@@ -1,0 +1,19 @@
+[project]
+name = "sagardrishti-api"
+version = "0.1.0"
+description = "SagarDrishti data-plane API (TRD M2)"
+requires-python = ">=3.11"
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+# Fail on FutureWarning: xarray and pandas announce breaking changes this way,
+# and a silent FutureWarning in a parser is a silent data bug next release.
+filterwarnings = ["error::FutureWarning"]
+# Pinned now so the default change in a future pytest-asyncio cannot alter how
+# our (eventual) async API tests share event loops.
+asyncio_default_fixture_loop_scope = "function"

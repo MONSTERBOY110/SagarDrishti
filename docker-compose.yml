@@ -1,0 +1,62 @@
+# SagarDrishti - "deployable on INCOIS infrastructure without client-side
+# dependencies" (PS requirement F5 / TRD §8).
+#
+# STATUS: AUTHORED, NOT YET EXECUTED. Docker is not installed on the current
+# build machine (ADR-0004), so Phase 1 spikes run natively:
+#     uvicorn app.main:app --reload        (services/api)
+#     pnpm web:dev                         (apps/web)
+# This file is kept in the tree because F5 is a screening claim and reviewers
+# read compose files. Verify it before making the claim on stage.
+
+services:
+  api:
+    build: ./services/api
+    environment:
+      OFFLINE: "1"
+      SAGAR_ROOT: /srv/sagardrishti
+    volumes:
+      - ./data:/srv/sagardrishti/data:ro
+    ports:
+      - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  agent:
+    build: ./services/agent
+    depends_on: [api]
+    environment:
+      OFFLINE: "1"
+      API_BASE: http://api:8000
+      LLM_PROVIDER: ollama        # provider adapter, TRD §6.2
+    ports:
+      - "8100:8100"
+
+  web:
+    build: ./apps/web
+    depends_on: [api]
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+    ports:
+      - "3000:3000"
+
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: sagardrishti
+      POSTGRES_USER: sagar
+      POSTGRES_PASSWORD: sagar
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  mqtt:
+    # SagarNode telemetry (TRD M9). HTTP POST fallback exists because campus
+    # WiFi commonly blocks 8883.
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./firmware/sagarnode/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+volumes:
+  pgdata:

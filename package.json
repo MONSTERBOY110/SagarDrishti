@@ -1,0 +1,10 @@
+{
+  "name": "sagardrishti",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "scripts": {
+    "web:dev": "pnpm --filter @sagardrishti/web dev",
+    "web:build": "pnpm --filter @sagardrishti/web build",
+    "web:typecheck": "pnpm --filter @sagardrishti/web typecheck"
+  }
+}

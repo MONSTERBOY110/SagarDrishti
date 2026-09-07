@@ -1,0 +1,69 @@
+# SagarDrishti CI skeleton (TRD §9).
+#
+# NOTE: authored but never executed yet -- it runs on the first push that
+# includes it (remote: github.com/MONSTERBOY110/SagarDrishti). Jobs are ordered
+# by what actually breaks the demo: data plane first, then types, then the
+# offline path.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  data-plane:
+    name: data plane (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"        # see docs/adr/0002-python-311.md
+          cache: pip
+      - name: Install
+        run: pip install -r services/api/requirements-dev.txt
+      - name: Unit tests (CF edge cases, QC filtering, colorbar mapping)
+        working-directory: services/api
+        run: pytest -q
+
+  web:
+    name: web (typecheck + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm web:typecheck
+      - run: pnpm web:build
+
+  offline:
+    name: offline path (OFFLINE=1, no network)
+    runs-on: ubuntu-latest
+    needs: data-plane
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r services/api/requirements-dev.txt
+      # Builds a tiny cube from the committed fixtures - no network, no INCOIS.
+      - name: Build fixture cube
+        run: python tools/preprocess.py --fixtures
+      - name: Boot API and hit the demo endpoints
+        env:
+          OFFLINE: "1"
+        run: |
+          cd services/api
+          uvicorn app.main:app --port 8000 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/healthz && break; sleep 1; done
+          curl -sf http://127.0.0.1:8000/healthz | tee /dev/stderr | grep -q '"offline":true'
+          curl -sf "http://127.0.0.1:8000/catalog" > /dev/null

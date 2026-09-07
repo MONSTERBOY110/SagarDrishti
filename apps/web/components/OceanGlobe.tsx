@@ -1,0 +1,465 @@
+"use client";
+
+/** The volumetric scene (TRD M3, PS requirement F1).
+ *
+ * Strategy (a) from TRD M3: the water column is a stack of textured,
+ * geodetically-placed depth slices with an opacity transfer function, drawn as
+ * Cesium primitives. Per ADR-0001 this is both the first implementation and
+ * TRD §6.4's slices-only fallback floor - the fallback is proven by
+ * construction rather than promised.
+ *
+ * Two Cesium details make the column visible at all:
+ *   - globe translucency turns the sea surface into glass, so slices below the
+ *     ellipsoid are not occluded by it;
+ *   - collision detection is off, so the camera may descend into the column.
+ */
+
+import { useEffect, useRef, useState } from "react";
+
+import { loadCesium } from "@/lib/cesium-loader";
+import { paintLevel, type Palette, type Scale } from "@/lib/colormap";
+import { sliceVisibility } from "@/lib/scene";
+import type { FieldColumn, ProfileGlyph } from "@/lib/api";
+
+export interface FpsSample {
+  fps: number;
+  p1: number;
+}
+
+interface Props {
+  column: FieldColumn | null;
+  profiles: ProfileGlyph[];
+  selection: string | null;
+  focusDepth: number;
+  exaggeration: number;
+  opacity: number;
+  palette: Palette;
+  scale: Scale;
+  vmin: number;
+  vmax: number;
+  onFps: (s: FpsSample) => void;
+  onPickProfile: (profileId: string | null) => void;
+  onReady: () => void;
+  /** next/dynamic swallows load failures, so the scene reports its own */
+  onError: (message: string) => void;
+}
+
+const ABYSS = "#05080c";
+/** The Bay of Bengal opening view.
+ *
+ * Framed with lookAt on a point PART WAY DOWN the column rather than on the
+ * sea surface, so the stack sits in the middle of the frame instead of hanging
+ * off the bottom of it; the transform is released immediately afterwards so the
+ * user still has free orbit. A setView with a pitched orientation puts most of
+ * the viewport in empty space, which is the mistake this replaces. */
+const HOME = {
+  lon: 87.0,
+  lat: 15.0,
+  /** metres below the surface, roughly mid-column at the default exaggeration */
+  centreDepth: -190_000,
+  /** Low, because a slice stack seen from above is one opaque lid; the
+   *  stratification only reads from the side. */
+  pitchDeg: -18,
+  /** Far enough out that the stack covers part of the viewport instead of all
+   *  of it - overdraw is the dominant cost in this scene. */
+  range: 3_000_000,
+};
+
+export default function OceanGlobe(props: Props) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const creditRef = useRef<HTMLDivElement>(null);
+  /* The viewer is built asynchronously while the field is being fetched, so the
+     two race. Without this gate the slice effect can run first, find no viewer,
+     bail out, and never run again because its dependencies never change. */
+  const [ready, setReady] = useState(false);
+
+  // Live refs so the render loop and Cesium callbacks read current values
+  // without the effect re-running and rebuilding the whole scene.
+  const latest = useRef(props);
+  latest.current = props;
+
+  const cesiumRef = useRef<{
+    viewer: any;
+    Cesium: any;
+    slices: any[];
+    floats: any[];
+  } | null>(null);
+
+  /* --- build the viewer once ---------------------------------------------- */
+  useEffect(() => {
+    let disposed = false;
+    let handler: any = null;
+    let removeFps: (() => void) | null = null;
+
+    (async () => {
+      // Cesium's own prebuilt bundle, not the bundler's idea of it. See
+      // lib/cesium-loader.ts for the production failure this avoids.
+      let Cesium: Awaited<ReturnType<typeof loadCesium>>;
+      try {
+        Cesium = await loadCesium();
+      } catch (e) {
+        latest.current.onError(
+          `The 3D engine could not load: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        return;
+      }
+      if (disposed || !hostRef.current) return;
+
+      const viewer = new Cesium.Viewer(hostRef.current, {
+        // No ion token, no network: NaturalEarthII ships inside the npm package
+        // and was vendored into public/cesium at install time.
+        baseLayer: Cesium.ImageryLayer.fromProviderAsync(
+          Cesium.TileMapServiceImageryProvider.fromUrl("/cesium/Assets/Textures/NaturalEarthII"),
+          {},
+        ),
+        baseLayerPicker: false,
+        geocoder: false,
+        homeButton: false,
+        sceneModePicker: false,
+        navigationHelpButton: false,
+        animation: false,
+        timeline: false,
+        fullscreenButton: false,
+        infoBox: false,
+        selectionIndicator: false,
+        // Cesium's attribution must stay visible; it lives in the cartouche.
+        creditContainer: creditRef.current ?? undefined,
+      });
+
+      const scene = viewer.scene;
+
+      // An instrument, not a planetarium: no sun, sky, stars or fog competing
+      // with the field for the eye.
+      scene.backgroundColor = Cesium.Color.fromCssColorString(ABYSS);
+      scene.globe.baseColor = Cesium.Color.fromCssColorString(ABYSS);
+      scene.globe.showGroundAtmosphere = false;
+      scene.globe.enableLighting = false;
+      if (scene.skyAtmosphere) scene.skyAtmosphere.show = false;
+      if (scene.skyBox) scene.skyBox.show = false;
+      if (scene.sun) scene.sun.show = false;
+      if (scene.moon) scene.moon.show = false;
+      scene.fog.enabled = false;
+      scene.highDynamicRange = false;
+
+      /* --- frame budget (TRD §5: 60 target / 30 floor at 1080p on the Intel
+         UHD target) ---------------------------------------------------------
+         Measured on that GPU, in this order of impact:
+           - MSAA defaults to 4x in current Cesium, quadrupling fragment work
+             on a scene that is mostly large flat quads. An instrument reading
+             numeric values gains nothing from it.
+           - A coarser screen-space error halves the tile draw calls.
+           - FXAA on top of a translucent stack softens the grid cells we
+             deliberately kept crisp. */
+      scene.msaaSamples = 1;
+      scene.globe.maximumScreenSpaceError = 4;
+      if (scene.postProcessStages?.fxaa) scene.postProcessStages.fxaa.enabled = false;
+
+      // Darken and desaturate the base imagery so land reads as context and
+      // the coloured field is the only saturated thing on screen.
+      const base = scene.imageryLayers.get(0);
+      if (base) {
+        // Land reads as context, never as content: bright enough that a
+        // coastline is legible against the field, desaturated enough that the
+        // only real colour on screen is the measurement. Costs no frame time.
+        base.brightness = 0.52;
+        base.saturation = 0.26;
+        base.contrast = 1.24;
+      }
+
+      // Make the sea surface glass and let the camera go under it.
+      scene.globe.translucency.enabled = true;
+      // A single alpha, not a distance ramp: the column must stay readable
+      // whether the camera is at basin scale or inside the water.
+      scene.globe.translucency.frontFaceAlpha = 0.32;
+      scene.globe.undergroundColor = Cesium.Color.fromCssColorString(ABYSS);
+      /* Confine the glass surface to the region that actually has data. A
+         globe-wide translucent pass blends the whole viewport every frame; the
+         data box is a fraction of it, and outside the box an opaque Earth is
+         also the more honest picture - there is nothing to see through. */
+      scene.globe.translucency.rectangle = Cesium.Rectangle.fromDegrees(
+        79.0,
+        4.0,
+        96.0,
+        26.0,
+      );
+      scene.globe.depthTestAgainstTerrain = false;
+      scene.screenSpaceCameraController.enableCollisionDetection = false;
+
+      viewer.camera.lookAt(
+        Cesium.Cartesian3.fromDegrees(HOME.lon, HOME.lat, HOME.centreDepth),
+        new Cesium.HeadingPitchRange(
+          0,
+          Cesium.Math.toRadians(HOME.pitchDeg),
+          HOME.range,
+        ),
+      );
+      // Release the reference frame or the camera stays welded to that point.
+      viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+
+      cesiumRef.current = { viewer, Cesium, slices: [], floats: [] };
+
+      /* --- FPS probe -------------------------------------------------------
+         Frame durations, not a simple counter: the p1 (99th-percentile frame)
+         is what a judge actually perceives as a stutter, and an average hides
+         it completely. */
+      const frames: number[] = [];
+      let last = performance.now();
+      let reported = 0;
+      const onPostRender = () => {
+        const now = performance.now();
+        frames.push(now - last);
+        last = now;
+        if (frames.length > 180) frames.shift();
+        if (now - reported > 400 && frames.length > 20) {
+          reported = now;
+          const sorted = [...frames].sort((a, b) => a - b);
+          const median = sorted[Math.floor(sorted.length / 2)];
+          const worst = sorted[Math.floor(sorted.length * 0.99)];
+          latest.current.onFps({
+            fps: median > 0 ? 1000 / median : 0,
+            p1: worst > 0 ? 1000 / worst : 0,
+          });
+        }
+      };
+      scene.postRender.addEventListener(onPostRender);
+      removeFps = () => scene.postRender.removeEventListener(onPostRender);
+
+      /* --- picking: a float glyph is a station, and clicking it is the ask -- */
+      handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+      handler.setInputAction((movement: any) => {
+        const picked = scene.pick(movement.position);
+        const id = picked?.id?.properties?.profileId?.getValue?.();
+        latest.current.onPickProfile(typeof id === "string" ? id : null);
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+      /* A hook for the Playwright demo-path test and the perf probe.
+         Available in production behind ?probe=1 as well as in development: a
+         test that can only drive the dev build cannot catch a production-only
+         failure, which is exactly the class of bug that made the globe render
+         black while every panel worked. */
+      const probeRequested =
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).has("probe");
+      if (process.env.NODE_ENV !== "production" || probeRequested) {
+        (window as unknown as Record<string, unknown>).__sagarScene = {
+          viewer,
+          Cesium,
+          sliceCount: () => cesiumRef.current?.slices.length ?? 0,
+          floatCount: () => cesiumRef.current?.floats.length ?? 0,
+          entityCount: () => viewer.entities.values.length,
+          /** Window coordinates of a station mark, so a test can click the real
+           *  glyph and exercise scene.pick rather than poking the store. */
+          floatWindowPos: (i: number) => {
+            const e = cesiumRef.current?.floats[i];
+            if (!e) return null;
+            const pos = e.position?.getValue(viewer.clock.currentTime);
+            if (!pos) return null;
+            const st: any = Cesium.SceneTransforms as any;
+            const fn = st.worldToWindowCoordinates ?? st.wgs84ToWindowCoordinates;
+            const win = fn.call(st, viewer.scene, pos);
+            return win ? { x: win.x, y: win.y, wmo: e.properties?.wmo?.getValue?.() } : null;
+          },
+        };
+      }
+
+      setReady(true);
+      latest.current.onReady();
+    })();
+
+    return () => {
+      disposed = true;
+      removeFps?.();
+      handler?.destroy?.();
+      const c = cesiumRef.current;
+      if (c && !c.viewer.isDestroyed()) c.viewer.destroy();
+      cesiumRef.current = null;
+    };
+    // Built once. Everything else is driven by the effects below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* --- rebuild the slice stack when the field itself changes --------------- */
+  useEffect(() => {
+    const c = cesiumRef.current;
+    const { column, palette, scale, vmin, vmax } = props;
+    if (!ready || !c || !column) return;
+    const { viewer, Cesium } = c;
+
+    for (const e of c.slices) viewer.entities.remove(e);
+    c.slices = [];
+
+    const [nz, ny, nx] = column.shape;
+    const west = column.lons[0] - 0.5;
+    const east = column.lons[column.lons.length - 1] + 0.5;
+    const south = column.lats[0] - 0.5;
+    const north = column.lats[column.lats.length - 1] + 0.5;
+    const rectangle = Cesium.Rectangle.fromDegrees(west, south, east, north);
+
+    for (let di = 0; di < nz; di++) {
+      const canvas = paintLevel(
+        column.values,
+        di * ny * nx,
+        ny,
+        nx,
+        vmin,
+        vmax,
+        palette,
+        scale,
+        1, // alpha rides on the material colour, so the texture never repaints
+      );
+      const entity = viewer.entities.add({
+        rectangle: {
+          coordinates: rectangle,
+          height: -column.depths[di] * props.exaggeration,
+          material: new Cesium.ImageMaterialProperty({
+            image: canvas,
+            transparent: true,
+            color: Cesium.Color.WHITE.withAlpha(0.1),
+          }),
+          // Crisp cells: this is a 1-degree analysis grid and it should look
+          // like one. Interpolation here would invent values.
+          granularity: Cesium.Math.toRadians(1.0),
+        },
+      });
+      c.slices.push(entity);
+    }
+    viewer.scene.requestRender();
+    // Palette/range changes repaint textures; depth/exaggeration/opacity do not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, props.column, props.palette, props.scale, props.vmin, props.vmax]);
+
+  /* --- the depth cursor: one gesture, three synchronized readouts ---------- */
+  useEffect(() => {
+    const c = cesiumRef.current;
+    const { column, focusDepth, opacity, exaggeration } = props;
+    if (!ready || !c || !column || c.slices.length === 0) return;
+    const { Cesium } = c;
+
+    let focusIndex = 0;
+    let best = Infinity;
+    column.depths.forEach((d, i) => {
+      const gap = Math.abs(d - focusDepth);
+      if (gap < best) {
+        best = gap;
+        focusIndex = i;
+      }
+    });
+
+    const alphas = sliceVisibility(column.depths, focusIndex, opacity);
+    let drawn = 0;
+    c.slices.forEach((entity, i) => {
+      const a = alphas[i];
+      // `show` is what actually saves the frame: an alpha-0 quad is still
+      // rasterized and blended, a hidden entity is not submitted at all.
+      entity.show = a > 0;
+      if (a > 0) {
+        drawn++;
+        entity.rectangle.material.color = Cesium.Color.WHITE.withAlpha(a);
+      }
+      entity.rectangle.height = -column.depths[i] * exaggeration;
+    });
+    if (process.env.NODE_ENV !== "production") {
+      const hook = (window as unknown as Record<string, any>).__sagarScene;
+      if (hook) hook.drawnSlices = drawn;
+    }
+    c.viewer.scene.requestRender();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, props.focusDepth, props.opacity, props.exaggeration, props.column]);
+
+  /* --- float glyphs: survey station marks, drawn not glyph-substituted ----- */
+  useEffect(() => {
+    const c = cesiumRef.current;
+    if (!ready || !c || props.profiles.length === 0) return;
+    const { viewer, Cesium } = c;
+
+    for (const e of c.floats) viewer.entities.remove(e);
+    c.floats = [];
+
+    const plain = stationMark(false);
+    const picked = stationMark(true);
+    for (const p of props.profiles) {
+      const isPicked = p.profile_id === props.selection;
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0),
+        billboard: {
+          image: isPicked ? picked : plain,
+          width: isPicked ? 22 : 15,
+          height: isPicked ? 22 : 15,
+          // A station mark stays clickable even when the camera is inside the
+          // water column and the mark sits behind a slice.
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        properties: { profileId: p.profile_id, wmo: p.wmo },
+      });
+      c.floats.push(entity);
+    }
+    viewer.scene.requestRender();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, props.profiles, props.selection]);
+
+  return (
+    <>
+      <div ref={hostRef} style={{ position: "absolute", inset: 0 }} />
+      {/* Cesium's attribution, required and kept legible, styled as a footer note */}
+      {/* Cesium's attribution is a licensing obligation, so it is given real
+          room at the bottom-right rather than being pushed half off the
+          viewport edge, and the scale bar above it is offset to clear it. */}
+      <div
+        ref={creditRef}
+        style={{
+          position: "absolute",
+          right: "1.25rem",
+          bottom: "0.625rem",
+          maxWidth: "22rem",
+          textAlign: "right",
+          fontSize: "0.625rem",
+          lineHeight: 1.3,
+          color: "var(--stamp-soft)",
+          pointerEvents: "auto",
+          zIndex: 3,
+        }}
+      />
+    </>
+  );
+}
+
+/** A hydrographic station mark: an ink-outlined manila square with a centre
+ *  tick, drawn rather than borrowed from an icon font, in the sheet's own ink.
+ *
+ *  Selection is carried by an added registration box, the chart-drafting way of
+ *  marking the station under examination, and not by a colour change: hue on
+ *  this surface belongs to the measurement. */
+function stationMark(selected: boolean): HTMLCanvasElement {
+  const s = 44;
+  const canvas = document.createElement("canvas");
+  canvas.width = s;
+  canvas.height = s;
+  const ctx = canvas.getContext("2d")!;
+  ctx.translate(s / 2, s / 2);
+
+  if (selected) {
+    ctx.strokeStyle = "#16130d";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-17, -17, 34, 34);
+    ctx.strokeStyle = "#c4b89a";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-15, -15, 30, 30);
+  }
+
+  ctx.fillStyle = "#c4b89a";
+  ctx.strokeStyle = "#16130d";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.rect(-8, -8, 16, 16);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, -4.5);
+  ctx.lineTo(0, 4.5);
+  ctx.moveTo(-4.5, 0);
+  ctx.lineTo(4.5, 0);
+  ctx.stroke();
+  return canvas;
+}

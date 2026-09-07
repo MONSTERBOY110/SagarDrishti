@@ -1,0 +1,38 @@
+# OFFLINE=1 overlay (TRD M6 / PRD F11): the air-gapped demo posture.
+#   docker compose -f docker-compose.yml -f docker-compose.offline.yml up
+#
+# Swaps per TRD M6: sources -> local zarr cube; PostGIS -> SQLite; LLM -> local
+# Ollama; STT/TTS -> local ONNX; Cesium assets -> already local (ADR-0001).
+# STATUS: AUTHORED, NOT YET EXECUTED (ADR-0004).
+
+services:
+  api:
+    environment:
+      OFFLINE: "1"
+      SAGAR_DB: sqlite:////srv/sagardrishti/data/cube/catalog.sqlite
+    network_mode: none          # proves the API never needs the network
+
+  agent:
+    environment:
+      OFFLINE: "1"
+      LLM_PROVIDER: ollama
+      OLLAMA_BASE: http://ollama:11434
+      STT_ENGINE: indicconformer-onnx
+      TTS_ENGINE: indictts-onnx
+
+  web:
+    environment:
+      NEXT_PUBLIC_OFFLINE: "1"
+
+  db:
+    profiles: ["online-only"]   # SQLite replaces PostGIS offline
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+
+volumes:
+  ollama:

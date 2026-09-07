@@ -1,0 +1,476 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-07T00:00:00Z",
+  "title": "Design System: SagarDrishti",
+  "extensions": {
+    "colorMeta": {
+      "abyss": {
+        "role": "neutral",
+        "displayName": "Abyss",
+        "canonical": "#05080c",
+        "oklch": "oklch(13.2% 0.011 250.2)",
+        "purpose": "The water. Page and scene ground, the punched holes in the binding margin, and Cesium's globe base and underground colour.",
+        "tonalRamp": [
+          "#080c10",
+          "#21262a",
+          "#3e4348",
+          "#5d6268",
+          "#7d8389",
+          "#a0a6ac",
+          "#c4cad0",
+          "#e9eff6"
+        ]
+      },
+      "plate": {
+        "role": "neutral",
+        "displayName": "Manila Plate",
+        "canonical": "#c4b89a",
+        "oklch": "oklch(78.5% 0.043 88.8)",
+        "purpose": "The form stock and the ground of every readable surface. Painted as a 160px seamless raster whose mean RGB is this exact value.",
+        "tonalRamp": [
+          "#120900",
+          "#2e2409",
+          "#4b4127",
+          "#6b6045",
+          "#8d8165",
+          "#b0a487",
+          "#d4c8aa",
+          "#faeece"
+        ]
+      },
+      "plate-shade": {
+        "role": "neutral",
+        "displayName": "Manila Shade",
+        "canonical": "#b3a686",
+        "oklch": "oklch(72.8% 0.047 88.5)",
+        "purpose": "The punched binding margin and the scrollbar track: the same stock a shade down, multiply-blended with the same tile.",
+        "tonalRamp": [
+          "#130900",
+          "#2e2406",
+          "#4c4124",
+          "#6c6042",
+          "#8e8162",
+          "#b1a484",
+          "#d6c8a7",
+          "#fbeecc"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Printing Ink",
+        "canonical": "#16130d",
+        "oklch": "oklch(18.8% 0.013 84.5)",
+        "purpose": "Titles, entered values, active rows, the slider's pen mark, the head's double rule, the station mark's outline, the model curve. 9.4:1 on the plate.",
+        "tonalRamp": [
+          "#0e0b06",
+          "#28251e",
+          "#45423b",
+          "#656159",
+          "#86827a",
+          "#a9a59c",
+          "#cdc9c0",
+          "#f2eee5"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Ink Soft",
+        "canonical": "#4a4335",
+        "oklch": "oklch(38.6% 0.025 84.5)",
+        "purpose": "Secondary printed matter: field labels, column heads, subtitles, resting rack rows, chart axis text. 5.0:1.",
+        "tonalRamp": [
+          "#100a02",
+          "#2b2417",
+          "#484133",
+          "#686052",
+          "#898172",
+          "#aca494",
+          "#d1c8b8",
+          "#f6eedc"
+        ]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Ink Faint",
+        "canonical": "#504935",
+        "oklch": "oklch(40.7% 0.033 91.0)",
+        "purpose": "Tertiary: rack serials, disabled controls, levels with no data, the dashed placeholder bar. 4.6:1.",
+        "tonalRamp": [
+          "#100a00",
+          "#2b2412",
+          "#48422e",
+          "#68614c",
+          "#8a826c",
+          "#ada58e",
+          "#d1c9b2",
+          "#f7eed6"
+        ]
+      },
+      "rule": {
+        "role": "primary",
+        "displayName": "Process Blue",
+        "canonical": "#2b6a86",
+        "oklch": "oklch(49.6% 0.078 230.4)",
+        "purpose": "The ruling ink. Every rule, track, tick, control border, selection and focus ring on the plate. It never sets type.",
+        "tonalRamp": [
+          "#000d25",
+          "#002a43",
+          "#004963",
+          "#2a6985",
+          "#4d8ba8",
+          "#70aecd",
+          "#94d3f3",
+          "#b9f9ff"
+        ]
+      },
+      "rule-soft": {
+        "role": "primary",
+        "displayName": "Process Blue Half Strength",
+        "canonical": "rgba(43, 106, 134, 0.34)",
+        "oklch": "oklch(49.6% 0.078 230.4 / 0.34)",
+        "purpose": "The field rule inside a block: per-row rulings, block dividers, the resting rack row.",
+        "tonalRamp": [
+          "#000d25",
+          "#002a43",
+          "#004963",
+          "#2a6985",
+          "#4d8ba8",
+          "#70aecd",
+          "#94d3f3",
+          "#b9f9ff"
+        ]
+      },
+      "caution": {
+        "role": "secondary",
+        "displayName": "Caution Vermilion",
+        "canonical": "#b23a22",
+        "oklch": "oklch(52.0% 0.160 33.2)",
+        "purpose": "The reserved ink, rules and marks only. The printed margin rule, the overprint frame, the errata top rule. 3.0:1 on the plate, sound for a rule and disqualifying for text.",
+        "tonalRamp": [
+          "#360000",
+          "#5c0000",
+          "#820000",
+          "#a93119",
+          "#d0563d",
+          "#f87a60",
+          "#ff9f83",
+          "#ffc5a7"
+        ]
+      },
+      "caution-ink": {
+        "role": "secondary",
+        "displayName": "Caution Ink",
+        "canonical": "#7e2110",
+        "oklch": "oklch(39.7% 0.130 32.6)",
+        "purpose": "The reserved voice darkened until it carries text on the plate (5.1:1). The overprint's letters and printed caveats.",
+        "tonalRamp": [
+          "#300000",
+          "#540000",
+          "#781b09",
+          "#9e3f2d",
+          "#c4614e",
+          "#eb846f",
+          "#ffa892",
+          "#ffceb6"
+        ]
+      },
+      "caution-stamp": {
+        "role": "secondary",
+        "displayName": "Caution Stamp",
+        "canonical": "#e8735a",
+        "oklch": "oklch(68.7% 0.151 33.4)",
+        "purpose": "The reserved voice lightened until it carries text on the water (6.4:1). Used only by the frame readout below the floor.",
+        "tonalRamp": [
+          "#340000",
+          "#590000",
+          "#7f0a00",
+          "#a5361f",
+          "#cc5a42",
+          "#f47e64",
+          "#ffa287",
+          "#ffc8ab"
+        ]
+      },
+      "stamp": {
+        "role": "tertiary",
+        "displayName": "Stamp White",
+        "canonical": "#cfd8dc",
+        "oklch": "oklch(87.7% 0.011 226.0)",
+        "purpose": "Readouts printed directly on the water: body colour, cartouche and scale-bar text, the scale bar's alternating segments.",
+        "tonalRamp": [
+          "#060c0f",
+          "#1f2629",
+          "#3c4347",
+          "#5b6366",
+          "#7c8487",
+          "#9ea7aa",
+          "#c2cbcf",
+          "#e7f0f4"
+        ]
+      },
+      "stamp-soft": {
+        "role": "tertiary",
+        "displayName": "Stamp Soft",
+        "canonical": "#7f8f99",
+        "oklch": "oklch(64.1% 0.024 235.2)",
+        "purpose": "Secondary on the water: cartouche and scale-bar borders, the exaggeration line, the Cesium attribution.",
+        "tonalRamp": [
+          "#030d14",
+          "#1a272f",
+          "#36444d",
+          "#55646d",
+          "#75858f",
+          "#97a8b2",
+          "#bbccd7",
+          "#e0f2fd"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Sheet Title",
+        "purpose": "The sheet's own title, one per surface, immediately above the 3px double rule that closes the cast head."
+      },
+      "title": {
+        "displayName": "Panel Head",
+        "purpose": "A secondary sheet's head, such as the instrument profile panel. Also the cartouche head's register at 0.6875rem."
+      },
+      "label": {
+        "displayName": "Form Label",
+        "purpose": "Every field label, block head and control legend on the plate. Rack column heads drop to 0.625rem at 0.07em."
+      },
+      "stamp": {
+        "displayName": "Printed Stamp",
+        "purpose": "The smallest printed devices: the overprint, the scale-bar legend, the cartouche head. Tracking rises as size falls."
+      },
+      "body": {
+        "displayName": "Printed Prose",
+        "purpose": "Citations, QC policy statements, caveats, empty-state instructions. Always the sans face, never the typewriter."
+      },
+      "value": {
+        "displayName": "Typewriter Value",
+        "purpose": "Every measured value, identifier, timestamp and coordinate, carried by the .num class. Tabular figures keep a column of 24 depths a column."
+      }
+    },
+    "shadows": [
+      {
+        "name": "sheet-on-water",
+        "value": "6px 8px 22px rgba(0, 0, 0, 0.55), 1px 1px 0 rgba(0, 0, 0, 0.25)",
+        "purpose": "The only shadow in the system. An offset and blurred cast shadow with a 1px hard contact line, which is how a clipped sheet sits on a surface. Applies to .sheet and nothing else."
+      },
+      {
+        "name": "punched-hole",
+        "value": "inset 0 1px 1px rgba(0, 0, 0, 0.8)",
+        "purpose": "A 1px inner shade at the top of a binding hole, so the hole reads as punched through the stock rather than printed on it."
+      },
+      {
+        "name": "margin-rule",
+        "value": "inset -3px 0 0 -2px var(--caution)",
+        "purpose": "The printed margin rule down the binding edge. An inset shadow used as a printed rule, not as depth."
+      }
+    ],
+    "motion": [
+      {
+        "name": "stamp",
+        "value": "90ms steps(2)",
+        "purpose": "The system's entire motion vocabulary. Applied to background-color, color, border-color and opacity by the .stamp class, so a state commits in two frames and stops. No easing curve exists in this system."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition: none",
+        "purpose": "The stamp is removed entirely under prefers-reduced-motion: reduce. Nothing else animates, so nothing else needs a fallback."
+      },
+      {
+        "name": "time-step",
+        "value": "1400ms",
+        "purpose": "The dwell per timestep when the time rule is running. The scrub and the camera are the only continuous motion on the surface."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "cartouche-narrow",
+        "value": "1500px"
+      },
+      {
+        "name": "single-column",
+        "value": "900px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Station Sheet",
+      "kind": "card",
+      "refersTo": "sheet",
+      "description": "The manila form plate with its punched binding margin and printed margin rule. The ground of every readable surface.",
+      "html": "<section class=\"ds-sheet\"><div class=\"ds-sheet-margin\" aria-hidden=\"true\"><span class=\"ds-sheet-hole\"></span><span class=\"ds-sheet-hole\"></span><span class=\"ds-sheet-hole\"></span></div><div class=\"ds-sheet-body\"><header class=\"ds-sheet-head\"><div><h1 class=\"ds-sheet-title\">Station Sheet</h1><p class=\"ds-sheet-sub\">Model cast and instrument rack</p></div><span class=\"ds-overprint\">Analysis</span></header><dl class=\"ds-castfield\"><dt>Cast</dt><dd class=\"ds-num\">incois-vam-bob</dd><dt>Time</dt><dd class=\"ds-num\">2026-08-21 00:00 UTC</dd><dt>Column</dt><dd class=\"ds-num\">24 lv, 5 to 2000 m</dd></dl></div></section>",
+      "css": ".ds-sheet{display:flex;background-color:var(--plate,#c4b89a);background-image:url(/textures/manila.png);background-repeat:repeat;color:var(--ink,#16130d);border-radius:0;box-shadow:6px 8px 22px rgba(0,0,0,.55),1px 1px 0 rgba(0,0,0,.25);width:21rem;font-family:\"Archivo Narrow\",system-ui,sans-serif}.ds-sheet-margin{flex-shrink:0;width:1.25rem;display:flex;flex-direction:column;align-items:center;justify-content:space-around;padding:2rem 0;background-color:var(--plate-shade,#b3a686);background-image:url(/textures/manila.png);background-blend-mode:multiply;border-right:1px solid rgba(22,19,13,.28);box-shadow:inset -3px 0 0 -2px var(--caution,#b23a22)}.ds-sheet-hole{width:.5rem;height:.5rem;border-radius:50%;background:var(--abyss,#05080c);box-shadow:inset 0 1px 1px rgba(0,0,0,.8)}.ds-sheet-body{flex:1;min-width:0;padding:.75rem .8125rem .6875rem .75rem}.ds-sheet-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem;padding-bottom:.4375rem;border-bottom:3px double var(--ink,#16130d)}.ds-sheet-title{margin:0;font-size:1.0625rem;font-weight:700;line-height:1.05;letter-spacing:.13em;text-transform:uppercase;color:var(--ink,#16130d)}.ds-sheet-sub{margin:.1875rem 0 0;font-size:.6875rem;letter-spacing:.04em;color:var(--ink-soft,#4a4335)}.ds-castfield{display:grid;grid-template-columns:3.5rem 1fr;gap:0;margin:.5rem 0;font-size:.6875rem}.ds-castfield dt{padding:.1875rem .5rem .1875rem 0;border-bottom:1px solid rgba(43,106,134,.34);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft,#4a4335)}.ds-castfield dd{margin:0;padding:.1875rem 0;border-bottom:1px solid rgba(43,106,134,.34);color:var(--ink,#16130d);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-overprint{display:inline-block;flex-shrink:0;padding:.1875rem .375rem;border:1px solid var(--caution,#b23a22);outline:1px solid var(--caution,#b23a22);outline-offset:2px;color:var(--caution-ink,#7e2110);font-size:.625rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;transform:rotate(-3deg)}.ds-num{font-family:\"Courier Prime\",ui-monospace,monospace;font-variant-numeric:tabular-nums lining-nums}"
+    },
+    {
+      "name": "Control Tick",
+      "kind": "button",
+      "refersTo": "tick",
+      "description": "The only button in the system: a ruled tick box that inverts to solid ink when pressed. Disabled switches the border to dashed rather than greying out.",
+      "html": "<div style=\"display:flex;gap:.25rem\"><button type=\"button\" class=\"ds-tick\" aria-pressed=\"true\">TEMP</button><button type=\"button\" class=\"ds-tick\" aria-pressed=\"false\">SAL</button><button type=\"button\" class=\"ds-tick\" disabled>CURR</button></div>",
+      "css": ".ds-tick{background:none;border:1px solid var(--rule,#2b6a86);border-radius:0;color:var(--ink,#16130d);padding:.125rem .5rem;font-family:\"Archivo Narrow\",system-ui,sans-serif;font-size:.6875rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:background-color 90ms steps(2),color 90ms steps(2),border-color 90ms steps(2),opacity 90ms steps(2)}.ds-tick[aria-pressed=\"true\"]{background:var(--ink,#16130d);color:var(--plate,#c4b89a)}.ds-tick:disabled{border-style:dashed;color:var(--ink-faint,#504935);cursor:not-allowed}.ds-tick:focus-visible{outline:2px solid var(--ink,#16130d);outline-offset:1px}@media (prefers-reduced-motion:reduce){.ds-tick{transition:none}}"
+    },
+    {
+      "name": "Bottle Rack Row",
+      "kind": "custom",
+      "refersTo": "rack-row",
+      "description": "The signature component: one depth level of the model column, drawn as a serialised Niskin bottle. The bar is the only saturated mark on the plate; the rule carries the state. All four states are shown, active first.",
+      "html": "<ul class=\"ds-rack\"><li><button type=\"button\" class=\"ds-rack-row\" aria-selected=\"true\"><span class=\"ds-rack-no ds-num\">08</span><span class=\"ds-rack-depth ds-num\">100</span><span class=\"ds-rack-bar\" style=\"width:68%;background:rgb(205 109 85)\"></span><span class=\"ds-rack-value ds-num\">26.41</span></button></li><li><button type=\"button\" class=\"ds-rack-row\"><span class=\"ds-rack-no ds-num\">09</span><span class=\"ds-rack-depth ds-num\">125</span><span class=\"ds-rack-bar\" style=\"width:52%;background:rgb(153 88 132)\"></span><span class=\"ds-rack-value ds-num\">22.08</span></button></li><li><button type=\"button\" class=\"ds-rack-row\" data-state=\"pending\"><span class=\"ds-rack-no ds-num\">10</span><span class=\"ds-rack-depth ds-num\">150</span><span class=\"ds-rack-bar ds-rack-bar--none\"></span><span class=\"ds-rack-value ds-num\">&#183;&#183;&#183;&#183;</span></button></li><li><button type=\"button\" class=\"ds-rack-row\" data-empty=\"true\" disabled><span class=\"ds-rack-no ds-num\">11</span><span class=\"ds-rack-depth ds-num\">200</span><span class=\"ds-rack-bar ds-rack-bar--none\"></span><span class=\"ds-rack-value ds-num\">n/a</span></button></li></ul>",
+      "css": ".ds-rack{list-style:none;margin:0;padding:0;overflow:visible;font-family:\"Archivo Narrow\",system-ui,sans-serif;max-width:17rem}.ds-rack li{display:contents}.ds-rack-row{display:grid;grid-template-columns:1.5rem 2.75rem 1fr 3rem;align-items:baseline;gap:.375rem;width:100%;padding:.125rem 0;background:none;border:0;border-bottom:1px solid rgba(43,106,134,.34);text-align:left;cursor:pointer;color:var(--ink-soft,#4a4335);transition:background-color 90ms steps(2),color 90ms steps(2),border-color 90ms steps(2),opacity 90ms steps(2)}.ds-rack-row:hover{background:rgba(22,19,13,.07);color:var(--ink,#16130d)}.ds-rack-row[aria-selected=\"true\"]{border-bottom:3px double var(--rule,#2b6a86);color:var(--ink,#16130d);background:rgba(43,106,134,.1)}.ds-rack-row[data-empty=\"true\"]{border-bottom:1px solid rgba(43,106,134,.14);color:var(--ink-faint,#504935);cursor:default}.ds-rack-row[data-state=\"pending\"]{border-bottom:1px dashed var(--rule,#2b6a86);cursor:progress}.ds-rack-row:focus-visible{outline:2px solid var(--ink,#16130d);outline-offset:1px}.ds-rack-no{font-size:.625rem;color:var(--ink-faint,#504935)}.ds-rack-depth{font-size:.6875rem;text-align:right}.ds-rack-bar{height:.5rem;align-self:center;outline:1px solid rgba(22,19,13,.35)}.ds-rack-bar--none{height:.4375rem;width:100%;border:1px dashed var(--ink-faint,#504935);outline:0}.ds-rack-value{font-size:.75rem;font-weight:700;text-align:right}.ds-num{font-family:\"Courier Prime\",ui-monospace,monospace;font-variant-numeric:tabular-nums lining-nums}@media (prefers-reduced-motion:reduce){.ds-rack-row{transition:none}}"
+    },
+    {
+      "name": "Ruled Field",
+      "kind": "input",
+      "refersTo": "field-thumb",
+      "description": "A slider drawn as a value written along a scale: a 1px process-blue rule with a hard ink pen mark on it. The numeric value always prints beside the label, so the slider is never the only readout.",
+      "html": "<div class=\"ds-field-wrap\"><div class=\"ds-label ds-label--split\"><span>Vertical exaggeration</span><span class=\"ds-num\">200x</span></div><input class=\"ds-field\" type=\"range\" min=\"1\" max=\"200\" value=\"200\" aria-label=\"Vertical exaggeration\"></div>",
+      "css": ".ds-field-wrap{font-family:\"Archivo Narrow\",system-ui,sans-serif;padding:.4375rem 0;border-bottom:1px solid rgba(43,106,134,.34);max-width:17rem;color:var(--ink,#16130d)}.ds-label{font-weight:700;font-size:.6875rem;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-soft,#4a4335);margin-bottom:.25rem}.ds-label--split{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem}.ds-field{-webkit-appearance:none;appearance:none;width:100%;height:1.25rem;background:transparent;cursor:ew-resize}.ds-field::-webkit-slider-runnable-track{height:1px;background:var(--rule,#2b6a86)}.ds-field::-moz-range-track{height:1px;background:var(--rule,#2b6a86)}.ds-field::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:.375rem;height:1.125rem;margin-top:-.5625rem;background:var(--ink,#16130d);border:0;border-radius:0}.ds-field::-moz-range-thumb{width:.375rem;height:1.125rem;background:var(--ink,#16130d);border:0;border-radius:0}.ds-field:focus-visible::-webkit-slider-thumb{background:var(--rule,#2b6a86)}.ds-field:focus-visible::-moz-range-thumb{background:var(--rule,#2b6a86)}.ds-num{font-family:\"Courier Prime\",ui-monospace,monospace;font-variant-numeric:tabular-nums lining-nums}"
+    },
+    {
+      "name": "Overprint Stamp",
+      "kind": "chip",
+      "refersTo": "overprint",
+      "description": "A rubber stamp, not a badge. Double-ruled in the reserved ink, letter-spaced, and rotated -3deg so it prints slightly off square. States what kind of product a sheet holds; never a filled status pill.",
+      "html": "<span class=\"ds-overprint\">Analysis</span> <span class=\"ds-overprint\">Argo QC 1-2</span>",
+      "css": ".ds-overprint{display:inline-block;flex-shrink:0;padding:.1875rem .375rem;border:1px solid var(--caution,#b23a22);outline:1px solid var(--caution,#b23a22);outline-offset:2px;color:var(--caution-ink,#7e2110);font-family:\"Archivo Narrow\",system-ui,sans-serif;font-size:.625rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;transform:rotate(-3deg);transform-origin:center}"
+    },
+    {
+      "name": "Provenance Cartouche",
+      "kind": "card",
+      "refersTo": "cartouche",
+      "description": "An engraved chart's title device, boxed so the citation stays legible over the moving 3D scene. The double outline is the cartouche's engraved rule; the box is what replaces a shadow over the water.",
+      "html": "<footer class=\"ds-cartouche\"><div class=\"ds-cartouche-head\"><span>SagarDrishti</span><span class=\"ds-cartouche-region\">Bay of Bengal</span><span class=\"ds-cartouche-flag\">offline</span></div><p>INCOIS Variational Analysis Method gridded analysis, Bay of Bengal.</p><p class=\"ds-cartouche-meta ds-num\">2026-08-21T00:00:00Z &#183; 24 levels &#183; 5 to 2000 m &#183; retrieved 2026-09-07</p></footer>",
+      "css": ".ds-cartouche{max-width:32rem;padding:.5rem .75rem .5625rem;border:1px solid var(--stamp-soft,#7f8f99);outline:1px solid rgba(207,216,220,.28);outline-offset:3px;background:rgba(5,8,12,.78);color:var(--stamp,#cfd8dc);font-family:\"Archivo Narrow\",system-ui,sans-serif}.ds-cartouche-head{display:flex;align-items:baseline;gap:.5rem;padding-bottom:.25rem;margin-bottom:.3125rem;border-bottom:1px solid var(--stamp-soft,#7f8f99);font-size:.6875rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase}.ds-cartouche-region{color:var(--stamp-soft,#7f8f99);letter-spacing:.06em}.ds-cartouche-flag{padding:0 .25rem;border:1px solid var(--stamp-soft,#7f8f99);font-family:\"Courier Prime\",ui-monospace,monospace;font-size:.625rem;font-weight:400;letter-spacing:0;text-transform:none}.ds-cartouche p{margin:0;font-size:.75rem;line-height:1.4}.ds-cartouche .ds-cartouche-meta{margin-top:.1875rem;font-size:.6875rem;color:var(--stamp-soft,#7f8f99)}.ds-num{font-family:\"Courier Prime\",ui-monospace,monospace;font-variant-numeric:tabular-nums lining-nums}"
+    },
+    {
+      "name": "Time Rule",
+      "kind": "nav",
+      "refersTo": "tick",
+      "description": "The time scrub as a ruled scale with one tick per available step, not a continuous slider: this analysis has three 10-day steps and a smooth track would imply timesteps that do not exist. Tick state is rule form, never colour: a solid bar for the step on screen, a hairline for one in hand, a dashed stub for one not yet fetched.",
+      "html": "<div class=\"ds-timerule\"><button type=\"button\" class=\"ds-tick\" aria-pressed=\"false\">Run</button><div class=\"ds-timerule-body\"><div class=\"ds-label\">Time &#183; UTC</div><div class=\"ds-timerule-scale\" role=\"radiogroup\" aria-label=\"Timestep\"><button type=\"button\" role=\"radio\" aria-checked=\"true\" class=\"ds-timerule-step ds-timerule-step--on\"><span class=\"ds-timerule-mark ds-timerule-mark--on\" aria-hidden=\"true\"></span><span class=\"ds-num\">08-01</span></button><button type=\"button\" role=\"radio\" aria-checked=\"false\" class=\"ds-timerule-step\"><span class=\"ds-timerule-mark\" aria-hidden=\"true\"></span><span class=\"ds-num\">08-11</span></button><button type=\"button\" role=\"radio\" aria-checked=\"false\" class=\"ds-timerule-step\"><span class=\"ds-timerule-mark ds-timerule-mark--pending\" aria-hidden=\"true\"></span><span class=\"ds-num\">08-21</span></button></div></div></div>",
+      "css": ".ds-timerule{display:flex;align-items:center;gap:.75rem;padding:.5rem .75rem;background-color:var(--plate,#c4b89a);background-image:url(/textures/manila.png);background-repeat:repeat;color:var(--ink,#16130d);border-radius:0;box-shadow:6px 8px 22px rgba(0,0,0,.55),1px 1px 0 rgba(0,0,0,.25);font-family:\"Archivo Narrow\",system-ui,sans-serif;width:21rem}.ds-timerule-body{flex:1;min-width:12rem}.ds-timerule-scale{display:flex;justify-content:space-between;align-items:flex-start;border-top:1px solid var(--rule,#2b6a86);padding-top:.25rem}.ds-timerule-step{background:none;border:0;padding:0 .25rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:.1875rem;color:var(--ink-soft,#4a4335);font-family:inherit}.ds-timerule-step--on{color:var(--ink,#16130d)}.ds-timerule-step--on .ds-num{font-weight:700}.ds-timerule-step .ds-num{font-size:.625rem}.ds-timerule-mark{width:1px;height:.4375rem;background:var(--rule,#2b6a86);transition:background-color 90ms steps(2),border-color 90ms steps(2)}.ds-timerule-mark--on{width:.1875rem;height:.6875rem;background:var(--ink,#16130d)}.ds-timerule-mark--pending{width:0;height:.4375rem;background:none;border-left:1px dashed var(--rule,#2b6a86)}.ds-timerule-step:focus-visible{outline:2px solid var(--ink,#16130d);outline-offset:1px}.ds-label{font-weight:700;font-size:.6875rem;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-soft,#4a4335);margin-bottom:.3125rem}.ds-tick{background:none;border:1px solid var(--rule,#2b6a86);border-radius:0;color:var(--ink,#16130d);padding:.125rem .5rem;font-family:inherit;font-size:.6875rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:background-color 90ms steps(2),color 90ms steps(2),border-color 90ms steps(2),opacity 90ms steps(2)}.ds-tick[aria-pressed=\"true\"]{background:var(--ink,#16130d);color:var(--plate,#c4b89a)}.ds-num{font-family:\"Courier Prime\",ui-monospace,monospace;font-variant-numeric:tabular-nums lining-nums}@media (prefers-reduced-motion:reduce){.ds-timerule-mark,.ds-tick{transition:none}}"
+    },
+    {
+      "name": "Render Readout",
+      "kind": "custom",
+      "refersTo": "scalebar",
+      "description": "The vertical scale bar and its frame-rate readout: the clearest demonstration of the state grammar on the water. The readout rules 3px double above target, a hairline when healthy, and dashed in the reserved caution stamp below the floor. Both the median and the 99th percentile print, because the median is throughput and the p1 is the stutter a person notices. All three states are shown.",
+      "html": "<aside class=\"ds-scalebar\"><div class=\"ds-scalebar-label\">Water column</div><div class=\"ds-scalebar-bar\" aria-hidden=\"true\"><span></span><span></span><span></span><span></span><span></span></div><div class=\"ds-scalebar-ends ds-num\"><span>0</span><span>2.0 km</span></div><div class=\"ds-num ds-scalebar-note\">200x vertical &#183; drawn 400 km</div><div class=\"ds-num ds-scalebar-render\" data-state=\"ok\">render 44 fps &#183; p1 33</div><div class=\"ds-num ds-scalebar-render\" data-state=\"target\">render 60 fps &#183; p1 59</div><div class=\"ds-num ds-scalebar-render\" data-state=\"floor\">render 44 fps &#183; p1 23</div></aside>",
+      "css": ".ds-scalebar{display:inline-block;padding:.4375rem .625rem .5rem;background:rgba(5,8,12,.78);border:1px solid var(--stamp-soft,#7f8f99);color:var(--stamp,#cfd8dc);font-family:\"Archivo Narrow\",system-ui,sans-serif;min-width:11rem}.ds-scalebar-label{font-size:.625rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--stamp-soft,#7f8f99);margin-bottom:.3125rem}.ds-scalebar-bar{display:flex;align-items:stretch;height:.5rem;border:1px solid var(--stamp,#cfd8dc)}.ds-scalebar-bar span{flex:1}.ds-scalebar-bar span:nth-child(odd){background:var(--stamp,#cfd8dc)}.ds-scalebar-ends{display:flex;justify-content:space-between;font-size:.625rem;margin-top:.1875rem}.ds-scalebar-note{font-size:.625rem;margin-top:.25rem;color:var(--stamp-soft,#7f8f99)}.ds-scalebar-render{margin-top:.3125rem;padding-top:.25rem;font-size:.625rem;border-top:1px solid var(--stamp-soft,#7f8f99);color:var(--stamp,#cfd8dc)}.ds-scalebar-render[data-state=\"target\"]{border-top:3px double var(--stamp,#cfd8dc)}.ds-scalebar-render[data-state=\"floor\"]{border-top:1px dashed var(--caution-stamp,#e8735a);color:var(--caution-stamp,#e8735a)}.ds-num{font-family:\"Courier Prime\",ui-monospace,monospace;font-variant-numeric:tabular-nums lining-nums}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Station Logsheet",
+    "overview": "A CTD station sheet, printed on manila form stock and clipped over the open water column. The globe is the ocean below the surface, rendered near-black; everything a forecaster reads is printed matter laid on top of it, opaque and square-cut. The surface deliberately refuses the category default for ocean dashboards: no dark-navy glass panels floating over a moving 3D scene, no glowing cyan accents, no rounded cards. A translucent panel over a moving scene is unreadable exactly when a forecaster needs it, and glow spends hue that belongs to the measurement.\n\nThe organising discipline is that hue is reserved for the measurement. The plate, the inks and the rulings are all achromatic-warm. The only saturated colour permitted on screen is the data field's own colorbar plus one reserved caution ink. Everything a normal interface would signal with colour is signalled here in rule form instead: a hairline rule means available, a 3px double rule means active, a dashed rule means pending, a half-strength rule means no data. That is not a stylistic tic. The product's own accessibility commitment says colour must never be the sole carrier of meaning, because the colorbar is being read as a measuring instrument, and a state grammar built from rules leaves the whole hue budget to the data.\n\nDensity is high and unapologetic. This is an instrument for a desk, not a landing page: 24 depth levels print as 24 ruled rows in one column, and the rack never scrolls internally because the rack is the water column. Type sits between 10px and 17px, tightly ranged, because a form gets its hierarchy from rules and weight rather than from size. Motion is a stamp, not an ease: state commits in 90ms across two frames and stops. The only continuous movement is the camera and the time scrub.",
+    "keyCharacteristics": [
+      "Opaque manila plate (#c4b89a) as a real seamless raster, laid on near-black water (#05080c)",
+      "Hue reserved for the measurement; chrome is achromatic-warm plus one caution ink",
+      "State carried in rule form (single, doubled, dashed, half-strength), never in hue",
+      "Two faces with a meaningful split: the printed form versus the typewriter that filled it in",
+      "Square corners everywhere, one shadow, a punched binding margin with a printed margin rule",
+      "90ms two-frame stamp for every state commit; no easing anywhere",
+      "Every colour-mapped value is accompanied by its number and its provenance"
+    ],
+    "rules": [
+      {
+        "name": "The Reserved Hue Rule",
+        "section": "colors",
+        "body": "Hue belongs to the measurement. The plate, the inks and the rulings are achromatic-warm; the only saturated colour on screen is the active field's colorbar plus the reserved caution ink. Base imagery on the globe is pushed to brightness 0.52 / saturation 0.26 / contrast 1.24 for the same reason: land reads as context, never as content."
+      },
+      {
+        "name": "The Three-Value Caution Rule",
+        "section": "colors",
+        "body": "One hue cannot be legible on two grounds. Use #b23a22 for rules and marks, #7e2110 for caution text on the plate, and #e8735a for caution text on the water. Never substitute one for another to save a token."
+      },
+      {
+        "name": "The Rule-Never-Text Rule",
+        "section": "colors",
+        "body": "Process blue draws rules, tracks, ticks, borders and focus rings. It has zero text uses in the build and must keep zero."
+      },
+      {
+        "name": "The Uncoloured Absence Rule",
+        "section": "colors",
+        "body": "Missing data is never coloured. On the globe, land and fill values are written fully transparent and black, so nothing bleeds under them. On the sheet, a level with no data prints n/a at half-strength rule; a level not yet read prints a dot leader on a dashed rule. Pending and missing are different facts and never share a mark."
+      },
+      {
+        "name": "The Typewriter-Is-Entered Rule",
+        "section": "typography",
+        "body": "Courier Prime carries only what was entered: measured values, identifiers, timestamps, coordinates, level counts. Archivo Narrow carries the form itself: labels, heads and printed prose. Prose never takes .num. Audit test: read any paragraph on screen; if it is a sentence, it must be in the sans face."
+      },
+      {
+        "name": "The Two Weights Rule",
+        "section": "typography",
+        "body": "400 and 700 only, on both faces. The variable axis spans 400 to 700 and the build uses neither end's interior. Do not introduce a 500 or a 600 to soften a label; a form's emphasis is binary."
+      },
+      {
+        "name": "The Tracked-Uppercase Rule",
+        "section": "typography",
+        "body": "Printed matter is uppercase with 0.07em to 0.14em of tracking. The typewriter face never takes tracking, because tabular figures already own their advance width."
+      },
+      {
+        "name": "The Rack-Is-The-Column Rule",
+        "section": "layout",
+        "body": "The bottle rack never scrolls inside itself. All 24 levels print, because the rack is a drawing of the water column and a window onto ten of them is a different object."
+      },
+      {
+        "name": "The Unclipped Attribution Rule",
+        "section": "layout",
+        "body": "Cesium's credit line carries a licensing obligation. Nothing may cover it, and every device near the bottom-right corner is positioned off it."
+      },
+      {
+        "name": "The One Shadow Rule",
+        "section": "elevation",
+        "body": "The sheet casts a shadow. Nothing else does. There is no hover lift, no elevated menu, no focus glow."
+      },
+      {
+        "name": "The Box-Over-Water Rule",
+        "section": "elevation",
+        "body": "Anything that must be read over the moving scene sits in a bordered box on rgba(5, 8, 12, 0.78) with a 1px --stamp-soft edge. Never set text straight onto the scene, and never make a panel interior translucent."
+      },
+      {
+        "name": "The Guillotine Rule",
+        "section": "shapes",
+        "body": "Forms are guillotined, not rounded. border-radius: 0 everywhere. The only exception is a punched hole."
+      },
+      {
+        "name": "The State-Is-Rule-Form Rule",
+        "section": "shapes",
+        "body": "State is carried by rule weight and dash, never by hue. Single hairline is available, 3px double is active, dashed is pending, half-strength is no data. This applies to rack rows, the time rule's ticks, the frame readout, disabled controls and the profile chart's two curves alike."
+      },
+      {
+        "name": "The Stamp Rule",
+        "section": "components",
+        "body": "A form does not ease. State commits in a 90ms transition with steps(2) on background, colour, border and opacity, so a change lands in two frames and stops. No tween, no fade, no spring, and the transition is removed entirely under prefers-reduced-motion: reduce. The only continuous motion on the surface is the camera and the time scrub."
+      }
+    ],
+    "dos": [
+      "Do reserve saturation for the measurement. Chrome is achromatic-warm plus the reserved caution ink; the field's colorbar is the only saturated thing on screen.",
+      "Do carry every state in rule form: 1px available, 3px double active, dashed pending, half-strength absent.",
+      "Do set every measured value, identifier and timestamp in Courier Prime via .num, and keep prose in Archivo Narrow.",
+      "Do print a number beside every colour-mapped mark. Colour is never the sole carrier of meaning, because the colorbar is being read as an instrument.",
+      "Do box anything that must be read over the moving scene: rgba(5, 8, 12, 0.78) on a 1px --stamp-soft border.",
+      "Do distinguish pending from missing. A dot leader on a dashed rule is 'not read yet'; n/a on a half-strength rule is 'no data here'.",
+      "Do paint the manila raster directly on --plate. Its mean RGB is that token, so it needs no colour wash, and tools/make_paper_tile.py with seed 20260907 regenerates it byte for byte.",
+      "Do self-host both faces with font-display: block. The demo runs air-gapped and the form must not reflow mid-read.",
+      "Do keep the frame budget part of the design: MSAA at 1 sample, FXAA off, a screen-space error of 4, globe translucency confined to the data rectangle, and at most 10 of the 24 depth slices blended at once (log-spaced in depth, not index, so the thermocline is actually drawn). Measured at 44 FPS median at 1080p on the Intel UHD target.",
+      "Do verify a new state grammar against a real render before writing its selector. A dead selector describing a state the render never produces reads as a promise the build cannot keep."
+    ],
+    "donts": [
+      "Don't use glow, gradient fills, glass panels or cyan accents on chrome. That is the category default this surface exists to refuse.",
+      "Don't set text in --caution (#b23a22) on the plate. At 3.0:1 it is a rule colour. Use --caution-ink on the plate and --caution-stamp on the water.",
+      "Don't set type in --rule process blue, at any size.",
+      "Don't ease, tween, fade or spring a state change. 90ms, steps(2), done.",
+      "Don't colour missing data. Land and fill values are fully transparent and black; nothing bleeds under them.",
+      "Don't round a corner. The only radius in the system is a punched hole.",
+      "Don't apply .num to a sentence. The typewriter is what was entered, not what was printed.",
+      "Don't add a second shadow, and don't make a panel interior translucent.",
+      "Don't substitute a glyph from an icon font for a drawn mark, and don't signal selection with a colour change; add a registration rule instead.",
+      "Don't let the bottle rack scroll internally, and don't cover the Cesium attribution.",
+      "Don't interpolate the analysis grid for smoothness. Crisp cells state the real resolution; smoothing invents values across coastlines."
+    ]
+  }
+}

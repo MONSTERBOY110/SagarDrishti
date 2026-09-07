@@ -1,0 +1,55 @@
+SagarDrishti - vendored web fonts
+=================================
+
+Both faces are self-hosted rather than loaded from a CDN. That is a hard
+requirement, not a preference: PRD F11 and CLAUDE.md require the entire demo to
+run air-gapped, and a font request to fonts.gstatic.com would break the offline
+path the moment the WiFi is off on stage.
+
+Both are licensed under the SIL Open Font License 1.1, whose full text is in
+OFL-1.1.txt beside this file.
+
+--------------------------------------------------------------------------
+archivo-narrow-latin.woff2        18.7 KB
+--------------------------------------------------------------------------
+  Family     Archivo Narrow, version 3.002
+  Role       engraved form labels, column heads, printed prose
+  Type       VARIABLE font, wght axis 400-700 (verified with fontTools:
+             fvar axes = [('wght', 400.0, 400.0, 700.0)]). The
+             `font-weight: 400 700` declaration in globals.css is therefore
+             real interpolation, not synthetic bold.
+  Copyright  Copyright 2019 The Archivo Narrow Project Authors
+             (https://github.com/Omnibus-Type/ArchivoNarrow)
+  Licence    SIL Open Font License 1.1 - https://scripts.sil.org/OFL
+  Subset     latin only, as served by Google Fonts
+
+--------------------------------------------------------------------------
+courier-prime-400-latin.woff2     18.6 KB
+courier-prime-700-latin.woff2     18.9 KB
+--------------------------------------------------------------------------
+  Family     Courier Prime, version 3.018 (static Regular + Bold)
+  Role       every measured value, identifier and timestamp
+  Copyright  Copyright 2015 The Courier Prime Project Authors
+             (https://github.com/quoteunquoteapps/CourierPrime)
+  Licence    SIL Open Font License 1.1 - http://scripts.sil.org/OFL
+  Subset     latin only, as served by Google Fonts
+
+--------------------------------------------------------------------------
+How these files were obtained (reproducible)
+--------------------------------------------------------------------------
+Resolve the latin-subset woff2 URLs from the Google Fonts CSS API with a
+modern browser user-agent, then download them:
+
+  UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+
+  curl -A "$UA" \
+    "https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&display=swap"
+  curl -A "$UA" \
+    "https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap"
+
+Each response lists one woff2 per unicode subset; take the `latin` range. A
+single file covering all requested weights is the signature of a variable
+font, which is how Archivo Narrow arrives here as one file.
+
+Retrieved 2026-09-07.

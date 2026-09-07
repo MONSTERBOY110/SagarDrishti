@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://sagardrishti.in/schema/scene.schema.json",
+  "title": "SceneState",
+  "description": "The single serializable source of truth for the 3D scene (TRD M3). The UI mutates it, deep links encode it, and the Samudra Sahayak agent (TRD M4) patches it via set_scene -- it is the ONLY channel by which the agent can affect the view. Kept in one schema so TS and Python types cannot drift.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["camera", "variable", "depthRange", "time", "colorbar", "exaggeration", "layers"],
+  "properties": {
+    "camera": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lon", "lat", "height"],
+      "properties": {
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "height": { "type": "number", "minimum": 0, "description": "metres above the ellipsoid" },
+        "heading": { "type": "number", "default": 0, "description": "degrees" },
+        "pitch": { "type": "number", "default": -45, "description": "degrees; negative looks down" },
+        "roll": { "type": "number", "default": 0 }
+      }
+    },
+    "variable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceId", "name"],
+      "properties": {
+        "sourceId": { "type": "string", "description": "id from data/sources.yaml" },
+        "name": { "type": "string", "description": "variable name as declared in sources.yaml" }
+      }
+    },
+    "depthRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max"],
+      "description": "metres, positive down (CF 'positive: down'). min is the shallowest.",
+      "properties": {
+        "min": { "type": "number", "minimum": 0 },
+        "max": { "type": "number", "minimum": 0 },
+        "focus": { "type": "number", "minimum": 0, "description": "the single depth the depth slider is parked on" }
+      }
+    },
+    "time": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current"],
+      "properties": {
+        "current": { "type": "string", "format": "date-time" },
+        "playing": { "type": "boolean", "default": false },
+        "speed": { "type": "number", "default": 1, "exclusiveMinimum": 0 }
+      }
+    },
+    "colorbar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["palette", "min", "max", "scale"],
+      "properties": {
+        "palette": { "type": "string", "description": "cmocean/crameri palette name, e.g. thermal, haline" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "scale": { "type": "string", "enum": ["linear", "log"] },
+        "reverse": { "type": "boolean", "default": false },
+        "nanTransparent": { "type": "boolean", "default": true, "description": "land/fill cells must never paint as a real value" }
+      }
+    },
+    "exaggeration": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 200,
+      "default": 40,
+      "description": "vertical exaggeration. The ocean is ~4 km deep over ~1000 km, so 1x is unreadable; oceanographers expect this control (PRIOR-ART §E.6)."
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "visible"],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["depth_slices", "isosurface", "particles", "argo_points", "glider_tracks", "warnings", "sagarnode"],
+            "description": "one per renderer in TRD M3/M8/M9"
+          },
+          "visible": { "type": "boolean" },
+          "opacity": { "type": "number", "minimum": 0, "maximum": 1, "default": 1 },
+          "params": { "type": "object", "description": "renderer-specific, e.g. isosurface value or slice count" }
+        }
+      }
+    },
+    "selection": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "description": "what the user clicked. Drives the profile panel and the scorecard.",
+      "properties": {
+        "kind": { "type": "string", "enum": ["argo", "glider", "ctd", "sagarnode", "gridpoint"] },
+        "id": { "type": "string", "description": "WMO id for Argo, station id for SagarNode" },
+        "lon": { "type": "number" },
+        "lat": { "type": "number" },
+        "time": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

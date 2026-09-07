@@ -1,0 +1,658 @@
+/* SagarDrishti, Station Logsheet world.
+   Every token here is a decision recorded in the direction contract in
+   layout.tsx. Hue is reserved for the measurement: the plate, the ink and the
+   rulings are achromatic-warm, and the only saturated colours on screen are
+   the field's own colorbar and the single reserved caution ink. */
+
+@font-face {
+  font-family: "Archivo Narrow";
+  src: url("/fonts/archivo-narrow-latin.woff2") format("woff2");
+  font-weight: 400 700; /* verified variable: fvar wght 400..700 */
+  font-style: normal;
+  font-display: block; /* the form must not reflow mid-read */
+}
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/courier-prime-400-latin.woff2") format("woff2");
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/courier-prime-700-latin.woff2") format("woff2");
+  font-weight: 700;
+  font-display: block;
+}
+
+:root {
+  /* the water: near-black, because the scene is the ocean below the surface */
+  --abyss: #05080c;
+
+  /* the form stock */
+  --plate: #c4b89a;
+  --plate-shade: #b3a686;
+
+  /* form-printing inks, with their measured contrast on the plate */
+  --ink: #16130d;          /* labels and values          9.4:1 */
+  --ink-soft: #4a4335;     /* secondary                  5.0:1 */
+  --ink-faint: #504935;    /* tertiary                   4.6:1 */
+  --rule: #2b6a86;         /* process blue: a RULE, never text */
+  --rule-soft: rgba(43, 106, 134, 0.34);
+
+  /* THE reserved ink. Two values because one hue cannot be legible on both
+     grounds: #b23a22 is 3.0:1 on the plate, fine for a rule, not for text. */
+  --caution: #b23a22;         /* rules, marks, borders */
+  --caution-ink: #7e2110;     /* caution text on the plate   5.1:1 */
+  --caution-stamp: #e8735a;   /* caution text on the water   6.4:1 */
+
+  /* readouts sitting directly on the water */
+  --stamp: #cfd8dc;
+  --stamp-soft: #7f8f99;
+
+  --sheet-w: 21rem;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--abyss);
+  color: var(--stamp);
+  font-family: "Archivo Narrow", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- browser surfaces: these ship with defaults belonging to no design system */
+
+::selection {
+  background: var(--rule);
+  color: #eef4f7;
+}
+
+:focus-visible {
+  outline: 2px solid var(--rule);
+  outline-offset: 2px;
+}
+.sheet :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-faint) transparent;
+}
+.sheet ::-webkit-scrollbar,
+.panel-stack::-webkit-scrollbar {
+  width: 9px;
+}
+.sheet ::-webkit-scrollbar-track,
+.panel-stack::-webkit-scrollbar-track {
+  background: var(--plate-shade);
+}
+.sheet ::-webkit-scrollbar-thumb,
+.panel-stack::-webkit-scrollbar-thumb {
+  background: var(--ink-faint);
+  border: 2px solid var(--plate-shade);
+}
+
+input,
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* Every measured value is set in the typewriter face with tabular figures, so
+   a column of numbers stays a column when the values change. On a real cast
+   sheet the typewriter is what was ENTERED; printed matter is the form's own
+   face, which is why prose never carries this class. */
+.num {
+  font-family: "Courier Prime", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* --- the sheet ------------------------------------------------------------- */
+
+.sheet {
+  display: flex;
+  /* Real form stock, not a hex fill. The tile's mean RGB IS --plate, so it is
+     painted directly rather than washed over with a colour that would bury the
+     grain (tools/make_paper_tile.py, with a provenance sidecar). */
+  background-color: var(--plate);
+  background-image: url("/textures/manila.png");
+  background-repeat: repeat;
+  color: var(--ink);
+  border-radius: 0; /* forms are guillotined, not rounded */
+  box-shadow: 6px 8px 22px rgba(0, 0, 0, 0.55), 1px 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.sheet__body {
+  flex: 1;
+  min-width: 0;
+  padding: 0.75rem 0.8125rem 0.6875rem 0.75rem;
+}
+
+/* The punched binding margin, printed once and never decorative: it is where
+   the sheet is bound into the cast log. */
+.sheet__margin {
+  flex-shrink: 0;
+  width: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  padding: 2rem 0;
+  background-color: var(--plate-shade);
+  background-image: url("/textures/manila.png");
+  background-blend-mode: multiply;
+  border-right: 1px solid rgba(22, 19, 13, 0.28);
+  /* the printed margin rule */
+  box-shadow: inset -3px 0 0 -2px var(--caution);
+}
+.sheet__hole {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--abyss);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.8);
+}
+
+/* --- the cast head --------------------------------------------------------- */
+
+.sheet__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.4375rem;
+  border-bottom: 3px double var(--ink);
+}
+.sheet__titles {
+  min-width: 0;
+}
+.sheet__title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.sheet__subtitle {
+  margin: 0.1875rem 0 0;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+/* The overprint: a rubber stamp, not a badge. Double-ruled, letter-spaced,
+   slightly off-square, in the reserved ink. */
+.overprint {
+  flex-shrink: 0;
+  padding: 0.1875rem 0.375rem;
+  border: 1px solid var(--caution);
+  outline: 1px solid var(--caution);
+  outline-offset: 2px;
+  color: var(--caution-ink);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+  transform-origin: center;
+}
+
+/* The cast field block: a printed form's key/value grid, ruled per row. */
+.castfield {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr;
+  gap: 0;
+  margin: 0.5rem 0 0.5rem;
+  font-size: 0.6875rem;
+}
+.castfield dt {
+  padding: 0.1875rem 0.5rem 0.1875rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.castfield dd {
+  margin: 0;
+  padding: 0.1875rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- blocks and labels ----------------------------------------------------- */
+
+.block {
+  padding: 0.4375rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.block--last,
+.block--rack {
+  border-bottom: 0;
+}
+
+.label {
+  font-weight: 700;
+  font-size: 0.6875rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 0.25rem;
+}
+.label--split {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.ramp {
+  height: 0.5625rem;
+  border: 1px solid var(--ink);
+}
+.ramp__ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.625rem;
+  color: var(--ink-soft);
+  margin-top: 0.125rem;
+}
+
+/* The .rrow wrapper forms were removed rather than left unwired. Nothing set
+   them, and three dead selectors describing a state grammar are worse than no
+   selectors: they read as a promise the render keeps. The live grammar is on
+   .rack__row (single, doubled via aria-selected, dashed via data-state) and on
+   the time rule's ticks. */
+
+/* --- the bottle rack ------------------------------------------------------- */
+
+.rack {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible; /* all 24 levels are shown; the rack IS the column */
+}
+.rack__head,
+.rack__row {
+  display: grid;
+  grid-template-columns: 1.5rem 2.75rem 1fr 3rem;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+.rack__head {
+  padding: 0 0 0.1875rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 0;
+  font-size: 0.625rem;
+  letter-spacing: 0.07em;
+}
+.rack__row {
+  width: 100%;
+  padding: 0.125rem 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule-soft);
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+.rack__row:hover {
+  background: rgba(22, 19, 13, 0.07);
+  color: var(--ink);
+}
+.rack__row[aria-selected="true"] {
+  border-bottom: 3px double var(--rule);
+  color: var(--ink);
+  background: rgba(43, 106, 134, 0.1);
+}
+/* No data at this level is stated, never coloured. */
+.rack__row[data-empty="true"] {
+  border-bottom: 1px solid rgba(43, 106, 134, 0.14);
+  color: var(--ink-faint);
+  cursor: default;
+}
+/* Pending: the cast is still being read, so rows are ruled but unfilled. */
+.rack__row[data-state="pending"] {
+  border-bottom: 1px dashed var(--rule);
+  cursor: progress;
+}
+.rack__no {
+  font-size: 0.625rem;
+  color: var(--ink-faint);
+}
+.rack__depth {
+  font-size: 0.6875rem;
+  text-align: right;
+}
+.rack__bar {
+  height: 0.5rem;
+  align-self: center;
+}
+.rack__value {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* --- ruled fields: a slider on a form is a value written along a scale ----- */
+
+.field {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 1.25rem;
+  background: transparent;
+  cursor: ew-resize;
+}
+.field::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--rule);
+}
+.field::-moz-range-track {
+  height: 1px;
+  background: var(--rule);
+}
+/* The thumb is a pen mark on the scale: a hard ink bar, not a pill. */
+.field::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.375rem;
+  height: 1.125rem;
+  margin-top: -0.5625rem;
+  background: var(--ink);
+  border: 0;
+  border-radius: 0;
+}
+.field::-moz-range-thumb {
+  width: 0.375rem;
+  height: 1.125rem;
+  background: var(--ink);
+  border: 0;
+  border-radius: 0;
+}
+.field:focus-visible::-webkit-slider-thumb {
+  background: var(--rule);
+}
+.field:focus-visible::-moz-range-thumb {
+  background: var(--rule);
+}
+
+/* --- press-and-hold controls ---------------------------------------------- */
+
+.tick {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  color: var(--ink);
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.tick[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--plate);
+}
+.tick:disabled {
+  border-style: dashed;
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+/* --- motion: a form does not ease; state commits in a two-frame stamp ------ */
+
+.stamp {
+  transition: background-color 90ms steps(2), color 90ms steps(2),
+    border-color 90ms steps(2), opacity 90ms steps(2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .stamp {
+    transition: none;
+  }
+}
+
+/* --- page composition ------------------------------------------------------ */
+
+.scene {
+  position: absolute;
+  inset: 0;
+}
+
+.panel-stack {
+  position: absolute;
+  top: 1.25rem;
+  left: 1.25rem;
+  z-index: 2;
+  width: var(--sheet-w);
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  max-height: calc(100vh - 2.5rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.panel-right {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 2;
+  max-height: calc(100vh - 2.5rem);
+  overflow: auto;
+}
+
+/* --- the cartouche: a chart's title device, ruled and boxed ---------------- */
+
+.provenance {
+  position: absolute;
+  bottom: 1.5rem;
+  /* Clear of the sheet: the rack is 24 rows tall, so the bottom-left corner
+     belongs to the time rule and the cartouche sits in the open band beside
+     it. */
+  left: calc(var(--sheet-w) + 2.5rem);
+  right: 15rem;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.cartouche {
+  max-width: 32rem;
+  padding: 0.5rem 0.75rem 0.5625rem;
+  border: 1px solid var(--stamp-soft);
+  /* the double rule of an engraved chart cartouche */
+  outline: 1px solid rgba(207, 216, 220, 0.28);
+  outline-offset: 3px;
+  background: rgba(5, 8, 12, 0.78);
+  color: var(--stamp);
+}
+.cartouche__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.3125rem;
+  border-bottom: 1px solid var(--stamp-soft);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.cartouche__flag {
+  padding: 0 0.25rem;
+  border: 1px solid var(--stamp-soft);
+  font-family: "Courier Prime", ui-monospace, monospace;
+  font-size: 0.625rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.cartouche p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.cartouche .num {
+  font-size: 0.6875rem;
+}
+
+/* --- the scene scale bar --------------------------------------------------- */
+
+.scalebar {
+  position: absolute;
+  right: 1.25rem;
+  /* Clear of Cesium's attribution, which sits below it and carries a licensing
+     obligation, so it may never be clipped or covered. */
+  bottom: 3rem;
+  z-index: 2;
+  padding: 0.4375rem 0.625rem 0.5rem;
+  background: rgba(5, 8, 12, 0.78);
+  border: 1px solid var(--stamp-soft);
+  color: var(--stamp);
+  pointer-events: none;
+}
+.scalebar__label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--stamp-soft);
+  margin-bottom: 0.3125rem;
+}
+.scalebar__bar {
+  display: flex;
+  align-items: stretch;
+  height: 0.5rem;
+  border: 1px solid var(--stamp);
+}
+.scalebar__bar span:nth-child(odd) {
+  background: var(--stamp);
+}
+.scalebar__ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.625rem;
+  margin-top: 0.1875rem;
+}
+
+/* --- narrow viewports: one honest column ----------------------------------
+   Not a target device (PRODUCT.md operating context is a forecast desk and a
+   stage), but it must be truthful rather than broken. The scene becomes a
+   block at the top and every panel follows it in document order, so nothing
+   overlaps and nothing is unreachable. */
+
+@media (max-width: 1500px) {
+  .cartouche {
+    max-width: 25rem;
+  }
+}
+
+@media (max-width: 900px) {
+  main {
+    height: auto !important;
+    min-height: 100vh;
+    overflow-y: auto !important;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    padding-bottom: 1.25rem;
+  }
+
+  .scene {
+    position: relative;
+    inset: auto;
+    flex: 0 0 auto;
+    height: 46vh;
+    min-height: 15rem;
+    order: 1;
+  }
+
+  .panel-stack,
+  .panel-right,
+  .provenance,
+  .scalebar {
+    position: static;
+    inset: auto;
+    transform: none;
+    width: auto;
+    max-width: none;
+    max-height: none;
+    margin: 0 1.25rem;
+    overflow: visible;
+  }
+
+  .panel-stack {
+    order: 2;
+  }
+  .scalebar {
+    order: 3;
+  }
+  .panel-right {
+    order: 4;
+  }
+  .panel-right > section {
+    width: auto !important;
+  }
+  .provenance {
+    order: 5;
+  }
+  .cartouche {
+    max-width: none;
+  }
+}
+
+/* The render readout inside the scale bar. State is rule form: doubled at
+   target, single when healthy, dashed and in the reserved ink below the
+   floor. */
+.scalebar__render {
+  margin-top: 0.3125rem;
+  padding-top: 0.25rem;
+  font-size: 0.625rem;
+  border-top: 1px solid var(--stamp-soft);
+  color: var(--stamp);
+}
+.scalebar__render[data-state="target"] {
+  border-top: 3px double var(--stamp);
+}
+.scalebar__render[data-state="floor"] {
+  border-top: 1px dashed var(--caution-stamp);
+  color: var(--caution-stamp);
+}
+
+/* Cesium's attribution is a licensing obligation, so it may not be clipped.
+   Cesium's own widgets.css absolutely positions .cesium-widget-credits at the
+   widget's bottom-left, which pushed it off the corner once it was moved into
+   our own container. Laying it out in normal flow inside that container is
+   what keeps it fully on screen at every viewport. */
+.cesium-widget-credits {
+  position: static !important;
+  display: block !important;
+  text-align: right;
+  font-size: 0.625rem;
+  line-height: 1.3;
+  color: var(--stamp-soft);
+}
+.cesium-widget-credits a,
+.cesium-widget-credits a:visited {
+  color: var(--stamp-soft);
+}
+.cesium-credit-logoContainer,
+.cesium-credit-expand-link {
+  display: inline-block !important;
+  vertical-align: middle;
+}

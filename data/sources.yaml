@@ -1,0 +1,153 @@
+# SagarDrishti - dataset registry (TRD M1)
+#
+# THIS FILE IS THE EXTENSIBILITY SURFACE. Adding a variable, a depth level range,
+# or a whole new source is an edit here - never a code change. That is PS
+# requirement F3 ("Multi-format Data Ingestion") and F6 ("Extensible Design"),
+# and we demo it live by editing this file on stage (PRD §11 step 6).
+#
+# Every entry is validated against services/api/app/registry.py:SourceSpec.
+# `cf_overrides` exists because real government NetCDF is not CF-clean - each
+# override below documents an actual defect observed in the live source, with
+# the date we observed it. Do not "tidy" these away.
+
+version: 1
+
+defaults:
+  # Bay of Bengal + Arabian Sea - the offline demo cube footprint (TRD §3)
+  bbox: [30.0, -30.0, 120.0, 30.0]   # [west, south, east, north]
+  demo_bbox: [80.0, 5.0, 95.0, 25.0] # Bay of Bengal, the Phase 1 spike box
+
+sources:
+
+  # ---------------------------------------------------------------------------
+  # PRIMARY model/analysis field for Phase 1 (ADR-0003).
+  # Open, no login, INCOIS-native, genuinely 4D. Verified live 2026-09-07:
+  # time=813 steps (latest 2026-07-30), ZAX=24 levels 5-2000 m, 1 deg grid.
+  # ---------------------------------------------------------------------------
+  - id: incois_vam_argo
+    title: "INCOIS Argo 10-day gridded analysis (Variational Analysis Method)"
+    kind: erddap_griddap
+    enabled: true
+    url: https://erddap.incois.gov.in/erddap
+    dataset_id: incois_argo_10d_VAM
+    citation: "INCOIS ERDDAP, incois_argo_10d_VAM (Variational Analysis Method, 10-day gridded Argo analysis)"
+    variables:
+      - name: TEMP
+        canonical: sea_water_temperature
+        label: Temperature
+      - name: SAL
+        canonical: sea_water_practical_salinity
+        label: Salinity
+      - name: TERR
+        canonical: sea_water_temperature_error
+        label: Temperature relative error
+      - name: SERR
+        canonical: sea_water_practical_salinity_error
+        label: Salinity relative error
+    dims:
+      time: time
+      depth: ZAX          # non-standard name; cf-xarray cannot infer it
+      lat: latitude
+      lon: longitude
+    cf_overrides:
+      # Observed 2026-09-07 on the live dataset:
+      ZAX:
+        standard_name: depth
+        units: m
+        positive: down    # ABSENT in the source. Without this, depth sign is a guess.
+        axis: Z
+      TEMP:
+        units: degC       # source says "degs" -- not a UDUNITS/CF unit
+        _FillValue: -9999.0
+      SAL:
+        units: "1"        # PSU is dimensionless in CF terms
+        _FillValue: -9999.0
+      TERR:
+        units: degC
+        _FillValue: -9999.0
+      SERR:
+        units: "1"
+        _FillValue: -9999.0
+
+  # ---------------------------------------------------------------------------
+  # PS-official Argo profiles. Daily basin-aggregated files - one HTTP GET gives
+  # every Indian-Ocean profile for a day. Do NOT use ar_index_global_prof.txt
+  # (316 MB, verified 2026-09-07).
+  # ---------------------------------------------------------------------------
+  - id: argo_gdac_indian
+    title: "Argo GDAC (Ifremer) - Indian Ocean daily profile files"
+    kind: gdac_geo
+    enabled: true
+    url: https://data-argo.ifremer.fr/geo/indian_ocean
+    path_template: "{year}/{month:02d}/{year}{month:02d}{day:02d}_prof.nc"
+    citation: "Argo GDAC (Ifremer), geo/indian_ocean daily profile files. Argo float data collected and made freely available by the International Argo Program."
+    variables:
+      - name: TEMP
+        canonical: sea_water_temperature
+        label: Temperature
+      - name: PSAL
+        canonical: sea_water_practical_salinity
+        label: Salinity
+    qc:
+      # PRIOR-ART.md §E.4 / Wong et al. 2020: good + probably-good only.
+      accept_flags: [1, 2]
+      prefer_adjusted: true   # use TEMP_ADJUSTED when its QC allows
+    dims:
+      profile: N_PROF
+      level: N_LEVELS
+    cf_overrides:
+      PRES:
+        standard_name: sea_water_pressure
+        units: dbar
+        positive: down    # pressure, NOT metres. Converted via gsw.z_from_p.
+
+  # ---------------------------------------------------------------------------
+  # PS-official reanalysis. DISABLED until Copernicus credentials exist.
+  # The ONLY source with depth-resolved currents (U/V) - required by F1's
+  # current-vector layer. Enable = set enabled: true + put creds in .env.
+  # ---------------------------------------------------------------------------
+  - id: glorys12
+    title: "Copernicus GLORYS12V1 global reanalysis (1/12 deg, 50 levels)"
+    kind: copernicus
+    enabled: false
+    disabled_reason: "Awaiting Copernicus Marine credentials (COPERNICUS_USER / COPERNICUS_PASS in .env). See docs/adr/0003."
+    url: https://data.marine.copernicus.eu
+    dataset_id: cmems_mod_glo_phy_my_0.083deg_P1D-m
+    citation: "E.U. Copernicus Marine Service Information, GLOBAL_MULTIYEAR_PHY_001_030 (GLORYS12V1)"
+    variables:
+      - name: thetao
+        canonical: sea_water_temperature
+        label: Temperature
+      - name: so
+        canonical: sea_water_practical_salinity
+        label: Salinity
+      - name: uo
+        canonical: eastward_sea_water_velocity
+        label: Eastward current
+      - name: vo
+        canonical: northward_sea_water_velocity
+        label: Northward current
+    dims:
+      time: time
+      depth: depth
+      lat: latitude
+      lon: longitude
+    cf_overrides: {}   # GLORYS12 is CF-clean; kept explicit to prove the contrast
+
+  # ---------------------------------------------------------------------------
+  # The OFFLINE=1 target. Written by tools/preprocess.py, read by the API.
+  # The API reads ONLY from here, so the offline path is the default code path
+  # (TRD M6) rather than a special case bolted on later.
+  # ---------------------------------------------------------------------------
+  - id: local_cube
+    title: "Local preprocessed cube (offline demo)"
+    kind: zarr
+    enabled: true
+    url: data/cube
+    members:
+      - store: incois_vam_bob.zarr
+        from_source: incois_vam_argo
+      - store: profiles.parquet
+        from_source: argo_gdac_indian
+        format: parquet
+    citation: "Derived from the sources named in each store's provenance.json"

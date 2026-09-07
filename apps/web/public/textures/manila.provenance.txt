@@ -1,0 +1,14 @@
+manila.png - SagarDrishti station-sheet substrate
+
+Origin: generated procedurally by tools/make_paper_tile.py in this
+repository. Seed 20260907, size 160x160, seamlessly tiling via an
+FFT low-pass (periodic by construction).
+
+Not sourced, not stock, not AI-image-generated. No third-party rights
+attach to it. Re-run the script to reproduce it byte-for-byte.
+
+Mean RGB: (196.0, 184.0, 154.0) - matches the
+--plate token #c4b89a = (196, 184, 154), so the tile
+is painted directly on the sheet rather than under a colour wash.
+
+sha256 (first 16): 0228c16ff9a174eb

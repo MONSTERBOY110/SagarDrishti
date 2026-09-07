@@ -1,0 +1,17 @@
+# SagarDrishti API service (TRD M2) - Python 3.11 (see docs/adr/0002-python-311.md)
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+PyYAML==6.0.2
+numpy==2.2.1
+xarray==2025.1.1
+netCDF4==1.7.2
+zarr==2.18.3
+numcodecs==0.13.1  # zarr 2.x needs numcodecs<0.16 (0.16 dropped blosc.cbuffer_sizes)
+dask==2024.12.1
+cf-xarray==0.10.0
+pandas==2.2.3
+pyarrow==18.1.0
+gsw==3.6.19
+httpx==0.28.1
+matplotlib==3.10.0
