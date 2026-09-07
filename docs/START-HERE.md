@@ -36,7 +36,9 @@ server and from the international Argo archive, cleans them up, and serves them
 to the web page. Government science files are messy in specific ways (a missing
 value stored as -9999, temperature labelled "degs" instead of Celsius, a depth
 axis that does not say whether depth counts upward or downward). All of that is
-handled and covered by 36 automated tests, so it stays handled.
+handled and covered by **281 automated tests**, so it stays handled. Four more
+tests drive a real browser through the whole demo and fail the build if
+anything reaches the internet.
 
 **The 3D scene.** The Bay of Bengal as a stack of 24 coloured layers, one per
 depth, from 5 m down to 2000 m. You can see the warm surface, the sharp
@@ -45,11 +47,50 @@ cyclones), and the cold deep water. It runs at **44 frames per second** on the
 weaker of this laptop's two graphics chips, which is the number that matters
 because it is the harder case.
 
-**The float click-through.** 13 real Argo floats are on the globe. Click one and
+**The float click-through.** 22 real instruments are on the globe. Click one and
 you get its actual temperature profile, 524 measurements in the case of float
 1902681, drawn as a coloured line against a dashed line showing the model. Where
 the two lines separate is where the model disagrees with reality. That is the
 whole point of the product, visible in one glance.
+
+**Two kinds of instrument, told apart.** 13 of those marks are ordinary Argo
+floats, drawn as squares, measuring temperature and salinity. The other 9 are
+profiles from 3 **biogeochemical floats**, drawn as diamonds, which also
+measure dissolved oxygen, chlorophyll, nitrate and pH. Click a diamond and the
+panel offers all of them. One of those floats reads **1.7 micromole of oxygen
+per kilogram at 141 metres** while the surface above it is 28.5 degrees: that is
+the Bay of Bengal oxygen minimum zone, water with effectively no oxygen in it,
+and it is the kind of thing an INCOIS scientist will recognise immediately.
+
+**The isosurface.** Switch on "Isosurface" in the left panel and the tool draws
+the single curved surface in the ocean where the temperature is exactly 26
+degrees, as real 3D geometry threading through the flat layers. That is the
+shape a cyclone forecaster actually reads: the deeper that surface, the more
+heat there is to fuel a storm. Drag the slider to pick a different value.
+
+Three things about it are worth knowing, because a judge may ask.
+
+It **agrees exactly** with the separate calculation we already had for the same
+quantity, to the last decimal place, in every water column where both apply.
+That is checked automatically on every run.
+
+It **stops short of the coast, on purpose**, and draws an orange line where it
+stops. Near the shore some of the surrounding measurements are missing, and
+rather than guess them we leave a hole and say how many cells we left out. The
+alternative is inventing data, which is the one thing this project never does.
+
+On the 10th of July it comes back as **two separate pieces**. That is real: a
+layer of warmer water sits trapped under cooler water in the Bay of Bengal, a
+known effect of monsoon and river freshwater. Nothing in our code knows that
+happens; the surface simply came out that way, which is a good sign.
+
+**Standards endpoints.** The tool also speaks the two international standards
+INCOIS use, so their existing software can read our data without knowing
+anything about us: a **WMS** map service (open it in QGIS and our temperature
+field appears as a layer) and a **WCS** coverage service (ask it for a region
+and it hands back a proper CF-convention NetCDF file). Plus a **plugin system**,
+with one plugin already running that computes the depth of the 26 degree
+isotherm, the number cyclone forecasters actually use.
 
 Everything works with **the WiFi switched off.** That is deliberate and it is a
 scoring criterion: no map service, no font service, no cloud anything. It all
@@ -102,8 +143,9 @@ I cannot do these. They need your account, your money, or your college.
 | 1 | **Get the internal hackathon date from the SPOC** | Everything is currently planned against a guess (Sep 12). If it is sooner, I need to cut scope deliberately rather than discover it late | **Highest.** One message |
 | 2 | **Make a free Copernicus Marine account** at data.marine.copernicus.eu, then give me the username and password | This is the only source of **ocean currents at depth.** The problem statement asks for current vectors and I cannot build them without it. INCOIS's free server has temperature and salinity but no deep currents | **High.** 5 minutes, free |
 | 3 | **Buy the SagarNode sensor parts** | The physical tank demo for the internal round. Full shop list, wiring diagram and the two mistakes that kill the board are in `docs/SAGARNODE-BOM.md`. Roughly Rs 1400 to 2900 | **High**, because delivery takes time |
+| 3b | **Find one glider or ship CTD file** for the Indian Ocean, in any text format (CSV, tab separated, an ODV export) | The problem statement names gliders and CTDs as instruments we must display. The reader for them is built and is the most heavily tested part of the codebase, but INCOIS do not publish such a file on their open server, so I have nothing to feed it. Any real one closes that requirement the day it arrives. A mentor or a college contact at a marine institute is the likeliest route | Medium |
 | 4 | **Install Docker Desktop** (or tell me to skip it) | The problem statement says the tool must be deployable on INCOIS's servers. The config files for that are written but have never been run, because Docker is not on this machine. A judge may ask | Medium |
-| 5 | **Commit and push the code** | You said you would handle git. Nothing has been committed. About 90 files are staged and waiting | Medium |
+| 5 | **Commit and push the code** | You said you would handle git. Nothing has been committed. Roughly 100 files are staged and waiting | Medium |
 | 6 | **Confirm the 6-member team** (at least one female member is an SIH hard rule) and 2 mentors | Registration requirement | Medium |
 | 7 | **Re-check the idea counter** on sih.gov.in for SIH26067 on **Sep 15 and Sep 19** | If it goes above ~150 ideas our odds drop and we should consider the backup problem statement | Two calendar reminders |
 
@@ -119,8 +161,11 @@ them is a P0 requirement that is missing:
   reality). Phase 4. The two curves are drawn today, but no number is claimed,
   and the panel says so on screen, because a number computed the quick way would
   not survive an INCOIS oceanographer's question.
-- **Cyclone warning polygons**, the **sensor rig**, **guided tours**, and the
-  standards endpoints (OGC WMS/WCS). Phases 2 and 4.
+- **Cyclone warning polygons**, the **sensor rig** and **guided tours**.
+  Phases 2 and 4. (The standards endpoints used to be on this list and are now
+  built, see above.)
+- **Depth-resolved currents** and a **chlorophyll layer**, both waiting on
+  items in your list above.
 
 ## 6. Honest weak points today
 
@@ -136,6 +181,9 @@ them is a P0 requirement that is missing:
 
 ---
 
-*Deeper detail, if you ever want it: `docs/PRD.md` for features, `docs/TRD.md`
-for architecture, `docs/ROADMAP.md` for dates and open items, `docs/adr/` for
-why specific technical choices were made, `README.md` for developer setup.*
+*Deeper detail, if you ever want it: `docs/P0-STATUS.md` for exactly where each
+of the problem statement's seven requirements stands and what proves it,
+`docs/PRD.md` for features, `docs/TRD.md` for architecture, `docs/ROADMAP.md`
+for dates and open items, `docs/PLUGINS.md` for the plugin interface,
+`docs/adr/` for why specific technical choices were made, `README.md` for
+developer setup.*

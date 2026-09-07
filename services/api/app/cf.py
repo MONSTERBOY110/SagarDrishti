@@ -190,6 +190,51 @@ def normalize_dataset(ds: xr.Dataset, spec: SourceSpec) -> xr.Dataset:
         )
         ds = ds.sortby("depth")
 
+        # STRICTLY increasing, which sortby alone does not give: it guarantees
+        # non-decreasing, so duplicate levels survive it silently. The module
+        # docstring has promised "strictly increasing" from the start and the
+        # tests assert it, but nothing enforced it at runtime on this path, and
+        # every consumer relies on it:
+        #
+        #   - any interpolation between two bracketing levels divides by
+        #     (z_lower - z_upper), which is zero across a duplicate pair;
+        #   - the renderer's depth-space level of detail assumes an ordering it
+        #     can bisect;
+        #   - a cell of zero thickness has no interior for a surface to cross.
+        #
+        # A duplicated level is a broken source file, not a subset request, so
+        # it belongs here at the boundary where messy input becomes the clean
+        # contract, and it must be loud rather than silently averaged away.
+        after = np.asarray(ds["depth"].values, dtype="float64")
+
+        # Finiteness FIRST, and the order is load-bearing rather than tidy. A
+        # NaN level makes `np.diff` produce NaN, `NaN > 0` is False so the
+        # monotonicity test below fails, and `NaN <= 0` is ALSO False so the
+        # list of offending pairs comes back empty and indexing it raises
+        # IndexError instead of the message the caller needed. Checking here
+        # means a NaN depth is reported as a NaN depth.
+        if not np.all(np.isfinite(after)):
+            bad = np.flatnonzero(~np.isfinite(after))
+            raise ValueError(
+                f"the depth axis carries {bad.size} non-finite value(s), first at "
+                f"level {int(bad[0])}, so those levels have no position in the water "
+                "column. A NaN depth cannot be sorted, interpolated across, or drawn."
+            )
+
+        if after.size > 1:
+            steps = np.diff(after)
+            if not np.all(steps > 0):
+                stuck = np.flatnonzero(steps <= 0)
+                first = int(stuck[0])
+                raise ValueError(
+                    f"the depth axis is not strictly increasing after sorting: "
+                    f"level {first} is {after[first]} m and level {first + 1} is "
+                    f"{after[first + 1]} m ({stuck.size} such pair(s)). Duplicate or "
+                    "reversed levels make a zero-thickness cell, and every depth "
+                    "interpolation downstream divides by that thickness. Fix the "
+                    "source file or drop the duplicate level before ingesting."
+                )
+
     # 5. Units: relabel first (typo fix), then convert (arithmetic).
     for var in spec.variables:
         if var.name not in ds.variables:

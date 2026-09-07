@@ -18,7 +18,17 @@ import { useEffect, useRef, useState } from "react";
 
 import { loadCesium } from "@/lib/cesium-loader";
 import { paintLevel, type Palette, type Scale } from "@/lib/colormap";
-import { sliceVisibility } from "@/lib/scene";
+import {
+  boundaryEdges,
+  positionsWithHeights,
+  vertexColors,
+  type IsosurfaceMesh,
+} from "@/lib/isosurface";
+import {
+  MAX_DRAWN_SLICES,
+  MAX_DRAWN_SLICES_WITH_ISOSURFACE,
+  sliceVisibility,
+} from "@/lib/scene";
 import type { FieldColumn, ProfileGlyph } from "@/lib/api";
 
 export interface FpsSample {
@@ -28,6 +38,8 @@ export interface FpsSample {
 
 interface Props {
   column: FieldColumn | null;
+  /** The extracted isosurface, or null when the layer is off (PS F1). */
+  isosurface: IsosurfaceMesh | null;
   profiles: ProfileGlyph[];
   selection: string | null;
   focusDepth: number;
@@ -37,6 +49,7 @@ interface Props {
   scale: Scale;
   vmin: number;
   vmax: number;
+  reverse: boolean;
   onFps: (s: FpsSample) => void;
   onPickProfile: (profileId: string | null) => void;
   onReady: () => void;
@@ -83,6 +96,18 @@ export default function OceanGlobe(props: Props) {
     Cesium: any;
     slices: any[];
     floats: any[];
+    /** The isosurface primitive and the polyline drawing the rim of its holes.
+     *  These live in `scene.primitives`, NOT in `viewer.entities`, which is why
+     *  the teardown below had to learn about them: the existing cleanup removed
+     *  entities only, and a leaked primitive shows up as a slow frame-rate
+     *  decay over a long demo rather than as a failing test. */
+    isosurface: any | null;
+    isoRim: any | null;
+    /** The mesh the primitive was BUILT from. The probe hooks read this rather
+     *  than the prop, so what they report is what is on screen: a hook keyed on
+     *  a prop can say a surface exists while the effect that draws it has not
+     *  run, which is the trap the drawnSlices readout already fell into once. */
+    isoMesh: IsosurfaceMesh | null;
   } | null>(null);
 
   /* --- build the viewer once ---------------------------------------------- */
@@ -196,7 +221,10 @@ export default function OceanGlobe(props: Props) {
       // Release the reference frame or the camera stays welded to that point.
       viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
-      cesiumRef.current = { viewer, Cesium, slices: [], floats: [] };
+      cesiumRef.current = {
+        viewer, Cesium, slices: [], floats: [],
+        isosurface: null, isoRim: null, isoMesh: null,
+      };
 
       /* --- FPS probe -------------------------------------------------------
          Frame durations, not a simple counter: the p1 (99th-percentile frame)
@@ -249,6 +277,16 @@ export default function OceanGlobe(props: Props) {
           entityCount: () => viewer.entities.values.length,
           /** Window coordinates of a station mark, so a test can click the real
            *  glyph and exercise scene.pick rather than poking the store. */
+          /** What the isosurface primitive actually carries, read from the
+           *  mesh the build effect stored rather than from a prop. */
+          isosurfaceTriangles: () => cesiumRef.current?.isoMesh?.n_triangles ?? 0,
+          isosurfaceComponents: () => cesiumRef.current?.isoMesh?.n_components ?? 0,
+          isosurfaceDepthRange: () => {
+            const m = cesiumRef.current?.isoMesh;
+            return m ? [m.depth_min, m.depth_max] : null;
+          },
+          /** So a test can prove a rebuild does not leak a primitive. */
+          primitiveCount: () => viewer.scene.primitives.length,
           floatWindowPos: (i: number) => {
             const e = cesiumRef.current?.floats[i];
             if (!e) return null;
@@ -306,6 +344,7 @@ export default function OceanGlobe(props: Props) {
         palette,
         scale,
         1, // alpha rides on the material colour, so the texture never repaints
+        props.reverse,
       );
       const entity = viewer.entities.add({
         rectangle: {
@@ -326,7 +365,7 @@ export default function OceanGlobe(props: Props) {
     viewer.scene.requestRender();
     // Palette/range changes repaint textures; depth/exaggeration/opacity do not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, props.column, props.palette, props.scale, props.vmin, props.vmax]);
+  }, [ready, props.column, props.palette, props.scale, props.vmin, props.vmax, props.reverse]);
 
   /* --- the depth cursor: one gesture, three synchronized readouts ---------- */
   useEffect(() => {
@@ -345,7 +384,14 @@ export default function OceanGlobe(props: Props) {
       }
     });
 
-    const alphas = sliceVisibility(column.depths, focusIndex, opacity);
+    // The stack yields budget to the surface when the surface is on: see
+    // MAX_DRAWN_SLICES_WITH_ISOSURFACE for the measurement behind the number.
+    const alphas = sliceVisibility(
+      column.depths,
+      focusIndex,
+      opacity,
+      props.isosurface ? MAX_DRAWN_SLICES_WITH_ISOSURFACE : MAX_DRAWN_SLICES,
+    );
     let drawn = 0;
     c.slices.forEach((entity, i) => {
       const a = alphas[i];
@@ -358,13 +404,160 @@ export default function OceanGlobe(props: Props) {
       }
       entity.rectangle.height = -column.depths[i] * exaggeration;
     });
-    if (process.env.NODE_ENV !== "production") {
-      const hook = (window as unknown as Record<string, any>).__sagarScene;
-      if (hook) hook.drawnSlices = drawn;
-    }
+    /* Keyed on the hook EXISTING, not on NODE_ENV. The hook is created under
+       either development or an explicit ?probe=1, and this write used to test
+       NODE_ENV alone: in a production build the hook was therefore present but
+       this field never written, so the end-to-end test could see the stack but
+       not how much of it was blended. Two conditions that must agree are one
+       condition too many. */
+    const hook = (window as unknown as Record<string, any>).__sagarScene;
+    if (hook) hook.drawnSlices = drawn;
     c.viewer.scene.requestRender();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, props.focusDepth, props.opacity, props.exaggeration, props.column]);
+    // props.isosurface is a dependency because the slice BUDGET depends on it:
+    // without it the stack would keep drawing ten slices until some other
+    // change happened to re-run this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, props.focusDepth, props.opacity, props.exaggeration, props.column, props.isosurface]);
+
+  /* --- the isosurface, as real geometry (PS requirement F1) ---------------- */
+  useEffect(() => {
+    const c = cesiumRef.current;
+    if (!ready || !c) return;
+    const { viewer, Cesium } = c;
+    const mesh = props.isosurface;
+
+    /* Remove the previous primitive FIRST and unconditionally. This effect
+       re-runs whenever the mesh or the exaggeration changes, and Cesium
+       consumes Geometry attributes at construction, so tracking either means
+       rebuilding. Forgetting the remove would leak a primitive per tick of the
+       exaggeration slider, which presents as a slow frame-rate decay over a
+       long demo rather than as a failure anything would catch. The existing
+       teardown removes ENTITIES only; a primitive lives in a different
+       collection. */
+    if (c.isosurface) {
+      viewer.scene.primitives.remove(c.isosurface);
+      c.isosurface = null;
+    }
+    if (c.isoRim) {
+      viewer.scene.primitives.remove(c.isoRim);
+      c.isoRim = null;
+    }
+    c.isoMesh = mesh;
+
+    if (!mesh || mesh.n_triangles === 0) {
+      viewer.scene.requestRender();
+      return;
+    }
+
+    // Depth positive down becomes height positive up in exactly one place,
+    // lib/isosurface.ts, and fromDegreesArrayHeights puts that height along
+    // the geodetic normal, which is what a depth below a surface point means.
+    const cartesians = Cesium.Cartesian3.fromDegreesArrayHeights(
+      positionsWithHeights(mesh, props.exaggeration),
+    );
+    const flat = new Float64Array(cartesians.length * 3);
+    for (let i = 0; i < cartesians.length; i++) {
+      flat[i * 3] = cartesians[i].x;
+      flat[i * 3 + 1] = cartesians[i].y;
+      flat[i * 3 + 2] = cartesians[i].z;
+    }
+
+    const geometry = new Cesium.Geometry({
+      attributes: new Cesium.GeometryAttributes({
+        position: new Cesium.GeometryAttribute({
+          componentDatatype: Cesium.ComponentDatatype.DOUBLE,
+          componentsPerAttribute: 3,
+          values: flat,
+        }),
+        // Coloured by DEPTH from the same lookup table the slices use, so one
+        // colorbar governs the scene. Colouring by the isovalue would say
+        // nothing: every vertex on the surface has that value by definition.
+        color: new Cesium.GeometryAttribute({
+          componentDatatype: Cesium.ComponentDatatype.UNSIGNED_BYTE,
+          componentsPerAttribute: 4,
+          normalize: true,
+          values: vertexColors(mesh, "deep", "linear"),
+        }),
+      }),
+      indices: Cesium.IndexDatatype.createTypedArray(mesh.n_vertices, mesh.indices),
+      primitiveType: Cesium.PrimitiveType.TRIANGLES,
+      boundingSphere: Cesium.BoundingSphere.fromVertices(Array.from(flat)),
+    });
+
+    const primitive = new Cesium.Primitive({
+      geometryInstances: new Cesium.GeometryInstance({ geometry }),
+      /* Flat and OPAQUE, both deliberately.
+         Opaque because the globe already runs translucency with up to ten
+         translucent slices; an eleventh translucent surface adds a
+         primitive-versus-entity depth-sort dependency Cesium will not resolve
+         cleanly, and the artefact would only appear from certain angles.
+         Flat because Gouraud-smoothing a facet 150 km across is a cosmetic lie
+         about the resolution of a 1-degree analysis: it is the same argument
+         the colorbar already makes for painting texels nearest-neighbour. */
+      appearance: new Cesium.PerInstanceColorAppearance({ flat: true, translucent: false }),
+      asynchronous: false,
+    });
+    viewer.scene.primitives.add(primitive);
+    c.isosurface = primitive;
+
+    /* The rim of every hole, drawn.
+       An edge used by exactly one triangle is a boundary, and on this surface
+       those are the cells the extractor REFUSED because a corner had no
+       measurement: land, the seabed and the sampled margin. Drawing it turns a
+       ragged edge from something a judge notices into something the picture
+       states. */
+    const rim = boundaryEdges(mesh, props.exaggeration);
+    if (rim.length >= 6) {
+      const rimPoints = Cesium.Cartesian3.fromDegreesArrayHeights(rim);
+      const rimFlat = new Float64Array(rimPoints.length * 3);
+      for (let i = 0; i < rimPoints.length; i++) {
+        rimFlat[i * 3] = rimPoints[i].x;
+        rimFlat[i * 3 + 1] = rimPoints[i].y;
+        rimFlat[i * 3 + 2] = rimPoints[i].z;
+      }
+      const rimColors = new Uint8Array(rimPoints.length * 4);
+      for (let i = 0; i < rimPoints.length; i++) {
+        // The caution ink of the design system, which is what marks a refusal
+        // everywhere else on this surface.
+        rimColors[i * 4] = 0xe8;
+        rimColors[i * 4 + 1] = 0x73;
+        rimColors[i * 4 + 2] = 0x5a;
+        rimColors[i * 4 + 3] = 0xff;
+      }
+      const rimGeometry = new Cesium.Geometry({
+        attributes: new Cesium.GeometryAttributes({
+          position: new Cesium.GeometryAttribute({
+            componentDatatype: Cesium.ComponentDatatype.DOUBLE,
+            componentsPerAttribute: 3,
+            values: rimFlat,
+          }),
+          color: new Cesium.GeometryAttribute({
+            componentDatatype: Cesium.ComponentDatatype.UNSIGNED_BYTE,
+            componentsPerAttribute: 4,
+            normalize: true,
+            values: rimColors,
+          }),
+        }),
+        indices: Cesium.IndexDatatype.createTypedArray(
+          rimPoints.length,
+          Array.from({ length: rimPoints.length }, (_, i) => i),
+        ),
+        primitiveType: Cesium.PrimitiveType.LINES,
+        boundingSphere: Cesium.BoundingSphere.fromVertices(Array.from(rimFlat)),
+      });
+      const rimPrimitive = new Cesium.Primitive({
+        geometryInstances: new Cesium.GeometryInstance({ geometry: rimGeometry }),
+        appearance: new Cesium.PerInstanceColorAppearance({ flat: true, translucent: false }),
+        asynchronous: false,
+      });
+      viewer.scene.primitives.add(rimPrimitive);
+      c.isoRim = rimPrimitive;
+    }
+
+    viewer.scene.requestRender();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, props.isosurface, props.exaggeration]);
 
   /* --- float glyphs: survey station marks, drawn not glyph-substituted ----- */
   useEffect(() => {
@@ -375,21 +568,36 @@ export default function OceanGlobe(props: Props) {
     for (const e of c.floats) viewer.entities.remove(e);
     c.floats = [];
 
-    const plain = stationMark(false);
-    const picked = stationMark(true);
+    // One canvas per (kind, selected) pair, built once per pass. Cheap, and it
+    // keeps the mark for a given instrument class identical everywhere.
+    const marks = new Map<string, HTMLCanvasElement>();
+    const markFor = (kind: string, selected: boolean) => {
+      const key = `${kind}:${selected}`;
+      let canvas = marks.get(key);
+      if (!canvas) {
+        canvas = stationMark(selected, kind);
+        marks.set(key, canvas);
+      }
+      return canvas;
+    };
+
     for (const p of props.profiles) {
       const isPicked = p.profile_id === props.selection;
       const entity = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0),
         billboard: {
-          image: isPicked ? picked : plain,
+          image: markFor(p.platform_kind, isPicked),
           width: isPicked ? 22 : 15,
           height: isPicked ? 22 : 15,
           // A station mark stays clickable even when the camera is inside the
           // water column and the mark sits behind a slice.
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
-        properties: { profileId: p.profile_id, wmo: p.wmo },
+        properties: {
+          profileId: p.profile_id,
+          wmo: p.wmo,
+          platformKind: p.platform_kind,
+        },
       });
       c.floats.push(entity);
     }
@@ -423,13 +631,20 @@ export default function OceanGlobe(props: Props) {
   );
 }
 
-/** A hydrographic station mark: an ink-outlined manila square with a centre
+/** A hydrographic station mark: an ink-outlined manila figure with a centre
  *  tick, drawn rather than borrowed from an icon font, in the sheet's own ink.
  *
- *  Selection is carried by an added registration box, the chart-drafting way of
- *  marking the station under examination, and not by a colour change: hue on
- *  this surface belongs to the measurement. */
-function stationMark(selected: boolean): HTMLCanvasElement {
+ *  INSTRUMENT CLASS IS CARRIED BY SILHOUETTE, NOT COLOUR. The PS asks for Argo
+ *  floats, gliders, CTD casts and BGC floats as distinguishable marks (PRD F2),
+ *  and on this surface hue belongs to the measurement: spending colour on a
+ *  platform category would put the legend in competition with the colorbar,
+ *  which has to stay readable as a measuring instrument. Chart practice agrees,
+ *  giving each observation type its own symbol. Square, diamond and triangle
+ *  are told apart by outline alone at 15 px, and stay told apart in a
+ *  photograph of a projector screen.
+ *
+ *  Selection is likewise an added registration box, not a colour change. */
+export function stationMark(selected: boolean, kind = "gdac_geo"): HTMLCanvasElement {
   const s = 44;
   const canvas = document.createElement("canvas");
   canvas.width = s;
@@ -450,7 +665,36 @@ function stationMark(selected: boolean): HTMLCanvasElement {
   ctx.strokeStyle = "#16130d";
   ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.rect(-8, -8, 16, 16);
+  switch (kind) {
+    case "gdac_bgc":
+      // Diamond: a profiling float carrying biogeochemical sensors as well as
+      // the CTD. Same platform family as the square, turned, because it is the
+      // same kind of instrument with more on board.
+      ctx.moveTo(0, -11);
+      ctx.lineTo(11, 0);
+      ctx.lineTo(0, 11);
+      ctx.lineTo(-11, 0);
+      ctx.closePath();
+      break;
+    case "file":
+      // Triangle: a cast from a ship or a glider, ingested from a text file.
+      // Not a free-drifting platform, so not a float shape.
+      ctx.moveTo(0, -10);
+      ctx.lineTo(9.5, 7.5);
+      ctx.lineTo(-9.5, 7.5);
+      ctx.closePath();
+      break;
+    case "mooring":
+    case "hf_radar":
+    case "adcp":
+      // Circle: a fixed station. It stays where it was put, which is the one
+      // thing that matters about it on a map.
+      ctx.arc(0, 0, 9.5, 0, Math.PI * 2);
+      break;
+    default:
+      // Square: a core Argo float, temperature and salinity.
+      ctx.rect(-8, -8, 16, 16);
+  }
   ctx.fill();
   ctx.stroke();
 

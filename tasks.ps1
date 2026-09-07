@@ -10,12 +10,19 @@
 #   ./tasks.ps1 offline   run the API with the network path disabled
 #   ./tasks.ps1 build     production build of the web client
 #   ./tasks.ps1 serve     serve the production build on :3000 (frees the port)
+#   ./tasks.ps1 demo      build AND serve, which is the one to use
+#
+# Use `demo` rather than build-then-serve by hand. `next start` reads the build
+# manifest once at boot, so a server left running across a rebuild serves stale
+# HTML that points at chunk names no longer on disk. The page then 400s on its
+# own assets and renders as an empty shell, which looks exactly like a data
+# outage and is not one. This cost real debugging time more than once.
 #
 # New here? Read docs/START-HERE.md first.
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'fetch', 'api', 'web', 'test', 'offline', 'build', 'serve')]
+    [ValidateSet('setup', 'fetch', 'api', 'web', 'test', 'offline', 'build', 'serve', 'demo', 'e2e')]
     [string]$Task = 'test'
 )
 
@@ -27,6 +34,20 @@ function Assert-Venv {
     if (-not (Test-Path $py)) {
         throw "No venv at $py. Run: ./tasks.ps1 setup"
     }
+}
+
+function Free-Port([int]$Port) {
+    # The same stale-server trap the header describes, in its second home.
+    # A uvicorn started WITHOUT --reload imports app.main once at boot, so a
+    # server left running while modules are added keeps serving the older app:
+    # a new route answers 404 and reads exactly like a broken endpoint. It is
+    # not. Freeing the port before every start makes the running server and the
+    # code on disk the same thing by construction.
+    Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Write-Output "freeing port $Port (pid $($_.OwningProcess))"
+            Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+        }
 }
 
 switch ($Task) {
@@ -44,17 +65,29 @@ switch ($Task) {
     }
     'api' {
         Assert-Venv
+        Free-Port 8000
         Push-Location (Join-Path $root 'services\api')
         try { & $py -m uvicorn app.main:app --reload --port 8000 } finally { Pop-Location }
     }
     'offline' {
         Assert-Venv
+        Free-Port 8000
         $env:OFFLINE = '1'
         Push-Location (Join-Path $root 'services\api')
         try { & $py -m uvicorn app.main:app --port 8000 } finally { Pop-Location }
     }
     'web' { pnpm web:dev }
     'build' { pnpm web:build }
+    'demo' {
+        pnpm web:build
+        if (-not $?) { throw 'build failed' }
+        & $PSCommandPath serve
+    }
+    'e2e' {
+        Assert-Venv
+        pnpm web:build
+        pnpm exec playwright test
+    }
     'serve' {
         # next start refuses to bind if a previous server is still holding the
         # port, and killing the shell does not always kill the node child.

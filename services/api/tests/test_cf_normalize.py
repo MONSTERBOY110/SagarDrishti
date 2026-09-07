@@ -189,3 +189,104 @@ def test_registry_matches_the_live_source_shape():
     # Only enabled sources are offered to the client.
     assert "glorys12" not in [s.id for s in reg.enabled()]
     assert "incois_vam_argo" in [s.id for s in reg.enabled()]
+
+
+# --- the depth axis must be STRICTLY increasing -----------------------------
+#
+# The module docstring has promised "depth positive down, metres, strictly
+# increasing" from the start, and the tests above assert it, but nothing
+# enforced it at runtime: `sortby("depth")` gives non-DECREASING, so a source
+# with a duplicated level sailed through and produced a zero-thickness cell.
+#
+# That matters because every consumer divides by that thickness. The D26 plugin
+# interpolates a crossing as (threshold - upper) / (lower - upper), and an
+# isosurface extractor does the same per cell edge. A duplicate level makes
+# both divide by zero, and numpy answers inf or nan rather than raising, so the
+# result would be a hole in a surface with no error anywhere to explain it.
+
+def _cube_with_depths(depths, spec_id="local_cube"):
+    """A minimal normalized-shape dataset with a chosen depth axis."""
+    import numpy as np
+    import xarray as xr
+
+    from app.registry import load_registry
+
+    n = len(depths)
+    data = np.arange(float(n * 2 * 2)).reshape(1, n, 2, 2)
+    ds = xr.Dataset(
+        {"TEMP": (("time", "depth", "lat", "lon"), data, {"units": "degC"})},
+        coords={
+            "time": ("time", np.array(["2026-07-30"], dtype="datetime64[ns]")),
+            "depth": ("depth", np.asarray(depths, dtype="float64"),
+                      {"units": "m", "positive": "down"}),
+            "lat": ("lat", np.array([10.0, 11.0])),
+            "lon": ("lon", np.array([85.0, 86.0])),
+        },
+    )
+    return ds, load_registry().get(spec_id)
+
+
+def test_a_duplicated_depth_level_is_refused(tmp_path):
+    """Two levels at the same depth make a cell with no interior."""
+    ds, spec = _cube_with_depths([5.0, 10.0, 10.0, 20.0])
+
+    with pytest.raises(ValueError) as err:
+        normalize_dataset(ds, spec)
+
+    message = str(err.value)
+    assert "strictly increasing" in message
+    assert "10.0" in message, "the message must name the level that repeats"
+    assert "zero-thickness" in message or "thickness" in message
+    # It must say what to do, not just that something is wrong.
+    assert "source file" in message
+
+
+def test_a_non_finite_depth_level_is_refused():
+    """A NaN depth cannot be sorted, interpolated across, or drawn.
+
+    Left alone it also defeats the duplicate check itself, because every
+    comparison against NaN is False and `np.diff` propagates it, so the
+    strictly-increasing test would pass a NaN through while rejecting a
+    duplicate. Checking finiteness explicitly closes that.
+    """
+    ds, spec = _cube_with_depths([5.0, float("nan"), 20.0])
+
+    with pytest.raises(ValueError) as err:
+        normalize_dataset(ds, spec)
+
+    assert "non-finite" in str(err.value)
+
+
+def test_an_unsorted_but_distinct_depth_axis_is_accepted_and_sorted():
+    """Out of order is a fixable presentation problem, not a broken file.
+
+    ERDDAP serves both orders and the sort is what the normalizer is for. Only
+    a duplicate is unfixable without inventing a rule for which level wins.
+    """
+    ds, spec = _cube_with_depths([20.0, 5.0, 10.0])
+
+    out = normalize_dataset(ds, spec)
+
+    assert list(out["depth"].values) == [5.0, 10.0, 20.0]
+    assert np.all(np.diff(out["depth"].values) > 0)
+
+
+def test_the_shipped_cube_has_a_strictly_increasing_depth_axis():
+    """The guard would be worthless if the real cube could not pass it."""
+    import pathlib
+
+    import xarray as xr
+
+    store = (
+        pathlib.Path(__file__).resolve().parents[3] / "data" / "cube" / "incois_vam_bob.zarr"
+    )
+    if not store.is_dir():
+        pytest.skip("no local cube; run tools/fetch_sample.py then tools/preprocess.py")
+
+    with xr.open_zarr(store) as ds:
+        depths = np.asarray(ds["depth"].values, dtype="float64")
+
+    assert depths.size == 24
+    assert np.all(np.isfinite(depths))
+    assert np.all(np.diff(depths) > 0), "the shipped cube violates its own contract"
+    assert depths[0] == 5.0 and depths[-1] == 2000.0

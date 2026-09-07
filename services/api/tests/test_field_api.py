@@ -8,6 +8,7 @@ contract is tested, not assumed.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 
 def test_healthz_reports_offline_by_default(client):
@@ -149,3 +150,275 @@ def test_time_outside_the_range_is_400(client):
     )
     assert r.status_code == 400
     assert "time" in r.json()["detail"].lower()
+
+
+# --- GET /isosurface (PS requirement F1) ------------------------------------
+#
+# The extraction maths is tested in test_isosurface.py. What is tested here is
+# the seam: that the route inherits the same bbox and time refusals /field
+# already has, that the isovalue's units are checked rather than assumed, and
+# that the response carries enough provenance for a saved payload to be
+# explained without the URL that produced it.
+
+ISO = "/isosurface/incois_vam_argo/TEMP"
+
+
+def _iso(client, **extra):
+    params = {
+        "value": "26",
+        "value_units": "degC",
+        "bbox": "85,10,88,14",
+        "time": "2026-07-30",
+    }
+    params.update(extra)
+    return client.get(ISO, params=params)
+
+
+def test_isosurface_returns_a_mesh_with_its_provenance(client):
+    r = _iso(client)
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    assert body["source_id"] == "incois_vam_argo"
+    assert body["variable"] == "TEMP"
+    assert body["units"] == "degC"
+    assert body["value"] == 26.0
+    # The SNAPPED time, not the request string: a mesh labelled with what was
+    # asked for rather than what was served is a number without provenance.
+    assert body["time"].startswith("2026-07-30T")
+    assert body["citation"], "every mesh must carry a citation"
+    assert body["extractor"] == "marching_cubes"
+    assert body["extractor_version"]
+
+    # The method has to be specific enough to argue with, at the same standard
+    # the D26 plugin's method string already sets.
+    method = body["method"]
+    for phrase in ("marching cubes", ">= the isovalue", "all eight corners", "non-uniform"):
+        assert phrase in method, f"the method does not mention {phrase!r}"
+
+    assert body["n_triangles"] > 0
+    assert len(body["positions"]) == body["n_vertices"] * 3
+    assert len(body["indices"]) == body["n_triangles"] * 3
+    assert len(body["dz_bracket"]) == body["n_vertices"]
+    assert len(body["on_edge"]) == body["n_vertices"]
+
+
+def test_the_mesh_is_anchored_to_the_grid_it_came_from(client):
+    """A vertex must be traceable back to cube cells, not float free."""
+    body = _iso(client).json()
+
+    assert body["lats"] and body["lons"] and body["depths"]
+    assert body["depths"] == sorted(body["depths"])
+    positions = body["positions"]
+    lons = positions[0::3]
+    lats = positions[1::3]
+    depths = positions[2::3]
+    assert min(lons) >= min(body["lons"]) - 1e-6
+    assert max(lons) <= max(body["lons"]) + 1e-6
+    assert min(lats) >= min(body["lats"]) - 1e-6
+    assert max(lats) <= max(body["lats"]) + 1e-6
+    # Depth positive down, inside the levels the cube actually holds.
+    assert min(depths) >= min(body["depths"]) - 1e-6
+    assert max(depths) <= max(body["depths"]) + 1e-6
+
+
+def test_the_honesty_counters_are_all_present(client):
+    """The mesh analogue of n_cells and n_valid.
+
+    Land and the seabed leave a hole in the surface, and the count of cells
+    that straddled the isovalue but were refused for a missing corner is what
+    makes that hole a stated decision rather than something a reviewer finds.
+    """
+    body = _iso(client).json()
+
+    for key in (
+        "n_vertices", "n_triangles", "n_cells", "n_cells_active",
+        "n_cells_skipped_missing_corner", "n_cells_straddling_but_masked",
+        "n_cells_exact_tie", "n_ambiguous_cells", "n_degenerate_culled",
+        "n_components", "n_boundary_edges", "depth_min", "depth_max",
+        "max_bracket_thickness",
+    ):
+        assert key in body, f"missing counter {key}"
+
+    assert body["n_cells_active"] > 0
+    assert body["n_cells_skipped_missing_corner"] > 0, "the fixture has land in it"
+    # A surface that leaves the box has a legitimate rim, so this is expected
+    # rather than a defect. Its being zero on a field with land would be the
+    # surprise.
+    assert body["n_boundary_edges"] > 0
+
+
+def test_a_mismatched_isovalue_unit_is_refused(client):
+    """26 degC and 26 K are different surfaces and both look reasonable in a
+    URL. Relabelling a number whose units were never converted is exactly the
+    failure the CF work exists to prevent."""
+    r = _iso(client, value="299", value_units="K")
+
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert "value_units" in detail and "'K'" in detail
+    assert "degC" in detail
+    assert "Convert the value first" in detail
+
+
+def test_value_units_is_required_not_defaulted(client):
+    """Defaulting it would make the dangerous case the silent one."""
+    r = client.get(ISO, params={"value": "26", "bbox": "85,10,88,14", "time": "2026-07-30"})
+    assert r.status_code == 422
+
+
+def test_an_isovalue_outside_the_field_is_an_empty_mesh_not_an_error(client):
+    """"No 500 degC surface exists in this box at this time" is a true answer
+    with a dataset and a timestamp behind it. A 404 would say the request was
+    malformed, which it was not."""
+    r = _iso(client, value="500")
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["n_vertices"] == 0
+    assert body["n_triangles"] == 0
+    assert body["positions"] == [] and body["indices"] == []
+    # The provenance block is still complete, so the emptiness is citable.
+    assert body["citation"] and body["time"] and body["method"]
+    assert body["n_cells"] > 0, "it still looked at the whole grid"
+
+
+def test_the_bbox_and_time_refusals_are_inherited_not_reimplemented(client):
+    bad_box = _iso(client, bbox="200,10,88,14")
+    assert bad_box.status_code == 400
+    assert "must lie in [-180, 180]" in bad_box.json()["detail"]
+
+    bad_time = _iso(client, time="1999-01-01")
+    assert bad_time.status_code == 400
+    assert "outside the available range" in bad_time.json()["detail"]
+
+
+def test_an_unknown_variable_names_what_is_available(client):
+    r = client.get(
+        "/isosurface/incois_vam_argo/NOPE",
+        params={"value": "26", "value_units": "degC", "bbox": "85,10,88,14", "time": "2026-07-30"},
+    )
+    assert r.status_code == 404
+    assert "TEMP" in r.json()["detail"]
+
+
+def test_a_derived_surface_product_cannot_be_meshed(client):
+    """D26 is already a surface. Asking for the isosurface of a depth field is
+    a different question, and answering it as though it were the same one would
+    produce a confident picture of nothing in particular."""
+    r = client.get(
+        "/isosurface/incois_vam_argo/D26",
+        params={"value": "60", "value_units": "m", "bbox": "85,10,88,14", "time": "2026-07-30"},
+    )
+    assert r.status_code == 404
+    detail = r.json()["detail"]
+    assert "no volume to mesh" in detail
+
+
+def test_an_unknown_dataset_points_at_the_catalog(client):
+    r = client.get(
+        "/isosurface/nope/TEMP",
+        params={"value": "26", "value_units": "degC", "bbox": "85,10,88,14", "time": "2026-07-30"},
+    )
+    assert r.status_code == 404
+    assert "GET /catalog" in r.json()["detail"]
+
+
+@pytest.fixture
+def shipped_iso_client(monkeypatch):
+    """Pointed at the REAL cube, for the claims that are about real ocean.
+
+    The synthetic fixture is a smooth exponential profile with one land column,
+    which is right for testing the contract and useless for testing whether the
+    Bay of Bengal actually behaves the way the method choice assumed.
+    """
+    import pathlib
+
+    from starlette.testclient import TestClient
+
+    from app.config import get_settings
+    from app.store import clear_caches
+
+    root = pathlib.Path(__file__).resolve().parents[3] / "data" / "cube"
+    if not (root / "incois_vam_bob.zarr").is_dir():
+        pytest.skip("no local cube; run tools/fetch_sample.py then tools/preprocess.py")
+
+    monkeypatch.setenv("SAGAR_CUBE", str(root))
+    monkeypatch.setenv("OFFLINE", "1")
+    get_settings.cache_clear()
+    clear_caches()
+
+    from app.main import app
+
+    with TestClient(app) as c:
+        yield c
+
+    get_settings.cache_clear()
+    clear_caches()
+
+
+def test_the_real_coastal_refusals_are_counted(shipped_iso_client):
+    """Land and the shelf put a hole in the surface exactly where a cyclone
+    forecaster looks. The count is what makes that a disclosed refusal instead
+    of an artifact a reviewer discovers."""
+    r = shipped_iso_client.get(
+        "/isosurface/incois_vam_argo/TEMP",
+        params={"value": "26", "value_units": "degC", "bbox": "80,5,95,25", "time": "2026-07-30"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    assert body["n_cells_straddling_but_masked"] > 0
+    assert body["n_cells_skipped_missing_corner"] > body["n_cells_active"]
+    assert "INCOIS" in body["citation"]
+    # The 26 degC isotherm sits in the upper hundred-odd metres of this basin.
+    assert 20.0 < body["depth_min"] < 80.0
+    assert 60.0 < body["depth_max"] < 250.0
+
+
+def test_the_salinity_surface_is_multi_valued_which_is_the_whole_point(shipped_iso_client):
+    """A single-depth-per-column product cannot represent this at all.
+
+    The 35 psu isohaline in the Bay of Bengal is crossed several times in
+    nearly every valid column, because monsoon and river freshwater cap saltier
+    water beneath. A height field would have to pick one crossing and call it
+    the surface, which would be wrong rather than merely lossy. This is the
+    concrete reason marching cubes was chosen over a depth-per-column product.
+    """
+    r = shipped_iso_client.get(
+        "/isosurface/incois_vam_argo/SAL",
+        params={"value": "35", "value_units": "1", "bbox": "80,5,95,25", "time": "2026-07-30"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    assert body["n_triangles"] > 0
+    assert body["n_components"] > 1, (
+        "the isohaline should break into several surfaces; one component would "
+        "suggest the extractor is collapsing the structure"
+    )
+    assert body["depth_max"] > body["depth_min"] + 50, (
+        "a multi-valued surface should span a real depth range"
+    )
+
+
+def test_the_inversion_date_yields_a_second_component_over_the_api(shipped_iso_client):
+    """End to end, the structure that justifies the whole method choice."""
+    def mesh(when):
+        r = shipped_iso_client.get(
+            "/isosurface/incois_vam_argo/TEMP",
+            params={"value": "26", "value_units": "degC",
+                    "bbox": "80,5,95,25", "time": when},
+        )
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    inverted = mesh("2026-07-10")
+    plain = mesh("2026-07-30")
+
+    assert inverted["n_components"] == 2, (
+        "the Bay of Bengal barrier-layer inversion should separate a warm lens "
+        "from the main thermocline sheet"
+    )
+    assert plain["n_components"] == 1
+    assert inverted["depth_max"] > plain["depth_max"]

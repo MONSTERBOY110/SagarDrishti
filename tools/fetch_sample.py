@@ -118,12 +118,123 @@ def fetch_argo(days: int, around: date) -> list[Path]:
     return got
 
 
+# Argo DATA_CENTRE code -> DAC directory name on the GDAC. Needed because the
+# core daily file records the two-letter centre code while the Sprof path uses
+# the directory name. Note IN: INCOIS is itself an Argo DAC, which is worth
+# knowing on stage.
+DAC_DIRECTORY = {
+    "AO": "aoml", "BO": "bodc", "CS": "csiro", "HZ": "csio", "IF": "coriolis",
+    "IN": "incois", "JA": "jma", "KM": "kma", "KO": "kordi", "ME": "meds",
+    "NM": "nmdis", "CI": "csio", "SI": "incois",
+}
+
+
+def _argo_chars(var) -> list[str]:
+    """One row of an Argo fixed-width char array -> a stripped string.
+
+    Same three-way decode as app/argo.py:_as_char, kept local so this script
+    stays importable without the API package's dependencies.
+    """
+    import numpy as np
+
+    out = []
+    for row in np.asarray(var[:]):
+        chars = []
+        for c in np.atleast_1d(row):
+            if isinstance(c, bytes):
+                chars.append(c.decode("ascii", "ignore"))
+            elif isinstance(c, str):
+                chars.append(c)
+            else:
+                try:
+                    code = int(c)
+                except (TypeError, ValueError):
+                    continue
+                if 0 < code < 128:
+                    chars.append(chr(code))
+        out.append("".join(chars).strip())
+    return out
+
+
+def discover_bgc_floats(core_files: list[Path]) -> dict[str, str]:
+    """WMO -> DAC directory for BGC floats inside the demo box.
+
+    Read out of the core daily files already on disk rather than from a pinned
+    list, because a pinned list goes stale the moment a float stops reporting
+    and then the BGC panel is empty for a reason nobody can see. PLATFORM_TYPE
+    is the discriminator: a BGC float announces itself as SOLO_BGC,
+    SOLO_BGC_MRV, PROVOR_BGC and so on.
+    """
+    import numpy as np
+    from netCDF4 import Dataset
+
+    west, south, east, north = BBOX
+    found: dict[str, str] = {}
+    for path in core_files:
+        with Dataset(path) as nc:
+            if "PLATFORM_TYPE" not in nc.variables:
+                continue
+            types = _argo_chars(nc["PLATFORM_TYPE"])
+            wmos = _argo_chars(nc["PLATFORM_NUMBER"])
+            centres = _argo_chars(nc["DATA_CENTRE"])
+            lat = np.asarray(nc["LATITUDE"][:], dtype="float64")
+            lon = np.asarray(nc["LONGITUDE"][:], dtype="float64")
+            for i, kind in enumerate(types):
+                if "BGC" not in kind.upper():
+                    continue
+                if not (west <= lon[i] <= east and south <= lat[i] <= north):
+                    continue
+                dac = DAC_DIRECTORY.get(centres[i].upper())
+                if dac and wmos[i]:
+                    found[wmos[i]] = dac
+    return found
+
+
+def fetch_argo_bgc(core_files: list[Path]) -> list[Path]:
+    """Download the Sprof file for each BGC float found in the demo box.
+
+    A BGC float's chlorophyll, oxygen, nitrate and pH are NOT in the core daily
+    files: those carry TEMP and PSAL only, so a BGC float looks like an
+    ordinary float there. The synthetic profile file is where the
+    biogeochemistry lives, and it is per float rather than per day.
+    """
+    reg = load_registry_from(REPO / "data" / "sources.yaml")
+    spec = reg.get("argo_bgc_indian")
+    if not spec.enabled:
+        print("\nArgo BGC: source disabled in sources.yaml, skipping")
+        return []
+
+    floats = dict.fromkeys(spec.platforms)  # pinned floats first, if any
+    if floats:
+        # A pinned float still needs a DAC; look it up from the core files and
+        # fall back to aoml only if the discovery finds nothing for it.
+        discovered = discover_bgc_floats(core_files)
+        floats = {w: discovered.get(w, "aoml") for w in floats}
+        print(f"\nArgo BGC: {len(floats)} pinned float(s) from sources.yaml")
+    else:
+        floats = discover_bgc_floats(core_files)
+        print(f"\nArgo BGC: {len(floats)} BGC float(s) discovered in the demo box "
+              f"{BBOX} by PLATFORM_TYPE")
+
+    got: list[Path] = []
+    for wmo, dac in sorted(floats.items()):
+        rel = spec.path_template.format(dac=dac, wmo=wmo)
+        dest = RAW / "argo_bgc" / f"{wmo}_Sprof.nc"
+        if dest.is_file():
+            print(f"  {dest.name} already present")
+            got.append(dest)
+        elif _get(f"{spec.url}/{rel}", dest, f"BGC float {wmo} (dac {dac})"):
+            got.append(dest)
+    return got
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--steps", type=int, default=3, help="model timesteps to fetch")
     ap.add_argument("--argo-days", type=int, default=3, help="Argo daily files to fetch")
     ap.add_argument("--argo-from", type=str, default=None, help="YYYY-MM-DD to walk back from")
     ap.add_argument("--list-times", action="store_true", help="show the model time axis and exit")
+    ap.add_argument("--no-bgc", action="store_true", help="skip the BGC synthetic profiles")
     args = ap.parse_args()
 
     RAW.mkdir(parents=True, exist_ok=True)
@@ -145,9 +256,17 @@ def main() -> int:
 
     argo = fetch_argo(args.argo_days, around)
 
+    # BGC is additive: the core floats already give a working demo, so a BGC
+    # failure must not fail the fetch. It is fetched last for that reason.
+    bgc: list[Path] = []
+    if argo and not args.no_bgc:
+        bgc = fetch_argo_bgc(argo)
+
     print("\nsummary")
     print(f"  model file : {'ok' if model else 'FAILED'}")
     print(f"  argo files : {len(argo)}")
+    print(f"  bgc files  : {len(bgc)}"
+          f"{'  (none found in the demo box)' if not bgc else ''}")
     if not model or not argo:
         print("\nIncomplete. Nothing downstream will work until both succeed.")
         return 1

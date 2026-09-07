@@ -90,18 +90,80 @@ def process_model(spec, src: Path) -> Path:
     return store
 
 
-def process_argo(spec, files: list[Path]) -> Path | None:
-    print(f"argo: {len(files)} file(s)")
+def model_time_window(store: Path) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+    """The span a profile may fall in to be shown beside this model cube.
+
+    The cube's own time axis, widened by half a timestep at each end. Without
+    this, a BGC float's synthetic profile file drags in that float's ENTIRE
+    deployment history: the three Bay of Bengal BGC floats carry 132 profiles
+    from 2025-04-15 to 2026-08-30, against a model cube covering three dates in
+    July 2026. Putting an April 2025 float mark inside a July 2026 field, on
+    one globe, under one time scrubber, states a co-location that does not
+    exist. Nine of those 132 profiles are genuinely contemporaneous, and those
+    are the ones worth drawing.
+    """
+    try:
+        ds = xr.open_zarr(store)
+    except Exception:
+        return None
+    times = pd.to_datetime(ds["time"].values)
+    if len(times) == 0:
+        return None
+    half = pd.Timedelta(days=5)
+    if len(times) > 1:
+        half = pd.Timedelta(np.median(np.diff(times.values))) / 2
+    return times.min() - half, times.max() + half
+
+
+def process_argo(
+    jobs: list[tuple[object, list[Path]]],
+    *,
+    window: tuple[pd.Timestamp, pd.Timestamp] | None = None,
+) -> Path | None:
+    """Parse every profile source into ONE table, tagged with where each row came from.
+
+    Takes a list of (spec, files) rather than a single source because the
+    profile table is the union of several instrument classes: core Argo floats,
+    BGC floats, and later the text-ingested glider and CTD casts. They share a
+    schema, a QC policy and a chart, so they belong in one table.
+
+    Every row carries `source_id`. That column replaces a guess: provenance was
+    routed by looking at the shape of the platform id, which works for a text
+    cast (prefixed "CTD-...") but silently misfiles a BGC float, whose WMO is
+    seven digits exactly like a core float's. A BGC measurement cited to the
+    core daily files would be the same misattribution the routing exists to
+    prevent, arriving by a different door.
+    """
     frames = []
-    for f in sorted(files):
-        df = parse_profiles(f, spec)
-        n_prof = df["profile_id"].nunique() if not df.empty else 0
-        print(f"  {f.name}: {n_prof} profiles, {len(df)} accepted levels")
-        frames.append(df)
+    per_source: dict[str, dict] = {}
+    for spec, files in jobs:
+        if not files:
+            continue
+        print(f"{spec.id}: {len(files)} file(s)")
+        for f in sorted(files):
+            df = parse_profiles(f, spec)
+            n_prof = df["profile_id"].nunique() if not df.empty else 0
+            print(f"  {f.name}: {n_prof} profiles, {len(df)} accepted levels")
+            if df.empty:
+                continue
+            df["source_id"] = spec.id
+            frames.append(df)
+        per_source[spec.id] = {
+            "title": spec.title,
+            "citation": spec.citation,
+            "source_url": spec.url,
+            "variables": [v.name for v in spec.variables],
+            "qc_accept_flags": spec.qc.accept_flags,
+            "prefer_adjusted": spec.qc.prefer_adjusted,
+            "n_files": len(files),
+        }
 
     if not frames:
         return None
-    df = pd.concat(frames, ignore_index=True)
+    # sort=False keeps column order stable; the BGC frame has more columns than
+    # the core one, and the extra ones arrive as NaN for core rows, which is
+    # correct: a core float did not measure chlorophyll.
+    df = pd.concat(frames, ignore_index=True, sort=False)
 
     # Restrict to the demo box so the client is not handed the whole basin.
     reg_defaults = load_registry_from(SOURCES).defaults.get("demo_bbox", [80, 5, 95, 25])
@@ -110,6 +172,16 @@ def process_argo(spec, files: list[Path]) -> Path | None:
     print(f"  {int(inside.sum())} of {len(df)} levels inside the demo box {reg_defaults}")
     df = df[inside].reset_index(drop=True)
 
+    if window is not None and not df.empty:
+        start, end = window
+        before = df["profile_id"].nunique()
+        current = df["time"].between(start, end)
+        dropped = before - df[current]["profile_id"].nunique()
+        print(f"  time window {start.date()} .. {end.date()} "
+              f"(the model cube's own span, widened half a step): "
+              f"{dropped} profile(s) dropped as not contemporaneous")
+        df = df[current].reset_index(drop=True)
+
     if df.empty:
         print("  !! no profiles inside the demo box")
         return None
@@ -117,23 +189,46 @@ def process_argo(spec, files: list[Path]) -> Path | None:
     out = CUBE / "profiles.parquet"
     df.to_parquet(out, index=False)
     summary = profile_summary(df)
+
+    # Which parameters actually survived QC, per source. "Declared" and
+    # "served" are different facts: a BGC float declares pH and may have every
+    # pH level rejected, and a panel that offers an empty variable looks broken.
+    measured = [c for c in df.columns if f"{c}_qc" in df.columns]
+    for source_id, record in per_source.items():
+        rows = df[df["source_id"] == source_id]
+        record["n_profiles"] = int(rows["profile_id"].nunique())
+        record["n_levels"] = int(len(rows))
+        record["n_platforms"] = int(rows["wmo"].nunique())
+        record["parameters_served"] = {
+            col: int(rows[col].notna().sum())
+            for col in measured
+            if int(rows[col].notna().sum()) > 0
+        }
+
+    primary = next(iter(per_source)) if per_source else "argo_gdac_indian"
     write_provenance(
         out,
-        source_id=spec.id,
-        title=spec.title,
-        citation=spec.citation,
-        variables=["TEMP", "PSAL"],
-        source_url=spec.url,
+        source_id=primary,
+        title="Profile observations (all instrument classes)",
+        citation="; ".join(r["citation"] for r in per_source.values()),
+        variables=sorted({v for r in per_source.values() for v in r["variables"]}),
+        source_url=per_source.get(primary, {}).get("source_url"),
         extra={
             "n_profiles": int(len(summary)),
             "n_levels": int(len(df)),
-            "n_floats": int(df["wmo"].nunique()),
-            "qc_accept_flags": spec.qc.accept_flags,
+            "n_platforms": int(df["wmo"].nunique()),
             "bbox": reg_defaults,
             "time_range": [str(df["time"].min()), str(df["time"].max())],
+            # Per-source detail, so a citation can name the file family a given
+            # profile came from rather than the union of everything ingested.
+            "sources": per_source,
         },
     )
-    print(f"  {len(summary)} profiles from {df['wmo'].nunique()} floats")
+    print(f"  {len(summary)} profiles from {df['wmo'].nunique()} platforms "
+          f"across {len(per_source)} source(s)")
+    for source_id, record in per_source.items():
+        served = ", ".join(f"{k} {v}" for k, v in record["parameters_served"].items())
+        print(f"    {source_id}: {record['n_profiles']} profiles, {served}")
     print(f"  -> {out.relative_to(REPO)}  ({out.stat().st_size / 1024:.0f} KB)\n")
     return out
 
@@ -201,7 +296,21 @@ def main() -> int:
     if not argo_files:
         print("no Argo files in data/raw/argo -- run tools/fetch_sample.py first")
         return 1
-    process_argo(reg.get("argo_gdac_indian"), argo_files)
+
+    jobs: list[tuple[object, list[Path]]] = [(reg.get("argo_gdac_indian"), argo_files)]
+
+    # BGC is additive. Absent files are not an error: the fetch skips BGC when
+    # no BGC float is in the demo box, and the demo works on core floats alone.
+    bgc_spec = reg.get("argo_bgc_indian") if reg.has("argo_bgc_indian") else None
+    bgc_files = sorted((RAW / "argo_bgc").glob("*_Sprof.nc"))
+    if bgc_spec and bgc_spec.enabled and bgc_files:
+        jobs.append((bgc_spec, bgc_files))
+    elif bgc_spec and bgc_spec.enabled:
+        print("no BGC files in data/raw/argo_bgc (none found in the demo box); "
+              "core floats only")
+
+    window = model_time_window(CUBE / 'incois_vam_bob.zarr')
+    process_argo(jobs, window=window)
 
     print("cube ready. Start the API:  ./tasks.ps1 api")
     return 0

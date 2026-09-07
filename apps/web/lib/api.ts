@@ -4,7 +4,11 @@
  * a citation: every field on these responses comes from the API, which gets it
  * from a store's provenance.json. */
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
+import type { IsosurfaceMesh } from "./isosurface";
+
+export type { IsosurfaceMesh };
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 
 export interface VariableInfo {
   name: string;
@@ -40,6 +44,16 @@ export interface FieldColumn {
   values: (number | null)[];
 }
 
+/**
+ * The registry `kind` of the instrument that took a profile.
+ *
+ * Carried through to the client because the PS asks for Argo floats, gliders,
+ * CTD casts and BGC floats as distinguishable marks (PRD F2), and because a
+ * BGC float's chlorophyll must never be cited to the core Argo daily files,
+ * which carry no chlorophyll at all.
+ */
+export type PlatformKind = "gdac_geo" | "gdac_bgc" | "file" | "mooring" | "hf_radar" | "adcp";
+
 export interface ProfileGlyph {
   profile_id: string;
   wmo: string;
@@ -48,6 +62,25 @@ export interface ProfileGlyph {
   lon: number;
   n_levels: number;
   max_depth: number;
+  source_id: string;
+  platform_kind: PlatformKind;
+  /** Parameters this profile actually SERVES, not what its class can measure. */
+  parameters: string[];
+}
+
+export interface ProfileParameter {
+  name: string;
+  label: string;
+  /**
+   * The unit the SOURCE FILE declares, verified against `data/sources.yaml` at
+   * parse time by services/api/app/argo.py:check_units. Trustworthy enough to
+   * label an axis with, which is why the client does not keep a units table of
+   * its own to drift out of step.
+   */
+  units: string;
+  canonical: string;
+  /** Levels of this parameter that passed QC, so a reader knows how sparse it is. */
+  n_values: number;
 }
 
 export interface ProfileDetail {
@@ -56,15 +89,28 @@ export interface ProfileDetail {
   time: string;
   lat: number;
   lon: number;
+  source_id: string;
+  platform_kind: PlatformKind;
   citation: string;
   qc_policy: string;
+  adjusted_preferred: boolean;
   n_levels: number;
+  parameters: ProfileParameter[];
+  /**
+   * `depth` and `pres` are always present. Every other key is a parameter this
+   * profile served, so the set of keys varies by instrument class: a core
+   * float has temp and psal, a BGC float adds doxy, chla, nitrate and pH.
+   *
+   * Nulls are gaps, NOT zeroes, and they are load-bearing. A BGC sensor
+   * samples far more sparsely than the CTD beside it, so oxygen exists at
+   * levels where temperature does not. Anything that plots these must leave
+   * the gaps open rather than joining across them, or the chart invents
+   * measurements between two real ones.
+   */
   levels: {
     depth: number[];
     pres: number[];
-    temp: (number | null)[];
-    psal: (number | null)[];
-  };
+  } & Record<string, (number | null)[]>;
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -83,6 +129,25 @@ async function get<T>(path: string): Promise<T> {
 
 export const api = {
   catalog: () => get<{ datasets: DatasetInfo[] }>("/catalog"),
+
+  /** The surface where a field takes a given value, as a triangle mesh (F1).
+   *
+   * `valueUnits` is required rather than defaulted, and the server refuses a
+   * mismatch: 26 degC and 26 K are different surfaces and both look equally
+   * reasonable in a URL. */
+  isosurface: (
+    sourceId: string,
+    variable: string,
+    value: number,
+    valueUnits: string,
+    bbox: string,
+    time: string,
+  ) =>
+    get<IsosurfaceMesh>(
+      `/isosurface/${sourceId}/${variable}?value=${encodeURIComponent(String(value))}` +
+        `&value_units=${encodeURIComponent(valueUnits)}` +
+        `&bbox=${encodeURIComponent(bbox)}&time=${encodeURIComponent(time)}`,
+    ),
 
   column: (sourceId: string, variable: string, bbox: string, time: string) =>
     get<FieldColumn>(

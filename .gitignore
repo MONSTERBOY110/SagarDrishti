@@ -12,7 +12,7 @@ out/
 *.tsbuildinfo
 .pnpm-store/
 
-# Data — NEVER commit the cube (2-4 GB) or raw downloads
+# Data: NEVER commit the cube (2-4 GB) or raw downloads
 data/raw/*
 data/cube/*
 !data/raw/.gitkeep
@@ -45,3 +45,7 @@ apps/web/public/cesium/
 
 # Playwright MCP scratch output
 .playwright-mcp/
+
+# Playwright artifacts
+test-results/
+playwright-report/

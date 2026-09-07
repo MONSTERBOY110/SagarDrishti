@@ -12,6 +12,29 @@
  */
 
 export type Palette = "thermal" | "haline" | "deep" | "balance" | "algae" | "gray";
+
+/** What each palette is FOR. Shown in the colorbar editor so the choice is a
+ *  scientific one rather than a preference: a diverging ramp on an absolute
+ *  field, or a sequential ramp on an anomaly, both misread the data. */
+export const PALETTE_USE: Record<Palette, string> = {
+  thermal: "temperature",
+  haline: "salinity",
+  deep: "depth and bathymetry",
+  balance: "anomalies and model minus observation",
+  algae: "chlorophyll, usually with a log scale",
+  gray: "print safe, and the fallback when colour is unavailable",
+};
+
+/** Diverging ramps carry a meaningful midpoint, so they belong on residuals and
+ *  anomalies, not on an absolute field. Declared here so the editor can say so. */
+export const PALETTE_DIVERGING: Record<Palette, boolean> = {
+  thermal: false,
+  haline: false,
+  deep: false,
+  balance: true,
+  algae: false,
+  gray: false,
+};
 export type Scale = "linear" | "log";
 
 const STOPS: Record<Palette, [number, number, number][]> = {
@@ -95,20 +118,39 @@ export function cssFor(
   vmax: number,
   palette: Palette = "thermal",
   scale: Scale = "linear",
+  reverse = false,
 ): string {
-  const [r, g, b] = rgbFor(v, vmin, vmax, palette, scale);
+  const [r, g, b] = rgbFor(v, vmin, vmax, palette, scale, reverse);
   return `rgb(${r} ${g} ${b})`;
 }
 
 /** A horizontal colorbar as a CSS gradient, for the sheet's legend field. */
-export function rampCss(palette: Palette, steps = 24): string {
+export function rampCss(palette: Palette, steps = 24, reverse = false): string {
   const table = lut(palette);
   const parts: string[] = [];
   for (let s = 0; s < steps; s++) {
-    const i = Math.round((s / (steps - 1)) * (LUT_SIZE - 1)) * 3;
-    parts.push(`rgb(${table[i]} ${table[i + 1]} ${table[i + 2]}) ${(s / (steps - 1)) * 100}%`);
+    const t = s / (steps - 1);
+    const i = Math.round((reverse ? 1 - t : t) * (LUT_SIZE - 1)) * 3;
+    parts.push(`rgb(${table[i]} ${table[i + 1]} ${table[i + 2]}) ${t * 100}%`);
   }
   return `linear-gradient(90deg, ${parts.join(", ")})`;
+}
+
+/** The colorbar range a log scale can actually accept.
+ *
+ * log10 of a non-positive number is undefined, so a log scale needs a strictly
+ * positive minimum. Rather than throwing at render time and blanking the scene,
+ * the editor asks for the nearest legal range and states that it did so: a
+ * silently clamped axis is a lying axis. */
+export function legalRange(
+  vmin: number,
+  vmax: number,
+  scale: Scale,
+): { vmin: number; vmax: number; adjusted: boolean } {
+  if (scale !== "log") return { vmin, vmax, adjusted: false };
+  const lo = vmin > 0 ? vmin : 1e-3;
+  const hi = vmax > lo ? vmax : lo * 10;
+  return { vmin: lo, vmax: hi, adjusted: lo !== vmin || hi !== vmax };
 }
 
 /**
@@ -131,6 +173,7 @@ export function paintLevel(
   palette: Palette,
   scale: Scale,
   alpha: number,
+  reverse = false,
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = nx;
@@ -155,7 +198,7 @@ export function paintLevel(
         img.data[p + 3] = 0; // land and fill: transparent, and black underneath
         continue;
       }
-      const [r, g, b] = rgbFor(v, vmin, vmax, palette, scale);
+      const [r, g, b] = rgbFor(v, vmin, vmax, palette, scale, reverse);
       img.data[p] = r;
       img.data[p + 1] = g;
       img.data[p + 2] = b;

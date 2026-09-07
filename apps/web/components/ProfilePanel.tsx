@@ -20,10 +20,60 @@
  * oceanographer. The panel says so on screen.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { modelProfileAt, type FieldColumn, type ProfileDetail } from "@/lib/api";
 import { rampCss, rgbFor, type Palette, type Scale } from "@/lib/colormap";
+
+/**
+ * Which profile parameter the gridded model can be compared against.
+ *
+ * The INCOIS analysis carries temperature and salinity, and nothing else. A
+ * BGC float's chlorophyll, oxygen, nitrate and pH have NO model counterpart,
+ * so for those the dashed model curve is not drawn and the panel says why.
+ * Drawing an empty dashed line, or worse borrowing the temperature column,
+ * would imply a comparison that does not exist.
+ */
+const MODEL_COUNTERPART: Record<string, string> = { temp: "TEMP", psal: "SAL" };
+
+/** The scene variable a profile parameter corresponds to, for colour parity. */
+const SCENE_VARIABLE: Record<string, string> = { temp: "TEMP", psal: "SAL" };
+
+/**
+ * Below this many samples a parameter is drawn WITH its sample points showing.
+ *
+ * A BGC sensor samples far more sparsely than the CTD beside it: on float
+ * 2903831 the CTD returns 1012 levels while nitrate returns 76. Joining 76
+ * points into a smooth curve without showing where they are invites reading
+ * the line between two samples as measured. Showing the marks is the ordinary
+ * oceanographic presentation and it is honest at a glance.
+ */
+const SPARSE_SAMPLE_LIMIT = 200;
+
+/**
+ * What to call the instrument, from its registry kind.
+ *
+ * The header said "Argo float" for everything, which is wrong the moment a
+ * ship cast or a BGC float is clicked. Naming the class is not decoration: a
+ * reader has to know whether the chlorophyll in front of them came off a float
+ * or out of a cruise file before they can judge it.
+ */
+function platformNoun(kind: string): string {
+  switch (kind) {
+    case "gdac_bgc":
+      return "BGC float";
+    case "file":
+      return "Cast";
+    case "mooring":
+      return "Mooring";
+    case "hf_radar":
+      return "HF radar";
+    case "adcp":
+      return "ADCP";
+    default:
+      return "Argo float";
+  }
+}
 
 interface Props {
   detail: ProfileDetail | null;
@@ -34,6 +84,7 @@ interface Props {
   scale: Scale;
   vmin: number;
   vmax: number;
+  reverse: boolean;
   focusDepth: number;
   stationCount: number;
   loading: boolean;
@@ -52,11 +103,43 @@ export default function ProfilePanel(p: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
 
-  const obs = p.detail
-    ? p.variable === "SAL"
-      ? p.detail.levels.psal
-      : p.detail.levels.temp
-    : null;
+  // Which of the clicked instrument's parameters is plotted. Panel-local,
+  // because it is a property of the profile in front of you and not of the
+  // scene: the globe keeps showing the field the scene variable selects.
+  const [chosen, setChosen] = useState<string | null>(null);
+
+  const available = p.detail?.parameters ?? [];
+
+  // Default to the parameter matching the scene variable, so clicking a float
+  // while looking at salinity opens salinity. A BGC float that does not carry
+  // it falls back to its first served parameter rather than an empty chart.
+  const param = useMemo(() => {
+    if (!available.length) return null;
+    if (chosen && available.some((a) => a.name === chosen)) return chosen;
+    const wanted = Object.keys(SCENE_VARIABLE).find(
+      (k) => SCENE_VARIABLE[k] === p.variable,
+    );
+    if (wanted && available.some((a) => a.name === wanted)) return wanted;
+    return available[0].name;
+  }, [available, chosen, p.variable]);
+
+  // A new profile clears the choice, so the selector cannot keep pointing at a
+  // parameter the newly clicked instrument does not measure.
+  useEffect(() => setChosen(null), [p.detail?.profile_id]);
+
+  const active = available.find((a) => a.name === param) ?? null;
+  const obs = p.detail && param ? (p.detail.levels[param] ?? null) : null;
+  // Never borrow the scene variable's unit for a different quantity: that put
+  // "Chlorophyll-a . degC" on the axis. An unknown unit is left blank, which is
+  // merely incomplete rather than wrong.
+  const obsUnits =
+    active?.units || (param && SCENE_VARIABLE[param] === p.variable ? p.units : "");
+  const obsLabel = active?.label || p.variable;
+  const modelVariable = param ? MODEL_COUNTERPART[param] : undefined;
+  // Colour the observed line from the colorbar only when it is measuring the
+  // same quantity the colorbar is scaled to. Colouring chlorophyll with a
+  // temperature ramp would state a scale that does not apply to it.
+  const colourMatchesScale = Boolean(param && SCENE_VARIABLE[param] === p.variable);
 
   useEffect(() => {
     let disposed = false;
@@ -75,7 +158,13 @@ export default function ProfilePanel(p: Props) {
         if (v !== null && Number.isFinite(v)) obsPairs.push([v, depths[i]]);
       }
 
-      const model = p.column ? modelProfileAt(p.column, p.detail.lat, p.detail.lon) : null;
+      // The model curve exists only for a parameter the model actually
+      // carries, AND only when the scene is showing that same variable, since
+      // `p.column` holds one variable at a time.
+      const comparable = modelVariable !== undefined && modelVariable === p.variable;
+      const model = comparable && p.column
+        ? modelProfileAt(p.column, p.detail.lat, p.detail.lon)
+        : null;
       const modelPairs: [number, number][] = [];
       if (model) {
         model.depths.forEach((d, i) => {
@@ -85,12 +174,16 @@ export default function ProfilePanel(p: Props) {
       }
 
       // Colour the observed line along its own length with the field's
-      // colorbar, so the chart and the globe speak one colour language.
-      const gradientStops = obsPairs.map((_, i) => {
-        const t = obsPairs.length === 1 ? 0 : i / (obsPairs.length - 1);
-        const [r, g, b] = rgbFor(obsPairs[i][0], p.vmin, p.vmax, p.palette, p.scale);
-        return { offset: t, color: `rgb(${r},${g},${b})` };
-      });
+      // colorbar, so the chart and the globe speak one colour language. Only
+      // when the two are measuring the same quantity: see colourMatchesScale.
+      const gradientStops = colourMatchesScale
+        ? obsPairs.map((_, i) => {
+            const t = obsPairs.length === 1 ? 0 : i / (obsPairs.length - 1);
+            const [r, g, b] = rgbFor(obsPairs[i][0], p.vmin, p.vmax, p.palette, p.scale, p.reverse);
+            return { offset: t, color: `rgb(${r},${g},${b})` };
+          })
+        : [];
+      const sparse = obsPairs.length > 0 && obsPairs.length < SPARSE_SAMPLE_LIMIT;
 
       const maxDepth = Math.max(
         obsPairs.length ? obsPairs[obsPairs.length - 1][1] : 0,
@@ -114,7 +207,7 @@ export default function ProfilePanel(p: Props) {
               items
                 .map(
                   (it) =>
-                    `${it.seriesName}: ${Number(it.value[0]).toFixed(2)} ${p.units} @ ${Number(
+                    `${it.seriesName}: ${Number(it.value[0]).toFixed(3)} ${obsUnits} @ ${Number(
                       it.value[1],
                     ).toFixed(0)} m`,
                 )
@@ -122,7 +215,7 @@ export default function ProfilePanel(p: Props) {
           },
           xAxis: {
             type: "value",
-            name: `${p.variable} · ${p.units}`,
+            name: obsUnits ? `${obsLabel} · ${obsUnits}` : obsLabel,
             nameLocation: "middle",
             nameGap: 20,
             nameTextStyle: {
@@ -172,7 +265,13 @@ export default function ProfilePanel(p: Props) {
               name: "OBSERVED",
               type: "line",
               data: obsPairs,
-              showSymbol: false,
+              // Sparse parameters show their sample points: see
+              // SPARSE_SAMPLE_LIMIT. The line between two BGC samples is
+              // drafting, not data, and the marks say which is which.
+              showSymbol: sparse,
+              symbol: "circle",
+              symbolSize: 3.5,
+              itemStyle: { color: INK },
               lineStyle: {
                 width: 2.4,
                 color: gradientStops.length
@@ -224,7 +323,8 @@ export default function ProfilePanel(p: Props) {
       disposed = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.detail, p.column, p.variable, p.units, p.palette, p.scale, p.vmin, p.vmax, p.focusDepth]);
+  }, [p.detail, p.column, p.variable, p.units, p.palette, p.scale, p.vmin, p.vmax,
+      p.reverse, p.focusDepth, param, obsUnits, obsLabel, colourMatchesScale, modelVariable]);
 
   // Dispose only on unmount; re-creating the chart per update would throw away
   // the canvas every time the depth cursor moves.
@@ -269,7 +369,7 @@ export default function ProfilePanel(p: Props) {
               color: "var(--ink)",
             }}
           >
-            {p.detail ? `Argo float ${p.detail.wmo}` : "Instrument profile"}
+            {p.detail ? `${platformNoun(p.detail.platform_kind)} ${p.detail.wmo}` : "Instrument profile"}
           </h2>
           {p.detail ? (
             <p
@@ -292,11 +392,8 @@ export default function ProfilePanel(p: Props) {
           {/* The Argo QC filter belongs on the observation panel, not on the
               model sheet: this is the data it actually describes. */}
           {p.detail && (
-            <span
-              className="overprint"
-              title="Argo QC flags 1 and 2 only (Wong et al. 2020)"
-            >
-              Argo QC 1-2
+            <span className="overprint" title={p.detail.qc_policy}>
+              {p.detail.platform_kind.startsWith("gdac") ? "ARGO QC 1-2" : "QC 1-2"}
             </span>
           )}
           {p.detail && (
@@ -309,6 +406,38 @@ export default function ProfilePanel(p: Props) {
 
       {p.detail ? (
         <>
+          {/* The parameters THIS instrument served. A core float shows two and
+              a BGC float up to seven, and one whose pH was entirely rejected
+              shows no pH: offering a variable that draws nothing reads as a
+              broken chart, so the API reports what it actually has. */}
+          {available.length > 1 && (
+            <div
+              role="group"
+              aria-label="Profile parameter"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.25rem",
+                padding: "0.4375rem 0.75rem 0",
+              }}
+            >
+              {available.map((a) => (
+                <button
+                  key={a.name}
+                  type="button"
+                  className="tick"
+                  aria-pressed={a.name === param}
+                  onClick={() => setChosen(a.name)}
+                  title={`${a.label}${a.units ? ` · ${a.units}` : ""} · ${a.n_values} accepted levels`}
+                  /* No inline colour. `.tick[aria-pressed="true"]` already
+                     inverts to ink-on-plate; overriding the colour here put
+                     dark text on a dark ground and the label vanished. */
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div ref={hostRef} style={{ height: "19rem", width: "100%" }} />
           <div
             style={{
@@ -329,18 +458,33 @@ export default function ProfilePanel(p: Props) {
                   height: "0.1875rem",
                   // The real ramp, not an approximation of it: a legend that
                   // does not match the line it describes is a wrong legend.
-                  background: rampCss(p.palette),
+                  // Ink when the line is ink, for the same reason.
+                  background: colourMatchesScale
+                    ? rampCss(p.palette, 24, p.reverse)
+                    : "var(--ink)",
                 }}
               />
               OBSERVED
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: "0.3125rem" }}>
-              <span
-                aria-hidden
-                style={{ width: "1.25rem", borderTop: "1.4px dashed var(--ink)" }}
-              />
-              MODEL · nearest cell
-            </span>
+            {/* Only claimed when it is actually drawn. The INCOIS analysis has
+                no chlorophyll, oxygen, nitrate or pH, so for those parameters
+                there is nothing to compare against and saying so is the whole
+                point. */}
+            {modelVariable === p.variable ? (
+              <span style={{ display: "flex", alignItems: "center", gap: "0.3125rem" }}>
+                <span
+                  aria-hidden
+                  style={{ width: "1.25rem", borderTop: "1.4px dashed var(--ink)" }}
+                />
+                MODEL · nearest cell
+              </span>
+            ) : (
+              <span style={{ color: "var(--ink-faint)" }}>
+                {modelVariable
+                  ? `MODEL · switch the scene to ${modelVariable} to compare`
+                  : "MODEL · this analysis carries no " + (obsLabel || "").toLowerCase()}
+              </span>
+            )}
           </div>
           <footer
             style={{
@@ -392,8 +536,11 @@ export default function ProfilePanel(p: Props) {
                   color: "var(--ink-soft)",
                 }}
               >
-                Every mark is a real Argo profile inside the Bay of Bengal box,
-                filtered to QC flags 1 and 2.
+                Every mark is a real profile inside the Bay of Bengal box,
+                contemporaneous with the model field, filtered to QC flags 1
+                and 2. Square marks are Argo floats; a diamond is a float
+                carrying biogeochemical sensors, so it also reads oxygen,
+                chlorophyll, nitrate and pH.
               </p>
             </>
           )}

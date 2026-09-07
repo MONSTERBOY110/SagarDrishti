@@ -13,5 +13,8 @@ cf-xarray==0.10.0
 pandas==2.2.3
 pyarrow==18.1.0
 gsw==3.6.19
-httpx==0.28.1
 matplotlib==3.10.0
+# NOTE: no HTTP client is listed here on purpose. app/store.py asserts that
+# services/api contains no network client, and an auditor reads this file
+# before reading imports. httpx is a TEST-only dependency (it backs
+# starlette.testclient) and lives in requirements-dev.txt.

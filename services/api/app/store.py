@@ -115,6 +115,14 @@ def nearest_time(ds: xr.Dataset, wanted: str) -> np.datetime64:
         target = pd.Timestamp(wanted)
     except (ValueError, TypeError):
         raise SubsetError(f"time {wanted!r} is not a valid ISO-8601 timestamp") from None
+    # NaT parses without raising, and every comparison against it is False, so
+    # the range check below would pass and argmin over an all-NaN difference
+    # array would return index 0. The caller would be handed the first timestep
+    # while believing it asked for something else. Pandas also warns that the
+    # all-NA argmin will raise in a future version, which would turn this into
+    # a 500 later. Refuse it here instead.
+    if pd.isna(target):
+        raise SubsetError(f"time {wanted!r} is not a usable timestamp")
     if target.tzinfo is not None:
         target = target.tz_convert("UTC").tz_localize(None)
 
@@ -137,6 +145,11 @@ def nearest_time(ds: xr.Dataset, wanted: str) -> np.datetime64:
 
 def nearest_depth(ds: xr.Dataset, wanted: float) -> float:
     depths = np.asarray(ds["depth"].values, dtype="float64")
+    # float("nan") parses fine and then makes both range comparisons False, so
+    # an unusable depth would sail through and argmin would silently return the
+    # shallowest level. A served number must be the number that was asked for.
+    if not np.isfinite(wanted):
+        raise SubsetError(f"depth {wanted!r} is not a finite value in metres")
     if wanted < depths.min() - 1e-6 or wanted > depths.max() + 1e-6:
         raise SubsetError(
             f"depth {wanted} m is outside the available range "

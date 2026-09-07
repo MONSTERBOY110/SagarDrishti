@@ -13,6 +13,22 @@ on:
   pull_request:
 
 jobs:
+  house-style:
+    name: house style (typography rule)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the guard asks git for the tracked file list
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # The team lead's rule is zero em and en dashes. It was applied once
+      # across 167 instances; without a guard the next paragraph reintroduces
+      # them. Cheap job, runs in seconds, fails loudly with the file and line.
+      - name: No em or en dashes
+        run: python tools/check_dashes.py
+
   data-plane:
     name: data plane (pytest)
     runs-on: ubuntu-latest
@@ -67,3 +83,44 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/healthz && break; sleep 1; done
           curl -sf http://127.0.0.1:8000/healthz | tee /dev/stderr | grep -q '"offline":true'
           curl -sf "http://127.0.0.1:8000/catalog" > /dev/null
+
+  e2e:
+    name: demo path (production build, air-gap guard)
+    runs-on: ubuntu-latest
+    needs: [data-plane, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r services/api/requirements-dev.txt
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+      # No network: the cube is built from the committed fixtures, so this job
+      # never reaches INCOIS and cannot go red because a government server is down.
+      - name: Build the fixture cube
+        run: .venv/bin/python tools/preprocess.py --fixtures
+      - name: Production build
+        run: pnpm web:build
+      # The suite boots its own API and web server (see playwright.config.ts) and
+      # fails on ANY off-origin request, which is how PRD F11's air-gapped promise
+      # is enforced mechanically rather than by inspection.
+      - name: Demo path
+        run: pnpm e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-trace
+          path: test-results/
+          retention-days: 7

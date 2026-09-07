@@ -85,9 +85,11 @@ sources:
       - name: TEMP
         canonical: sea_water_temperature
         label: Temperature
+        units: "degree_Celsius"
       - name: PSAL
         canonical: sea_water_practical_salinity
         label: Salinity
+        units: "psu"
     qc:
       # PRIOR-ART.md §E.4 / Wong et al. 2020: good + probably-good only.
       accept_flags: [1, 2]
@@ -100,6 +102,230 @@ sources:
         standard_name: sea_water_pressure
         units: dbar
         positive: down    # pressure, NOT metres. Converted via gsw.z_from_p.
+
+  # ---------------------------------------------------------------------------
+  # The ASCII half of F3. Cruise CTD and glider text casts. Adding another text
+  # layout is another entry here and NO code change: that is the whole claim,
+  # and app/text_profiles.py documents the schema.
+  #
+  # SCOPE, STATED PRECISELY. This handles delimited text that carries a
+  # COLUMN-NAME ROW, which covers ERDDAP tabledap exports, most glider CSV and
+  # hand-prepared cruise tables. It does NOT handle a raw Sea-Bird Seasave
+  # .cnv: Seasave declares its columns in "# name 0 = prDM: Pressure" header
+  # lines and then writes a fixed-width numeric block with no column-name row
+  # at all, and the parser raises rather than guessing. An earlier draft of this
+  # entry was titled ".cnv style" with path_template "*.cnv", which promised
+  # something the code cannot do; supporting real .cnv is tracked as a Phase 2
+  # item in docs/ROADMAP.md.
+  #
+  # No files are on disk under data/raw/ctd yet. The entry is live so the
+  # config path is real and testable; tools/preprocess.py ingests whatever
+  # appears there.
+  # ---------------------------------------------------------------------------
+  - id: ctd_text_ascii
+    title: "Cruise CTD / glider profiles (delimited text with a column-name row)"
+    kind: file
+    enabled: true
+    url: data/raw/ctd
+    path_template: "*.txt"
+    citation: "Cruise CTD / glider delimited-text profiles; per-file provenance in data/cube/provenance.json"
+    variables:
+      - name: TEMP
+        canonical: sea_water_temperature
+        label: Temperature
+      - name: PSAL
+        canonical: sea_water_practical_salinity
+        label: Salinity
+    qc:
+      accept_flags: [1, 2]
+      prefer_adjusted: false   # a text cast has no *_ADJUSTED variant
+    text:
+      encoding: auto
+      comment_prefixes: ["*", "#", "%"]
+      delimiter: auto
+      decimal: auto
+      column_row: auto
+      units_row: false
+      columns:
+        pres: ["Pressure", "prDM", "PRES"]
+        temp: ["Temperature", "t090C", "TEMP", "Temp"]
+        psal: ["Salinity", "sal00", "PSAL", "Sal"]
+        qc: ["Flag", "flag"]
+      header_metadata:
+        platform: ["Station", "Platform", "platform_code"]
+        cast: ["Cast"]
+        lat: ["NMEA Latitude", "Latitude", "Lat"]
+        lon: ["NMEA Longitude", "Longitude", "Lon"]
+        time: ["NMEA UTC (Time)", "Date", "start_time"]
+      time_formats: ["%b %d %Y %H:%M:%S", "%Y-%m-%d %H:%M:%S"]
+      profile_id_from: ["platform", "cast", "time"]
+      platform_prefix: CTD   # keeps a station id from colliding with an Argo WMO
+      # -1.0e+34 needs the SIGNED exponent: PyYAML follows YAML 1.1, where
+      # "-1.0e34" loads as a string, not a float.
+      missing: [-999, -9.99, -1.0e+34, "NaN", "n/a", "---"]
+      vertical:
+        column: auto
+        units: auto
+        positive: auto
+      derive_pressure: true
+      flags:
+        map: {}            # this family already writes Argo 1-9
+        when_absent: 1
+        when_blank: 9
+
+  # ---------------------------------------------------------------------------
+  # The SAME parser, a completely different format. Kept as a separate entry
+  # because ODV repeats "QF" after every data column while a plain cast writes
+  # one unqualified level flag - only ODV sets qc_follows_value.
+  # ---------------------------------------------------------------------------
+  - id: odv_spreadsheet
+    title: "Ocean Data View spreadsheet export (profiles)"
+    kind: file
+    enabled: true
+    url: data/raw/odv
+    path_template: "*.txt"
+    citation: "Ocean Data View spreadsheet export; per-file provenance in data/cube/provenance.json"
+    variables:
+      - name: TEMP
+        canonical: sea_water_temperature
+        label: Temperature
+      - name: PSAL
+        canonical: sea_water_practical_salinity
+        label: Salinity
+    qc:
+      accept_flags: [1, 2]
+      prefer_adjusted: false
+    text:
+      encoding: auto
+      comment_prefixes: ["//"]
+      delimiter: tab
+      columns:
+        platform: ["Station"]
+        time: ["yyyy-mm-ddThh:mm:ss.sss"]
+        lat: ["Latitude"]
+        lon: ["Longitude"]
+        pres: ["Pressure"]
+        depth: ["Depth", "DEPTH"]
+        temp: ["Temperature", "Temp"]
+        psal: ["Salinity", "Sal"]
+        qc: ["QF", "QV:ODV"]
+      # ODV repeats "QF" after every data column, so a flag can only be bound
+      # to the value it follows.
+      qc_follows_value: true
+      # Identity cells are written on a station's FIRST row only.
+      forward_fill_identity: true
+      time_formats: ["%Y-%m-%dT%H:%M:%S.%f"]
+      profile_id_from: ["platform", "time"]
+      platform_prefix: ODV
+      # ODV puts the unit in the column name ("Pressure [db]"), so the vertical
+      # axis resolves from there with no units row at all.
+      vertical:
+        column: auto
+        units: auto
+        positive: auto
+      derive_pressure: true
+      flags:
+        # SeaDataNet vocabulary, NOT Argo's: 0 = no QC, 1 = good,
+        # 2 = probably good, 3 = probably bad, 4 = bad, 8 = interpolated
+        # (Argo's 3), 9 = missing.
+        map: {"0": 1, "1": 1, "2": 2, "3": 3, "4": 4, "8": 3, "9": 9}
+        when_absent: 1
+        when_blank: 9
+
+
+  # ---------------------------------------------------------------------------
+  # The "BGC" instrument class named in PRD F2, from real Argo biogeochemical
+  # floats. Synthetic profile files (<wmo>_Sprof.nc), which is where a BGC
+  # float's chlorophyll, oxygen, nitrate and pH actually live: the core
+  # geo/indian_ocean daily files carry TEMP and PSAL only, so a BGC float
+  # appears there as an ordinary float with its biogeochemistry missing.
+  #
+  # HOW THE FLOATS ARE FOUND. Not from a hardcoded list. tools/fetch_sample.py
+  # reads PLATFORM_TYPE out of the core daily files already on disk, keeps the
+  # ones whose type contains "BGC" and whose position falls in the demo box,
+  # and maps DATA_CENTRE to the DAC directory. A pinned WMO list would go stale
+  # the moment a float stopped reporting; `platforms:` below exists only to pin
+  # a known-good float for a rehearsal.
+  #
+  # THREE THINGS THIS SOURCE PROVED, all of them real and all of them the kind
+  # of defect the CF and QC work exists for:
+  #
+  #  1. `prefer_adjusted` is load-bearing, not a nicety. On float 1902367 the
+  #     raw CHLA_QC is flag 3 on every single one of its 13,934 measured
+  #     levels, and flag 4 on two more. Nothing is flag 1 or 2. Only
+  #     CHLA_ADJUSTED_QC reaches flag 2 (13,688 levels). A reader that ignored
+  #     the adjusted product and applied our own accept_flags [1, 2] would
+  #     therefore serve ZERO chlorophyll and look like a plumbing failure.
+  #     DOXY is the same shape: raw all flag 3, adjusted all flag 1.
+  #
+  #  2. A third fill convention. INCOIS VAM uses -9999.0, the value-added
+  #     products use -1.0E34, and these files use 99999.0. All three are
+  #     declared in the file and handled by xarray's mask_and_scale, which is
+  #     exactly why app/cf.py trusts the declaration instead of hunting for
+  #     magic numbers.
+  #
+  #  3. Raw BGC values are not physical until adjusted. Raw CHLA runs to
+  #     -0.993 mg/m3 (negative chlorophyll, from fluorometer dark-offset
+  #     drift) and raw PH_IN_SITU_TOTAL spans -381.6 to 157.6 against an ocean
+  #     range of roughly 7.4 to 8.2. The QC flags reject them and our policy
+  #     drops them. This is the clearest available answer to "why not just plot
+  #     the file".
+  #
+  # QC POLICY, STATED PRECISELY. accept_flags stays [1, 2], so Argo flag 5
+  # ("value changed") and flag 8 ("estimated/interpolated") are REJECTED even
+  # though some BGC workflows accept them. On float 1902367 that costs 246
+  # flag-5 and 2 flag-8 chlorophyll levels. Deliberate: a number on stage
+  # should be one a float measured, not one somebody interpolated, and if a
+  # judge asks we can say which flags we take and why in one sentence.
+  # ---------------------------------------------------------------------------
+  - id: argo_bgc_indian
+    title: "Argo BGC floats (synthetic profiles) - Indian Ocean"
+    kind: gdac_bgc
+    enabled: true
+    url: https://data-argo.ifremer.fr/dac
+    path_template: "{dac}/{wmo}/{wmo}_Sprof.nc"
+    citation: "Argo GDAC (Ifremer), BGC synthetic profiles (Sprof). Argo float data collected and made freely available by the International Argo Program and the national programmes that contribute to it."
+    platforms: []          # discovered from the core files; see the note above
+    variables:
+      - name: TEMP
+        canonical: sea_water_temperature
+        label: Temperature
+        units: "degree_Celsius"
+      - name: PSAL
+        canonical: sea_water_practical_salinity
+        label: Salinity
+        units: "psu"
+      - name: DOXY
+        canonical: moles_of_oxygen_per_unit_mass_in_sea_water
+        label: Dissolved oxygen
+        units: "micromole/kg"
+      - name: CHLA
+        canonical: mass_concentration_of_chlorophyll_a_in_sea_water
+        label: Chlorophyll-a
+        units: "mg/m3"
+      - name: NITRATE
+        canonical: moles_of_nitrate_per_unit_mass_in_sea_water
+        label: Nitrate
+        units: "micromole/kg"
+      - name: PH_IN_SITU_TOTAL
+        canonical: sea_water_ph_reported_on_total_scale
+        label: pH
+        units: "dimensionless"
+      - name: BBP700
+        canonical: volume_scattering_function_of_radiative_flux_in_sea_water
+        label: Particle backscattering (700 nm)
+        units: "m-1"
+    qc:
+      accept_flags: [1, 2]
+      prefer_adjusted: true   # see note 1 above: without this, no chlorophyll
+    dims:
+      profile: N_PROF
+      level: N_LEVELS
+    cf_overrides:
+      PRES:
+        standard_name: sea_water_pressure
+        units: dbar
+        positive: down
 
   # ---------------------------------------------------------------------------
   # PS-official reanalysis. DISABLED until Copernicus credentials exist.

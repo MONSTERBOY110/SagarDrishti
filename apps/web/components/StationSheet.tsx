@@ -17,7 +17,8 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { levelMean, type DatasetInfo, type FieldColumn } from "@/lib/api";
-import { cssFor, normalize, rampCss, type Palette, type Scale } from "@/lib/colormap";
+import ColorbarEditor from "@/components/ColorbarEditor";
+import { cssFor, normalize, type Palette, type Scale } from "@/lib/colormap";
 
 interface Props {
   dataset: DatasetInfo | null;
@@ -33,9 +34,23 @@ interface Props {
   scale: Scale;
   vmin: number;
   vmax: number;
+  reverse: boolean;
+  colorbarLocked: boolean;
+  /** the range the field itself suggests, for the editor's Auto action */
+  dataRange: [number, number] | null;
   onVariable: (v: string) => void;
+  onColorbar: (patch: Record<string, unknown>) => void;
   onFocusDepth: (d: number) => void;
   onExaggeration: (v: number) => void;
+  /** The isosurface layer (PS F1): off by default, so it is stated rather than
+   *  assumed, and its own value control appears only when it is on. */
+  isosurfaceOn: boolean;
+  isovalue: number;
+  units: string;
+  /** One line about what was actually extracted, including what it refused. */
+  isoSummary: string | null;
+  onToggleIsosurface: () => void;
+  onIsovalue: (v: number) => void;
   onOpacity: (v: number) => void;
 }
 
@@ -66,9 +81,17 @@ export default function StationSheet(p: Props) {
   );
 
   useEffect(() => {
-    rackRef.current
-      ?.querySelector<HTMLElement>('[aria-selected="true"]')
-      ?.scrollIntoView({ block: "nearest" });
+    const row = rackRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    row?.scrollIntoView({ block: "nearest" });
+    /* Move DOM focus along with the selection, but ONLY when focus is already
+       inside the rack. Arrow keys have to keep working after they move the
+       cursor, and without this the roving tabindex leaves focus on a row that
+       is now tabindex -1. Guarded, because the cursor also moves when a station
+       mark is clicked on the globe or the chart, and stealing focus to the
+       sheet then would yank the keyboard away from what the user was doing. */
+    if (row && rackRef.current?.contains(document.activeElement)) {
+      row.focus({ preventScroll: true });
+    }
   }, [focusIndex]);
 
   return (
@@ -138,17 +161,19 @@ export default function StationSheet(p: Props) {
           </div>
         </div>
 
-        {/* --- the scale, stated with its end values ------------------------ */}
-        <div className="block">
-          <div className="label">
-            Scale{units ? ` in ${units}` : ""}
-          </div>
-          <div className="ramp" style={{ background: rampCss(p.palette) }} />
-          <div className="ramp__ends num">
-            <span>{p.vmin.toFixed(1)}</span>
-            <span>{p.vmax.toFixed(1)}</span>
-          </div>
-        </div>
+        {/* --- the colorbar, editable: PS requirement F4 -------------------- */}
+        <ColorbarEditor
+          variable={p.variable}
+          units={units}
+          palette={p.palette}
+          scale={p.scale}
+          vmin={p.vmin}
+          vmax={p.vmax}
+          reverse={p.reverse}
+          locked={p.colorbarLocked}
+          dataRange={p.dataRange}
+          onChange={p.onColorbar}
+        />
 
         {/* --- the bottle rack ---------------------------------------------- */}
         <div className="block block--rack">
@@ -165,12 +190,17 @@ export default function StationSheet(p: Props) {
               {units ? ` ${units}` : ""}
             </span>
           </div>
+          {/* A listbox with focusable options must NOT itself be a tab stop.
+              With tabIndex 0 here and 24 natively focusable rows, reaching the
+              exaggeration slider cost 25 presses of Tab. The roving tabindex
+              below makes the whole rack one stop, which is the documented
+              listbox pattern and also simply what a forecaster expects. */}
           <ul
             ref={rackRef}
             className="rack"
             role="listbox"
             aria-label="Depth level"
-            tabIndex={0}
+            aria-activedescendant={depths.length ? `lvl-${focusIndex}` : undefined}
             onKeyDown={onKeyDown}
           >
             {depths.map((d, i) => {
@@ -182,7 +212,12 @@ export default function StationSheet(p: Props) {
                   <button
                     type="button"
                     role="option"
+                    id={`lvl-${i}`}
+                    tabIndex={i === focusIndex ? 0 : -1}
                     aria-selected={i === focusIndex}
+                    aria-label={`Level ${i + 1}, ${d} metres${
+                      mean === null ? ", no data" : `, ${mean.toFixed(2)} ${units}`
+                    }`}
                     data-empty={empty && !pending}
                     data-state={pending ? "pending" : undefined}
                     className="rack__row stamp"
@@ -200,7 +235,7 @@ export default function StationSheet(p: Props) {
                         empty
                           ? { border: "1px dashed var(--ink-faint)", height: "0.4375rem" }
                           : {
-                              background: cssFor(mean, p.vmin, p.vmax, p.palette, p.scale),
+                              background: cssFor(mean, p.vmin, p.vmax, p.palette, p.scale, p.reverse),
                               width: `${Math.max(6, normalize(mean, p.vmin, p.vmax, p.scale) * 100)}%`,
                               outline: "1px solid rgba(22,19,13,.35)",
                             }
@@ -232,6 +267,64 @@ export default function StationSheet(p: Props) {
             aria-label="Vertical exaggeration"
             onChange={(e) => p.onExaggeration(Number(e.target.value))}
           />
+        </div>
+
+        {/* --- the isosurface layer (PS requirement F1) ---------------------
+            Off by default and stated as a separate layer rather than folded
+            into the colorbar, because it answers a different question. The
+            slices show what the temperature IS everywhere; the surface shows
+            WHERE one chosen value sits, which is the shape a forecaster
+            actually reads for cyclone heat potential. */}
+        <div className="block">
+          <div className="label label--split">
+            <span>Isosurface</span>
+            <button
+              type="button"
+              className="tick stamp"
+              aria-pressed={p.isosurfaceOn}
+              onClick={p.onToggleIsosurface}
+              title={
+                p.isosurfaceOn
+                  ? "Stop drawing the surface"
+                  : "Draw the surface where the field takes one value"
+              }
+            >
+              {p.isosurfaceOn ? "On" : "Off"}
+            </button>
+          </div>
+          {p.isosurfaceOn && (
+            <>
+              <div className="label label--split" style={{ marginTop: "0.375rem" }}>
+                <span>Value</span>
+                <span className="num">
+                  {p.isovalue} {p.units}
+                </span>
+              </div>
+              <input
+                className="field"
+                type="range"
+                min={Math.floor(p.vmin)}
+                max={Math.ceil(p.vmax)}
+                step={p.units === "degC" ? 0.5 : 0.1}
+                value={p.isovalue}
+                aria-label="Isosurface value"
+                onChange={(e) => p.onIsovalue(Number(e.target.value))}
+              />
+              {p.isoSummary && (
+                <p
+                  className="num"
+                  style={{
+                    margin: "0.375rem 0 0",
+                    fontSize: "0.625rem",
+                    lineHeight: 1.45,
+                    color: "var(--ink-soft)",
+                  }}
+                >
+                  {p.isoSummary}
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         <div className="block block--last">

@@ -5,6 +5,11 @@
   "scripts": {
     "web:dev": "pnpm --filter @sagardrishti/web dev",
     "web:build": "pnpm --filter @sagardrishti/web build",
-    "web:typecheck": "pnpm --filter @sagardrishti/web typecheck"
+    "web:typecheck": "pnpm --filter @sagardrishti/web typecheck",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
   }
 }

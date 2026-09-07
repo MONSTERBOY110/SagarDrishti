@@ -17,11 +17,13 @@
  */
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import Cartouche from "@/components/Cartouche";
 import ScaleBar from "@/components/ScaleBar";
+import SceneSummary from "@/components/SceneSummary";
 import ProfilePanel from "@/components/ProfilePanel";
+import StationLegend from "@/components/StationLegend";
 import StationSheet from "@/components/StationSheet";
 import TimeRule from "@/components/TimeRule";
 import {
@@ -30,9 +32,11 @@ import {
   type DatasetInfo,
   type FieldColumn,
   type ProfileDetail,
+  type IsosurfaceMesh,
   type ProfileGlyph,
 } from "@/lib/api";
-import { useScene } from "@/lib/scene";
+import { describeMesh } from "@/lib/isosurface";
+import { defaultIsovalue, useScene } from "@/lib/scene";
 
 // Cesium is browser-only and large; it must never enter the server bundle.
 const OceanGlobe = dynamic(() => import("@/components/OceanGlobe"), { ssr: false });
@@ -46,6 +50,10 @@ export default function Page() {
   const [detail, setDetail] = useState<ProfileDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isosurface, setIsosurface] = useState<IsosurfaceMesh | null>(null);
+  /* Kept apart from `error`: a failed isosurface must not blank the scene the
+     way a failed catalogue does. The slices and the floats are still valid. */
+  const [isoError, setIsoError] = useState<string | null>(null);
 
   /* --- load the cast ------------------------------------------------------- */
   useEffect(() => {
@@ -111,6 +119,43 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset, scene.variable]);
 
+  /* --- the isosurface, fetched only while its layer is on -----------------
+     Not prefetched across timesteps like the columns are: extraction is a few
+     milliseconds and the mesh is a few kilobytes, so a request per change is
+     cheaper than holding three meshes for a layer that is off by default. */
+  useEffect(() => {
+    if (!dataset || !scene.isosurfaceOn || !scene.time) {
+      setIsosurface(null);
+      return;
+    }
+    const units = dataset.variables.find((v) => v.name === scene.variable)?.units ?? "";
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const mesh = await api.isosurface(
+          dataset.id,
+          scene.variable,
+          scene.isovalue,
+          units,
+          dataset.bbox.join(","),
+          scene.time,
+        );
+        if (!cancelled) setIsosurface(mesh);
+      } catch (e) {
+        if (!cancelled) {
+          setIsosurface(null);
+          setIsoError(String(e));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataset, scene.isosurfaceOn, scene.isovalue, scene.variable, scene.time]);
+
   const column = columns[`${scene.variable}@${scene.time}`] ?? null;
   const depths = column?.depths ?? dataset?.depths ?? [];
   /* Which timesteps are actually in hand. The time rule rules an unfetched
@@ -121,14 +166,34 @@ export default function Page() {
       .map((k) => k.slice(k.indexOf("@") + 1)),
   );
 
-  /* Lock the colorbar to a robust range over the WHOLE column, not the visible
-     slice: a range that jumped every time the depth cursor moved would make the
-     colours meaningless as a measurement. */
-  useEffect(() => {
-    if (!column) return;
+  /* The range the field itself suggests: robust percentiles over the WHOLE
+     column, not the visible slice, because a range that jumped every time the
+     depth cursor moved would make the colours meaningless as a measurement. */
+  const dataRange: [number, number] | null = useMemo(() => {
+    if (!column) return null;
     const [lo, hi] = robustRange(column);
-    useScene.setState({ vmin: Math.floor(lo), vmax: Math.ceil(hi) });
+    return [Math.floor(lo), Math.ceil(hi)];
   }, [column]);
+
+  /* Station counts per instrument class. The legend reads them visually; the
+     accessible summary has to say them in words, and both must come from the
+     same place so they cannot disagree. */
+  const stationKinds = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const profile of profiles) {
+      counts[profile.platform_kind] = (counts[profile.platform_kind] ?? 0) + 1;
+    }
+    return counts;
+  }, [profiles]);
+
+  /* Follow that suggestion only until the forecaster sets the range by hand.
+     Overwriting an edited limit on the next timestep would change the colours
+     under a value the reader has already interpreted. */
+  useEffect(() => {
+    if (!dataRange) return;
+    if (useScene.getState().colorbarLocked) return;
+    useScene.setState({ vmin: dataRange[0], vmax: dataRange[1] });
+  }, [dataRange]);
 
   /* --- a clicked station mark becomes a profile ---------------------------- */
   useEffect(() => {
@@ -163,9 +228,12 @@ export default function Page() {
 
   return (
     <main style={{ position: "relative", height: "100vh", overflow: "hidden" }}>
-      <div className="scene">
+      {/* A labelled region, because a bare canvas has no accessible name and
+          the scene is this product's primary display. */}
+      <div className="scene" role="region" aria-label="Ocean scene">
         <OceanGlobe
           column={column}
+          isosurface={isosurface}
           profiles={profiles}
           selection={scene.selection}
           focusDepth={scene.focusDepth}
@@ -175,6 +243,7 @@ export default function Page() {
           scale={scene.scale}
           vmin={scene.vmin}
           vmax={scene.vmax}
+          reverse={scene.reverse}
           onFps={onFps}
           onPickProfile={onPick}
           onReady={onReady}
@@ -197,7 +266,25 @@ export default function Page() {
           scale={scene.scale}
           vmin={scene.vmin}
           vmax={scene.vmax}
-          onVariable={(v) => useScene.setState({ variable: v })}
+          reverse={scene.reverse}
+          colorbarLocked={scene.colorbarLocked}
+          dataRange={dataRange}
+          isosurfaceOn={scene.isosurfaceOn}
+          isovalue={scene.isovalue}
+          units={column?.units ?? ""}
+          isoSummary={isoError ?? (isosurface ? describeMesh(isosurface) : null)}
+          onToggleIsosurface={scene.toggleIsosurface}
+          onIsovalue={scene.setIsovalue}
+          onVariable={(v) =>
+            useScene.setState({
+              variable: v,
+              colorbarLocked: false,
+              // 26 is a thermocline in degC and nothing at all in psu, so the
+              // isovalue follows the variable rather than carrying over.
+              isovalue: defaultIsovalue(v, useScene.getState().isovalue),
+            })
+          }
+          onColorbar={(patch) => useScene.setState(patch)}
           onFocusDepth={scene.setFocusDepth}
           onExaggeration={(exaggeration) => useScene.setState({ exaggeration })}
           onOpacity={(opacity) => useScene.setState({ opacity })}
@@ -225,6 +312,7 @@ export default function Page() {
           scale={scene.scale}
           vmin={scene.vmin}
           vmax={scene.vmax}
+          reverse={scene.reverse}
           focusDepth={scene.focusDepth}
           stationCount={profiles.length}
           loading={loadingDetail}
@@ -232,6 +320,28 @@ export default function Page() {
           onClose={() => scene.select(null)}
         />
       </div>
+
+      {/* The scene in words, for a reader who cannot see the canvas. */}
+      <SceneSummary
+        datasetTitle={dataset?.title ?? null}
+        variable={scene.variable}
+        units={column?.units ?? ""}
+        focusDepth={scene.focusDepth}
+        depthMin={depths.length ? depths[0] : 0}
+        depthMax={depths.length ? depths[depths.length - 1] : 0}
+        levels={depths.length}
+        time={column?.time ?? scene.time}
+        exaggeration={scene.exaggeration}
+        stationCount={profiles.length}
+        stationKinds={stationKinds}
+        selectedWmo={detail?.wmo ?? null}
+        selectedKind={detail?.platform_kind ?? null}
+        vmin={scene.vmin}
+        vmax={scene.vmax}
+      />
+
+      {/* --- what the marks on the water are, when there is more than one kind */}
+      <StationLegend profiles={profiles} />
 
       {/* --- the vertical scale, so 200x is checkable rather than asserted -- */}
       <ScaleBar

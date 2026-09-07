@@ -22,12 +22,26 @@ export interface SceneState {
   scale: Scale;
   vmin: number;
   vmax: number;
+  reverse: boolean;
+  /** The forecaster has set the range by hand, so stop re-deriving it from the
+   *  data. Without this, editing a limit and then scrubbing time silently threw
+   *  the edit away, which makes the control feel broken and, worse, changes the
+   *  colours under a value the reader has already interpreted. */
+  colorbarLocked: boolean;
   /** 1x-200x; the ocean is ~4 km deep over ~1000 km, so 1x is unreadable */
   exaggeration: number;
   /** peak alpha of the focused depth level */
   opacity: number;
   playing: boolean;
   selection: string | null;
+  /** Draw the isosurface layer (PS requirement F1). Off by default: it is a
+   *  second geometry pass and a second request, and the scene must open on the
+   *  slices alone in case either is slow on the demo machine. */
+  isosurfaceOn: boolean;
+  /** The value the surface is drawn at, in the CURRENT variable's units. Reset
+   *  when the variable changes, because 26 is a thermocline in degC and
+   *  nothing at all in psu. */
+  isovalue: number;
 }
 
 export interface SceneActions {
@@ -36,6 +50,8 @@ export interface SceneActions {
   setTime: (t: string) => void;
   togglePlaying: () => void;
   select: (id: string | null) => void;
+  toggleIsosurface: () => void;
+  setIsovalue: (v: number) => void;
 }
 
 export const INITIAL_SCENE: SceneState = {
@@ -47,6 +63,8 @@ export const INITIAL_SCENE: SceneState = {
   scale: "linear",
   vmin: 0,
   vmax: 30,
+  reverse: false,
+  colorbarLocked: false,
   // 200x (TRD M3's top of range), not a timid 1x-40x: 2000 m of ocean becomes
   // 400 km, legible against a basin 1650 km across. At 1x the entire water
   // column is thinner than the coastline it sits against, which is precisely
@@ -55,6 +73,10 @@ export const INITIAL_SCENE: SceneState = {
   opacity: 0.72,
   playing: false,
   selection: null,
+  isosurfaceOn: false,
+  // 26 degC: the base of the layer that can fuel a cyclone, and the same
+  // threshold the D26 product uses, so the surface and the scalar agree.
+  isovalue: 26,
 };
 
 export const useScene = create<SceneState & SceneActions>((set) => ({
@@ -64,7 +86,23 @@ export const useScene = create<SceneState & SceneActions>((set) => ({
   setTime: (time) => set({ time }),
   togglePlaying: () => set((s) => ({ playing: !s.playing })),
   select: (selection) => set({ selection }),
+  toggleIsosurface: () => set((s) => ({ isosurfaceOn: !s.isosurfaceOn })),
+  setIsovalue: (isovalue) => set({ isovalue }),
 }));
+
+/** A sensible isovalue for a variable, used when the variable changes.
+ *
+ * Named rather than computed from the data range, because these are the values
+ * a forecaster actually asks for: 26 degC is the cyclone heat-potential
+ * threshold, 35 psu is the isohaline that separates Bay of Bengal freshwater
+ * from Arabian Sea water. A midpoint of the colour range would be a number
+ * with no meaning behind it.
+ */
+export function defaultIsovalue(variable: string, fallback: number): number {
+  if (variable === "TEMP") return 26;
+  if (variable === "SAL") return 35;
+  return fallback;
+}
 
 /** Below this alpha a slice contributes nothing a person can see, so it is not
  *  drawn. This is the cheap half of Yu et al. 2025's early-ray-termination
@@ -76,6 +114,24 @@ export const SLICE_CUTOFF_ALPHA = 0.035;
  *  UHD target at 1080p: 24 drawn = 12 FPS, 8-10 drawn = 50+ FPS. Overdraw of
  *  large translucent quads is the dominant cost in this scene. */
 export const MAX_DRAWN_SLICES = 10;
+
+/**
+ * The slice budget while the isosurface layer is on.
+ *
+ * MEASURED, not guessed. With ten slices drawn and the surface on, the scene
+ * fell to 28.7 fps median on the Intel UHD target, under TRD section 5's floor
+ * of 30, from 51 with the surface off. The 780 opaque triangles of the surface
+ * itself are nothing; the cost is OVERDRAW. The surface sits inside a stack of
+ * large translucent quads, and a translucent fragment behind an opaque one is
+ * still rasterized and blended because blending cannot early-out on depth.
+ *
+ * So this is a budget TRADE, not a free addition, and it is the right way
+ * round: when a forecaster turns the surface on, the surface is the thing
+ * being read and the stack is context. Cutting the stack also stops the
+ * surface being buried in it, so the same change buys legibility and frame
+ * rate at once.
+ */
+export const MAX_DRAWN_SLICES_WITH_ISOSURFACE = 6;
 
 /**
  * Which depth levels to draw, and at what opacity.

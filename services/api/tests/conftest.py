@@ -255,3 +255,169 @@ def client(cube_dir, monkeypatch):
     with TestClient(app) as c:
         yield c
     get_settings.cache_clear()
+
+
+@pytest.fixture
+def argo_mixed_qc_nc(tmp_path):
+    """One profile whose parameters are flagged INDEPENDENTLY of each other.
+
+    This is the shape the real GDAC files have and the shape `argo_like_nc`
+    does not: that fixture flags TEMP only and leaves PSAL_QC all "1", which is
+    why six passing tests never noticed that salinity was being filtered by
+    temperature's flag. Verified against the 10 real Indian Ocean daily files:
+    60,643 levels there have a good TEMP flag and a rejected PSAL flag, and the
+    rejected salinities include 0.00, 65.53 and 134.12 PSU.
+
+    Six levels, one per case:
+      0  PRES 1  TEMP 1  PSAL 1   both good
+      1  PRES 1  TEMP 1  PSAL 4   good temperature, REJECTED salinity
+      2  PRES 1  TEMP 4  PSAL 1   REJECTED temperature, good salinity
+      3  PRES 1  TEMP 3  PSAL 3   both dubious, both rejected
+      4  PRES 4  TEMP 1  PSAL 1   no usable pressure: the level has no depth
+      5  PRES 1  TEMP 2  PSAL 2   probably-good, which Argo accepts
+    """
+    path = tmp_path / "argo_mixed_qc.nc"
+    n_prof, n_lev = 1, 6
+
+    pres = np.array([[5.0, 10.0, 20.0, 50.0, 100.0, 200.0]], dtype="float32")
+    temp = np.array([[29.10, 29.05, 28.90, 27.10, 22.40, 15.20]], dtype="float32")
+    # The impossible values sit on the levels whose PSAL flag rejects them, so a
+    # leak is unmistakable rather than plausible.
+    psal = np.array([[34.50, 134.12, 35.10, 65.53, 34.90, 34.80]], dtype="float32")
+
+    pres_qc = np.array([list("111141")], dtype="S1")
+    temp_qc = np.array([list("114312")], dtype="S1")
+    psal_qc = np.array([list("141312")], dtype="S1")
+
+    with NCDataset(path, "w") as nc:
+        nc.createDimension("N_PROF", n_prof)
+        nc.createDimension("N_LEVELS", n_lev)
+        nc.createDimension("STRING8", 8)
+
+        pn = nc.createVariable("PLATFORM_NUMBER", "S1", ("N_PROF", "STRING8"))
+        pn[0, :] = np.array(list("1902367 "), dtype="S1")
+
+        j = nc.createVariable("JULD", "f8", ("N_PROF",))
+        j.units = "days since 1950-01-01 00:00:00 UTC"
+        j[:] = np.array([27969.0], dtype="float64")
+
+        for name, value, unit in (
+            ("LATITUDE", 5.70, "degree_north"),
+            ("LONGITUDE", 88.18, "degree_east"),
+        ):
+            v = nc.createVariable(name, "f8", ("N_PROF",))
+            v.units = unit
+            v[:] = np.array([value], dtype="float64")
+
+        p = nc.createVariable("PRES", "f4", ("N_PROF", "N_LEVELS"))
+        p.units = "decibar"
+        p[:] = pres
+
+        t = nc.createVariable("TEMP", "f4", ("N_PROF", "N_LEVELS"))
+        t.units = "degree_Celsius"
+        t[:] = temp
+
+        s = nc.createVariable("PSAL", "f4", ("N_PROF", "N_LEVELS"))
+        s.units = "psu"
+        s[:] = psal
+
+        for name, src in (("PRES_QC", pres_qc), ("TEMP_QC", temp_qc), ("PSAL_QC", psal_qc)):
+            q = nc.createVariable(name, "S1", ("N_PROF", "N_LEVELS"))
+            q[:] = src
+
+    return path
+
+
+@pytest.fixture
+def argo_bgc_like_nc(tmp_path):
+    """Argo BGC synthetic-profile (Sprof) look-alike.
+
+    Reproduces the three properties of the REAL files that decide whether any
+    biogeochemistry reaches the screen, all three verified against float
+    1902367 in `data/raw/argo_bgc`:
+
+      1. The raw parameter QC is flag 3 on EVERY level, and only the ADJUSTED
+         product carries an accepted flag. On the real float that is 13,934
+         raw CHLA levels at flag 3 with nothing at 1 or 2, against 13,688
+         CHLA_ADJUSTED levels at flag 2. A reader that ignored the adjusted
+         product would therefore serve NO chlorophyll at all, which looks like
+         a broken pipe rather than a policy.
+      2. Raw values are not physical before adjustment: negative chlorophyll
+         from fluorometer dark-offset drift, and a pH of -381.
+      3. Parameters sample DIFFERENT levels. A BGC sensor runs sparsely
+         compared with the CTD, so oxygen exists at levels where temperature
+         does not and vice versa.
+
+    Four levels. CHLA is measured on levels 0 and 2 only, DOXY on 1 and 3.
+    """
+    path = tmp_path / "argo_bgc_like.nc"
+    n_prof, n_lev = 1, 4
+    nan = np.nan
+
+    pres = np.array([[5.0, 50.0, 150.0, 400.0]], dtype="float32")
+    temp = np.array([[28.50, 26.10, 18.20, 10.60]], dtype="float32")
+    psal = np.array([[31.90, 34.33, 34.98, 35.03]], dtype="float32")
+
+    # Raw: physically impossible, and flagged 3 throughout.
+    chla_raw = np.array([[-0.993, nan, 1.971, nan]], dtype="float32")
+    doxy_raw = np.array([[nan, 189.26, -50.0, nan]], dtype="float32")
+    ph_raw = np.array([[-381.62, nan, 157.63, nan]], dtype="float32")
+
+    # Adjusted: the values a scientist would actually use.
+    chla_adj = np.array([[0.081, nan, 0.412, nan]], dtype="float32")
+    doxy_adj = np.array([[nan, 186.40, 1.71, nan]], dtype="float32")
+    ph_adj = np.array([[8.021, nan, 7.607, nan]], dtype="float32")
+
+    with NCDataset(path, "w") as nc:
+        nc.createDimension("N_PROF", n_prof)
+        nc.createDimension("N_LEVELS", n_lev)
+        nc.createDimension("STRING8", 8)
+
+        pn = nc.createVariable("PLATFORM_NUMBER", "S1", ("N_PROF", "STRING8"))
+        pn[0, :] = np.array(list("2903831 "), dtype="S1")
+
+        j = nc.createVariable("JULD", "f8", ("N_PROF",))
+        j.units = "days since 1950-01-01 00:00:00 UTC"
+        # A value whose nanosecond tail is float noise: this is what produced
+        # the timestamp 14:13:48.001520640 on the real float.
+        j[:] = np.array([27967.59291666667], dtype="float64")
+
+        for name, value, unit in (
+            ("LATITUDE", 18.09, "degree_north"),
+            ("LONGITUDE", 89.84, "degree_east"),
+        ):
+            v = nc.createVariable(name, "f8", ("N_PROF",))
+            v.units = unit
+            v[:] = np.array([value], dtype="float64")
+
+        def write(name, values, unit):
+            v = nc.createVariable(name, "f4", ("N_PROF", "N_LEVELS"), fill_value=np.float32(99999.0))
+            v.units = unit
+            v[:] = values
+
+        write("PRES", pres, "decibar")
+        write("TEMP", temp, "degree_Celsius")
+        write("PSAL", psal, "psu")
+        write("CHLA", chla_raw, "mg/m3")
+        write("CHLA_ADJUSTED", chla_adj, "mg/m3")
+        write("DOXY", doxy_raw, "micromole/kg")
+        write("DOXY_ADJUSTED", doxy_adj, "micromole/kg")
+        write("PH_IN_SITU_TOTAL", ph_raw, "dimensionless")
+        write("PH_IN_SITU_TOTAL_ADJUSTED", ph_adj, "dimensionless")
+
+        good = np.full((n_prof, n_lev), b"1", dtype="S1")
+        dubious = np.full((n_prof, n_lev), b"3", dtype="S1")
+        accepted = np.full((n_prof, n_lev), b"2", dtype="S1")
+        for name, src in (
+            ("PRES_QC", good), ("TEMP_QC", good), ("PSAL_QC", good),
+            # Raw BGC flags: dubious everywhere, exactly as the real files.
+            ("CHLA_QC", dubious), ("DOXY_QC", dubious), ("PH_IN_SITU_TOTAL_QC", dubious),
+            # Adjusted flags: accepted.
+            ("CHLA_ADJUSTED_QC", accepted),
+            ("DOXY_ADJUSTED_QC", good),
+            ("PH_IN_SITU_TOTAL_ADJUSTED_QC", accepted),
+        ):
+            q = nc.createVariable(name, "S1", ("N_PROF", "N_LEVELS"))
+            q[:] = src
+
+    return path
