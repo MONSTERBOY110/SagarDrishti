@@ -1,0 +1,19 @@
+# Samudra Sahayak agent plane (TRD M4) - Python 3.11.
+#
+# Deliberately short, and the short list IS the architecture. This service
+# reaches the data plane over the public HTTP API and nothing else: no xarray,
+# no zarr, no netCDF4, no database driver. It cannot read a store directly even
+# by accident, so it cannot know anything a user could not check by opening the
+# same endpoint themselves (TRD section 6.5).
+#
+# Note also what is NOT here: there is no LLM client, no transformers, no
+# ollama. The planner is a deterministic router over the tools, every response
+# says `planner: "rules"`, and PRD section 10 sanctions that for the air-gapped
+# demo. When a model lands, its client is added here and app/planner.py:plan()
+# is what it replaces.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+# The one client, and unlike the data plane this service is SUPPOSED to have
+# one: talking to the API over HTTP is the whole point of it being separate.
+httpx==0.28.1

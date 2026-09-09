@@ -85,7 +85,7 @@ while it runs answers 404 until it is restarted.
 
 ## API surface
 
-All nine routes are served by `services/api`, and OpenAPI is at `/docs`.
+All twelve routes are served by `services/api`, and OpenAPI is at `/docs`.
 
 | Route | What it is for |
 |---|---|
@@ -95,10 +95,45 @@ All nine routes are served by `services/api`, and OpenAPI is at `/docs`.
 | `GET /profiles` | Station glyphs for the globe: position, time, instrument class, parameters served |
 | `GET /profiles/{id}` | Every accepted level of one profile, with its QC policy and citation |
 | `GET /isosurface/{source}/{var}` | **Isosurface extraction (F1).** The surface where a field takes a given value, as a triangle mesh with its extraction method and refusal counts. Marching cubes on the native grid, no resampling |
+| `GET /scorecard/{source}/{var}` | **Class-4-style verification (F9).** Per-depth-bin bias and RMSE of the model against the in-situ profiles, interpolated to each cast's own position and depth, with every unpaired level counted and the reason it was refused. Carries the caveat that the analysis assimilates these same profiles, so this is analysis fit and not forecast skill |
+| `GET /warnings` | **HazardWatch (F13).** Active CAP v1.2 warnings at an instant, as polygons and circles, from India's national CAP backbone (NDMA SACHET) plus ocean-hazard rehearsal bulletins. Refuses to serve a cancelled, superseded, expired or not-yet-effective alert, and refuses a drill unless asked; every refusal is counted |
+| `GET /storyboards` | **Guided tours (F12).** JSON-scripted tours: a scene patch, a line of narration and the evidence it rests on, per step. Every numeral in a narration line must be backed by the patch or the evidence, and the loader refuses a tour where it is not |
 | `GET /wms` | **OGC WMS 1.3.0.** GetCapabilities and GetMap, for stored variables AND plugin-derived products. `CRS:84` and `EPSG:4326`, time and elevation dimensions, six palettes, TRANSPARENT and BGCOLOR per spec |
 | `GET /wcs` | **OGC WCS 1.0.0.** GetCapabilities, DescribeCoverage and GetCoverage, serving CF-1.8 NetCDF. Refuses to resample rather than inventing cells |
 | `GET /plugins` | The registered plugins, their derived products and any load failures |
 | `POST /plugins/reload` | Re-scan the plugin directory without a restart |
+
+### The agent plane, on :8010
+
+Samudra Sahayak is a **separate service** (`services/agent`, `./tasks.ps1
+agent`), and that is the architecture rather than a packaging choice: TRD
+section 6.5 states the property as "kill the agent and every P0 still passes".
+Stop that process and the globe, the scorecard, HazardWatch and the tours carry
+on; the web client probes the port and omits the ask box entirely.
+
+| Route | What it is for |
+|---|---|
+| `GET /healthz` | Liveness, whether the data plane under it is reachable, and **whether a language model is loaded** (none is; see below) |
+| `GET /tools` | The tool schemas, in the shape a model would be handed, plus the no-fabrication rule |
+| `POST /ask` | A question, answered from tool results only, with the full tool trace and citations |
+
+Two properties are enforced mechanically rather than promised:
+
+- **Numbers enter answers only through tools.** `app/guard.py` checks every
+  numeral in a finished answer against the tool results behind it and
+  **withholds** an answer that fails, rather than correcting it silently. It is
+  written and tested now, while the planner is deterministic, precisely so that
+  the day a model is plugged in behind the same interface the guard has already
+  been the last step for weeks.
+- **The agent cannot draw.** Its only channel to the view is a validated scene
+  patch, applied through the same store a person's clicks go through, checked
+  against the same key list the guided tours use.
+
+**There is no language model in the loop, and every response says so.** The
+planner is a deterministic router over the tools; `planner: "rules"` is in each
+answer and printed in the UI. PRD section 10 already answers a judge on this
+("offline mode uses a local model or disables narration gracefully"), and an
+audience that assumed otherwise would have been misled.
 
 Open our own WMS layer in QGIS:
 
@@ -111,9 +146,17 @@ The plugin interface is documented in [`docs/PLUGINS.md`](docs/PLUGINS.md).
 ## Tests
 
 ```bash
-./tasks.ps1 test     # 281 data-plane tests
-./tasks.ps1 e2e      # 4 browser tests against a production build
+./tasks.ps1 test     # 398 data-plane tests
+./tasks.ps1 agent    # then: python -m pytest services/agent/tests  (68 tests)
+./tasks.ps1 e2e      # 8 browser tests against a production build
 ```
+
+Both run with no network. `data/raw/` and `data/cube/` are gitignored, so CI
+builds its cube from **`data/sample/`**, 614 KB of real INCOIS field and Argo
+profiles committed for that purpose (`python tools/preprocess.py --fixtures`).
+The browser suite asserts claims about the real Bay of Bengal, so testing it
+against an invented field would assert nothing; the reasoning and the
+attribution are in `data/sample/README.md`.
 
 The data plane is developed test-first (CLAUDE.md). The suite pins the CF
 edge cases that real government NetCDF actually exhibits: three different
@@ -145,6 +188,8 @@ config entry rather than a code change.
 | `incois_vam_argo` | erddap_griddap | live, the primary field ([ADR-0003](docs/adr/0003-incois-vam-primary-field.md)) |
 | `argo_gdac_indian` | gdac_geo | live, 13 core floats in the demo box |
 | `argo_bgc_indian` | gdac_bgc | live, 3 BGC floats: oxygen, chlorophyll, nitrate, pH |
+| `rama_mooring_bob` | mooring | live, read by a PLUGIN source reader. RAMA moored buoy 15n90e (WMO 23009) |
+| `incois_oceansat2_chl` | erddap_griddap | registered and disabled: the series ends 2020, so it cannot share a 2026 scrubber |
 | `ctd_text_ascii` | file | reader live and tested; awaiting a real cast file |
 | `odv_spreadsheet` | file | reader live and tested; awaiting a real export |
 | `local_cube` | zarr | the `OFFLINE=1` target |

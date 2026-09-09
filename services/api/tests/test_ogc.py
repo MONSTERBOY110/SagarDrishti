@@ -1376,8 +1376,13 @@ def shipped_client(monkeypatch):
 def test_the_shipped_cube_serves_valid_capabilities_and_a_real_tile(shipped_client):
     _, root = _wms_caps(shipped_client)
     layers = _named_layers(root)
+    # Every materialized variable, from EVERY materialized source. The
+    # Copernicus currents arriving here for free is the point of F7 rather than
+    # an accident: a second dataset was added to the registry on 2026-09-09 and
+    # the OGC surface picked it up without a line of OGC code changing.
     assert set(layers) == {
         "incois_vam_argo/TEMP", "incois_vam_argo/SAL", "incois_vam_argo/D26",
+        "glorys12_cur/uo", "glorys12_cur/vo",
     }
 
     temp = layers["incois_vam_argo/TEMP"]

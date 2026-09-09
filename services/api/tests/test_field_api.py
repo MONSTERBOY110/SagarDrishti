@@ -422,3 +422,109 @@ def test_the_inversion_date_yields_a_second_component_over_the_api(shipped_iso_c
     )
     assert plain["n_components"] == 1
     assert inverted["depth_max"] > plain["depth_max"]
+
+
+# --- a date outside the observations is a refusal, not an empty list --------
+#
+# /field has refused an out-of-range time since the beginning, through
+# store.nearest_time. /profiles did not: it compared the requested day for
+# equality and returned whatever matched, so a date years away from the
+# observations answered HTTP 200 with count 0.
+#
+# The two must agree. An empty list is a statement about the OCEAN ("no floats
+# in this box"); the true statement is about the REQUEST ("no observations from
+# that date"). A client holding a 2020 field and a 2026 float set would be told
+# nothing at all, which is exactly the failure mode the epoch work exists to
+# prevent.
+
+
+def test_profiles_refuses_a_date_outside_the_observations(shipped_iso_client):
+    r = shipped_iso_client.get("/profiles", params={"time": "1999-01-01"})
+
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert "outside the range" in detail
+    # It must say what the range actually is, or the caller guesses again.
+    assert "2026" in detail
+    # And it must say why an empty list would have been the wrong answer.
+    assert "no floats in this box" in detail
+
+
+def test_profiles_still_returns_an_empty_list_for_a_quiet_day_in_range(shipped_iso_client):
+    """The refusal must not swallow the legitimate empty case.
+
+    A day inside the observed window on which nothing reported is a real answer
+    about the OCEAN, and it stays a 200 with count 0.
+
+    The quiet day is FOUND rather than hardcoded. It used to be 2026-07-09, and
+    adding the RAMA mooring broke the test because the mooring reports that
+    day: a test that pins a date is really pinning which instruments exist,
+    which is not what it is for.
+    """
+    import datetime
+
+    everything = shipped_iso_client.get("/profiles").json()["profiles"]
+    busy = {p["time"][:10] for p in everything}
+    days = sorted(busy)
+    first = datetime.date.fromisoformat(days[0])
+    last = datetime.date.fromisoformat(days[-1])
+
+    quiet = None
+    day = first
+    while day <= last:
+        if day.isoformat() not in busy:
+            quiet = day.isoformat()
+            break
+        day += datetime.timedelta(days=1)
+    if quiet is None:
+        pytest.skip("every day in the observed window has a profile")
+
+    r = shipped_iso_client.get("/profiles", params={"time": quiet})
+
+    assert r.status_code == 200, r.text
+    assert r.json()["count"] == 0, f"{quiet} was expected to be quiet"
+
+
+def test_profiles_accepts_a_day_that_has_floats(shipped_iso_client):
+    r = shipped_iso_client.get("/profiles", params={"time": "2026-07-30"})
+
+    assert r.status_code == 200, r.text
+    assert r.json()["count"] >= 1
+
+
+def test_profiles_refuses_an_unusable_timestamp(shipped_iso_client):
+    """NaT parses without raising and compares False against everything, so it
+    would have produced an empty list rather than an error.
+
+    Uses the real cube because the endpoint returns early when there are no
+    profiles at all, which is correct (there is nothing to filter) but means
+    the synthetic fixture never reaches this validation.
+    """
+    r = shipped_iso_client.get("/profiles", params={"time": "not-a-date"})
+
+    assert r.status_code == 400
+    assert "time" in r.json()["detail"]
+
+
+def test_the_time_refusal_does_not_depend_on_the_bbox(shipped_iso_client):
+    """Narrowing the box must not change which DATES are legal.
+
+    The range is taken from the whole profile table before any spatial filter.
+    Computing it from the filtered subset instead would mean a date that was
+    valid a moment ago becomes invalid after panning the map, and the caller
+    would have no way to tell which of their two parameters the service was
+    objecting to.
+    """
+    tiny_box = "86,11,87,12"
+
+    in_range = shipped_iso_client.get(
+        "/profiles", params={"time": "2026-07-09", "bbox": tiny_box}
+    )
+    assert in_range.status_code == 200, in_range.text
+
+    out_of_range = shipped_iso_client.get(
+        "/profiles", params={"time": "1999-01-01", "bbox": tiny_box}
+    )
+    assert out_of_range.status_code == 400
+    # The range quoted is the dataset's, not the tiny box's.
+    assert "2026-07-07" in out_of_range.json()["detail"]

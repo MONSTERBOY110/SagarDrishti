@@ -31,6 +31,20 @@ class Settings(BaseModel):
     def profiles_parquet(self) -> Path:
         return self.cube_dir / "profiles.parquet"
 
+    @property
+    def warnings_json(self) -> Path:
+        return self.cube_dir / "warnings.json"
+
+    @property
+    def storyboards_dir(self) -> Path:
+        """Guided tours (PRD F12). Source files in the repository, NOT derived
+        into data/cube: a tour is authored content like a CAP bulletin, not an
+        artifact of the ingest, so it lives in version control and needs no
+        preprocess step to exist."""
+        import os as _os
+
+        return Path(_os.environ.get("SAGAR_STORYBOARDS", self.repo_root / "storyboards"))
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

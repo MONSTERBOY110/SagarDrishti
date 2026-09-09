@@ -661,6 +661,16 @@ def compute_derived(
         "params": dict(product.params),
         "output": product.output,
         "plugin": product.plugin,
+        # For a surface product asked for as a column, the single 0.0 level in
+        # `depths` is a TRANSPORT PLACEHOLDER so the volumetric renderer needs
+        # no special case. It is not a level the field sits at, and for D26 the
+        # values themselves are depths, so reading 0.0 as "the surface" would
+        # be exactly backwards. Stated rather than left to be inferred.
+        **(
+            {"surface_level_is_a_placeholder": True}
+            if product.output == "surface" and all_depths
+            else {}
+        ),
         # The honesty counter. A judge sees 209 of 336 columns rather than a
         # picture that implies the whole box was computed (binding rule 7).
         "n_cells": int(values.size),
@@ -809,13 +819,24 @@ def _shape_for_transport(
     from . import store
 
     if product.output == "surface":
-        # A 2-D diagnostic has no depth axis. When the volumetric client asks
-        # for the whole column it gets one level at the surface, so the
-        # existing renderer needs no special case -- but the VALUES carry their
-        # own units (metres for D26), which the docs state plainly.
+        # A 2-D diagnostic has no depth axis, and the two cases below differ in
+        # a way that matters.
+        #
+        # ALL-DEPTHS is a TRANSPORT shape. The volumetric client wants a column
+        # and gets a one-level array so the renderer needs no special case. The
+        # 0.0 is a placeholder index into that array, not a claim about where
+        # the field sits, and the response says so with
+        # `surface_level_is_a_placeholder`.
+        #
+        # THE SINGLE SLAB used to return 0.0 as the SERVED DEPTH, and that was
+        # a fabricated number. /field/incois_vam_argo/D26 answered
+        # `"depth": 0.0` for a field whose own values run from 41 to 96 metres:
+        # a reader was being told the slab came from the surface level, when
+        # the field describes the whole water column and its values ARE depths.
+        # There is no depth to report, so None is reported.
         if all_depths:
             return None, [0.0], values.reshape((1,) + values.shape)
-        return 0.0, None, values
+        return None, None, values
 
     if all_depths:
         return None, list(ref.depths), values

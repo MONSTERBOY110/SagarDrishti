@@ -14,6 +14,12 @@ pandas==2.2.3
 pyarrow==18.1.0
 gsw==3.6.19
 matplotlib==3.10.0
+# Copernicus Marine, for the GLORYS depth-resolved currents (PS F1). Used ONLY
+# by tools/fetch_sample.py, which is the single file in this repository that
+# touches the network, and never imported by app/. Listed here rather than in a
+# separate ingest file because tools/ runs in this environment.
+copernicusmarine==2.4.1
+
 # NOTE: no HTTP client is listed here on purpose. app/store.py asserts that
 # services/api contains no network client, and an auditor reads this file
 # before reading imports. httpx is a TEST-only dependency (it backs

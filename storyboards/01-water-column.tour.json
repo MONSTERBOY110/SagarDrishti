@@ -1,0 +1,62 @@
+{
+  "id": "water-column",
+  "title": "Reading a water column",
+  "subtitle": "What this picture actually is",
+  "audience": "classroom",
+  "source_id": "incois_vam_argo",
+  "steps": [
+    {
+      "narration": "This is the Bay of Bengal, and it is not a map. Every coloured sheet is one depth in the real ocean, stacked from just below the surface down to two kilometres.",
+      "hold": 8,
+      "patch": {
+        "variable": "TEMP",
+        "focusDepth": 5,
+        "exaggeration": 200,
+        "opacity": 0.72,
+        "isosurfaceOn": false
+      },
+      "evidence": [
+        "24 depth levels from 5 to 2000 metres, listed in the bottle rack on the station sheet",
+        "the vertical is exaggerated 200 times, printed under the scale bar"
+      ]
+    },
+    {
+      "narration": "The depth is stretched two hundred times. It has to be: the ocean here is two kilometres deep across a basin a thousand kilometres wide, so drawn honestly the whole water column would be thinner than the coastline beside it.",
+      "hold": 8,
+      "patch": { "focusDepth": 5 },
+      "evidence": [
+        "exaggeration 200 times, shown on the vertical exaggeration control and repeated on the scale bar"
+      ]
+    },
+    {
+      "narration": "At the surface the water is about 29 degrees. Warm enough to swim in, and warm enough to build a cyclone out of.",
+      "hold": 7,
+      "patch": { "focusDepth": 5 },
+      "evidence": [
+        "29.03 degC at 5 metres on 2026-07-30, row 01 of the bottle rack"
+      ]
+    },
+    {
+      "narration": "Now watch the colour as the cursor goes down. Between fifty and two hundred metres it falls off a cliff. That layer is the thermocline, and it is the single most important thing in this picture.",
+      "hold": 10,
+      "patch": { "focusDepth": 150 },
+      "evidence": [
+        "25.88 degC at 75 m, 22.45 at 100 m, 17.33 at 150 m, 14.38 at 200 m, from the bottle rack on 2026-07-30"
+      ]
+    },
+    {
+      "narration": "Below it the ocean barely changes at all. Two kilometres down the water is under three degrees, and it stays that way whatever the weather does above it.",
+      "hold": 8,
+      "patch": { "focusDepth": 2000 },
+      "evidence": [
+        "2.65 degC at 2000 metres, row 24 of the bottle rack on 2026-07-30"
+      ]
+    },
+    {
+      "narration": "That is the whole idea. A forecaster does not care about the sea surface temperature on its own. They care about how deep the warm water goes, because that is the fuel, and you cannot see it from a satellite.",
+      "hold": 9,
+      "patch": { "focusDepth": 100 },
+      "evidence": []
+    }
+  ]
+}

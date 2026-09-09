@@ -247,11 +247,39 @@ def normalize_dataset(ds: xr.Dataset, spec: SourceSpec) -> xr.Dataset:
         ds[var.name] = da
 
     # 6. Canonical dim order, so the renderer never has to guess an axis.
-    want = [d for d in ("time", "depth", "lat", "lon") if d in ds.dims]
+    #
+    # PER VARIABLE, and that is the whole point rather than a detail. This used
+    # to build one target order from `ds.dims`, the UNION over the dataset, and
+    # then skip any variable whose own dims did not match that union exactly.
+    # The moment a surface variable shares a dataset with a volumetric one, the
+    # union contains `depth`, the surface variable never matches it, and it is
+    # left in whatever axis order the file happened to use, silently.
+    #
+    # Reproduced before fixing: a dataset carrying TEMP(time, ZAX, lat, lon) and
+    # CHL(lat, lon, time) returned TEMP as (time, depth, lat, lon) and CHL as
+    # (lat, lon, time). The renderer would then index CHL's time axis as though
+    # it were latitude, which is the exact guess the comment above promises it
+    # will never have to make, and nothing raised.
+    canonical = ("time", "depth", "lat", "lon")
+    declared = {v.name for v in spec.variables}
     for name in list(ds.data_vars):
         dims = ds[name].dims
-        if set(want) == set(dims) and tuple(want) != dims:
-            ds[name] = ds[name].transpose(*want)
+        order = tuple(d for d in canonical if d in dims)
+        if set(order) != set(dims):
+            # A dim outside the canonical set. Harmless on an auxiliary
+            # variable (CF bounds carry an `nv` dim and nothing reads them),
+            # but on a variable the registry DECLARES it means the renderer
+            # would receive an axis it has no rule for.
+            if name in declared:
+                raise ValueError(
+                    f"source {spec.id!r}: variable {name!r} has dims {dims}, which "
+                    f"include an axis outside the canonical set {canonical}. The "
+                    "renderer indexes by position and has no rule for it. Either "
+                    "map it in the source's `dims` block or drop it before ingest."
+                )
+            continue
+        if order != dims:
+            ds[name] = ds[name].transpose(*order)
 
     ds.attrs["source_id"] = spec.id
     ds.attrs["citation"] = spec.citation

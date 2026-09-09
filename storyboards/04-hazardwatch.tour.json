@@ -1,0 +1,70 @@
+{
+  "id": "hazardwatch",
+  "title": "When there is a warning",
+  "subtitle": "CAP bulletins over the field that explains them",
+  "audience": "judge",
+  "source_id": "incois_vam_argo",
+  "steps": [
+    {
+      "narration": "The problem statement's theme is disaster management, so a viewer that only draws the ocean is answering half of it. HazardWatch is the other half.",
+      "hold": 8,
+      "patch": {
+        "variable": "TEMP",
+        "time": "2026-07-30T00:00:00Z",
+        "focusDepth": 100,
+        "isosurfaceOn": false,
+        "selection": null,
+        "rehearsal": true
+      },
+      "evidence": []
+    },
+    {
+      "narration": "These red areas are warnings in the Common Alerting Protocol, which is the format INCOIS's own tsunami centre and India's national alert backbone actually publish in. We are not inventing an integration; we are reading what the customer already emits.",
+      "hold": 11,
+      "patch": { "rehearsal": true },
+      "evidence": [
+        "OASIS CAP version 1.2; the parser is proven against real alerts retrieved from NDMA SACHET and two of them are committed as test fixtures"
+      ]
+    },
+    {
+      "narration": "A tsunami warning and a high wave warning are both in force on this date. The heavier the rule beside a warning, the worse its severity, and the panel lists what was withheld as well as what is shown.",
+      "hold": 10,
+      "patch": { "rehearsal": true },
+      "evidence": [
+        "the panel prints severity and urgency per alert and a counted ledger of every alert not shown, with the reason"
+      ]
+    },
+    {
+      "narration": "Open one and it carries three languages. That is not something we designed for; it is how Indian CAP arrives, and it is the same fact the voice assistant will rest on later.",
+      "hold": 10,
+      "patch": { "rehearsal": true },
+      "evidence": [
+        "the tsunami bulletin carries info blocks in en-IN, hi-IN and ta-IN, listed on its detail card"
+      ]
+    },
+    {
+      "narration": "Now the important part. These three ocean bulletins are drills. They carry the status Exercise, which is the standard's own word for a rehearsal, and every layer of this tool honours it: the server refuses them unless asked, the globe draws them dashed instead of solid, and the panel stamps itself.",
+      "hold": 13,
+      "patch": { "rehearsal": true },
+      "evidence": [
+        "CAP status Exercise in each file under data/warnings/incois, and a test that fails if any of them ever becomes Actual"
+      ]
+    },
+    {
+      "narration": "Untick the box and they vanish, leaving only what is genuinely live. The reason the ocean hazards are drills is that INCOIS publishes no public machine feed for them, and we would rather say that than fake a warning.",
+      "hold": 12,
+      "patch": { "rehearsal": false },
+      "evidence": [
+        "the panel states which alerts are drills and why, and the ledger counts them"
+      ]
+    },
+    {
+      "narration": "And the warnings move with the ocean. Scrub back to the twentieth of July and a different bulletin is in force, because the hazard layer shares the field's time axis rather than the wall clock.",
+      "hold": 11,
+      "patch": { "time": "2026-07-20T00:00:00Z", "rehearsal": true },
+      "evidence": [
+        "a swell surge bulletin is valid at the 2026-07-20 analysis step and the other two are not"
+      ]
+    }
+  ]
+}

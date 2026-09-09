@@ -1,0 +1,110 @@
+{
+  "source_id": "argo_gdac_indian",
+  "title": "Profile observations (all instrument classes)",
+  "citation": "Argo GDAC (Ifremer), geo/indian_ocean daily profile files. Argo float data collected and made freely available by the International Argo Program.; Argo GDAC (Ifremer), BGC synthetic profiles (Sprof). Argo float data collected and made freely available by the International Argo Program and the national programmes that contribute to it.; TAO/TRITON, RAMA and PIRATA moored buoy array, NOAA PMEL, served via the OSMC ERDDAP (dataset pmelTaoDyT). RAMA is supported by NOAA PMEL, India's Ministry of Earth Sciences and INCOIS, JAMSTEC, BMKG and CSIRO.",
+  "variables": [
+    "BBP700",
+    "CHLA",
+    "DOXY",
+    "NITRATE",
+    "PH_IN_SITU_TOTAL",
+    "PSAL",
+    "TEMP"
+  ],
+  "source_url": "https://data-argo.ifremer.fr/geo/indian_ocean",
+  "retrieved_at": "2026-09-09T16:59:59+00:00",
+  "produced_by": "SagarDrishti tools/preprocess.py",
+  "host": "BHOOT",
+  "n_profiles": 25,
+  "n_levels": 16390,
+  "n_platforms": 17,
+  "bbox": [
+    80.0,
+    5.0,
+    95.0,
+    25.0
+  ],
+  "time_range": [
+    "2026-07-07 18:45:25",
+    "2026-07-30 22:38:24"
+  ],
+  "sources": {
+    "argo_gdac_indian": {
+      "title": "Argo GDAC (Ifremer) - Indian Ocean daily profile files",
+      "citation": "Argo GDAC (Ifremer), geo/indian_ocean daily profile files. Argo float data collected and made freely available by the International Argo Program.",
+      "source_url": "https://data-argo.ifremer.fr/geo/indian_ocean",
+      "variables": [
+        "TEMP",
+        "PSAL"
+      ],
+      "qc_accept_flags": [
+        1,
+        2
+      ],
+      "prefer_adjusted": true,
+      "n_files": 10,
+      "n_profiles": 13,
+      "n_levels": 4191,
+      "n_platforms": 13,
+      "parameters_served": {
+        "temp": 4191,
+        "psal": 4191
+      }
+    },
+    "argo_bgc_indian": {
+      "title": "Argo BGC floats (synthetic profiles) - Indian Ocean",
+      "citation": "Argo GDAC (Ifremer), BGC synthetic profiles (Sprof). Argo float data collected and made freely available by the International Argo Program and the national programmes that contribute to it.",
+      "source_url": "https://data-argo.ifremer.fr/dac",
+      "variables": [
+        "TEMP",
+        "PSAL",
+        "DOXY",
+        "CHLA",
+        "NITRATE",
+        "PH_IN_SITU_TOTAL",
+        "BBP700"
+      ],
+      "qc_accept_flags": [
+        1,
+        2
+      ],
+      "prefer_adjusted": true,
+      "n_files": 3,
+      "n_profiles": 9,
+      "n_levels": 12164,
+      "n_platforms": 3,
+      "parameters_served": {
+        "temp": 8658,
+        "psal": 8658,
+        "doxy": 3142,
+        "chla": 2120,
+        "nitrate": 327,
+        "ph_in_situ_total": 1957,
+        "bbp700": 1955
+      }
+    },
+    "rama_mooring_bob": {
+      "title": "RAMA moored buoys, Bay of Bengal (90 E line)",
+      "citation": "TAO/TRITON, RAMA and PIRATA moored buoy array, NOAA PMEL, served via the OSMC ERDDAP (dataset pmelTaoDyT). RAMA is supported by NOAA PMEL, India's Ministry of Earth Sciences and INCOIS, JAMSTEC, BMKG and CSIRO.",
+      "source_url": "data/raw/moorings",
+      "variables": [
+        "TEMP"
+      ],
+      "qc_accept_flags": [
+        1,
+        2
+      ],
+      "prefer_adjusted": false,
+      "n_files": 0,
+      "read_by_plugin": "mooring",
+      "n_profiles_reported": 36,
+      "n_profiles_kept": 3,
+      "n_profiles": 3,
+      "n_levels": 35,
+      "n_platforms": 1,
+      "parameters_served": {
+        "temp": 35
+      }
+    }
+  }
+}

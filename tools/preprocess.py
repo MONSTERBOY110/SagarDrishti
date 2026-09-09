@@ -7,12 +7,13 @@ missing, CF-valid units, and a provenance.json the agent can cite.
 
 Usage:
     python tools/preprocess.py              # process whatever is in data/raw
-    python tools/preprocess.py --fixtures   # tiny synthetic cube, for CI
+    python tools/preprocess.py --fixtures   # build from data/sample, for CI
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -23,6 +24,7 @@ import xarray as xr
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "services" / "api"))
 
+from app import cap as cap_reader  # noqa: E402
 from app.argo import parse_profiles, profile_summary  # noqa: E402
 from app.cf import normalize_dataset  # noqa: E402
 from app.provenance import write_provenance  # noqa: E402
@@ -30,6 +32,8 @@ from app.registry import load_registry_from  # noqa: E402
 
 RAW = REPO / "data" / "raw"
 CUBE = REPO / "data" / "cube"
+#: 614 KB of REAL data, committed on purpose. See data/sample/README.md.
+SAMPLE = REPO / "data" / "sample"
 SOURCES = REPO / "data" / "sources.yaml"
 
 #: Chunking follows Signell & Pothina (PRIOR-ART §E.1): the renderer asks for a
@@ -38,7 +42,15 @@ SOURCES = REPO / "data" / "sources.yaml"
 CHUNKS = {"time": 1, "depth": -1, "lat": -1, "lon": -1}
 
 
-def process_model(spec, src: Path) -> Path:
+#: Where each gridded source lands in the cube. A source with no entry is not
+#: a gridded field and is not processed by process_model.
+STORE_NAME = {
+    "incois_vam_argo": "incois_vam_bob.zarr",
+    "glorys12_cur": "glorys12_cur_bob.zarr",
+}
+
+
+def process_model(spec, src: Path, store_name: str | None = None) -> Path:
     print(f"model: {src.name}")
     raw = xr.open_dataset(src, decode_times=True, mask_and_scale=True)
     print(f"  raw dims      : {dict(raw.sizes)}")
@@ -62,7 +74,7 @@ def process_model(spec, src: Path) -> Path:
     for name in ds.data_vars:
         ds[name].encoding.clear()
 
-    store = CUBE / "incois_vam_bob.zarr"
+    store = CUBE / (store_name or STORE_NAME.get(spec.id) or f"{spec.id}.zarr")
     if store.exists():
         import shutil
 
@@ -74,7 +86,14 @@ def process_model(spec, src: Path) -> Path:
         title=spec.title,
         citation=spec.citation,
         variables=list(ds.data_vars),
-        source_url=f"{spec.url}/griddap/{spec.dataset_id}",
+        # ERDDAP puts the dataset under /griddap; Copernicus addresses it by id
+        # through its own client. Naming the right one matters: the provenance
+        # is what a reader follows to check a number.
+        source_url=(
+            f"{spec.url}/griddap/{spec.dataset_id}"
+            if spec.kind == "erddap_griddap"
+            else f"{spec.url} (dataset {spec.dataset_id})"
+        ),
         extra={
             "time_range": [str(pd.Timestamp(t)) for t in (ds.time.values[0], ds.time.values[-1])],
             "depth_levels": int(ds.sizes["depth"]),
@@ -115,10 +134,114 @@ def model_time_window(store: Path) -> tuple[pd.Timestamp, pd.Timestamp] | None:
     return times.min() - half, times.max() + half
 
 
+def profiles_from_reader(spec, model_times) -> pd.DataFrame:
+    """A plugin-read source -> the same profile frame every other source produces.
+
+    THIS is what makes the source-reader half of the plugin interface a running
+    example rather than a tested one (PS requirement F6). `plugins.open_source`
+    existed, held a checked contract, and was called by nothing outside its own
+    tests. It is called here, on a real moored buoy, and its output joins the
+    same table the Argo floats land in.
+
+    ONE PROFILE PER MODEL TIMESTEP, and the discard is deliberate and counted.
+    A mooring reports DAILY from one fixed position, so a month of RAMA is
+    about 36 profiles at a single point: on a globe that is 36 coincident marks
+    and one arbitrary pick when a judge clicks. The model has three timesteps,
+    so the mooring is subsampled to the day nearest each of them, which is the
+    same shape a float gives (one profile per surfacing) and is the only one of
+    those readings that can honestly be shown beside a given model field.
+    Everything dropped is counted into the provenance.
+    """
+    from app import plugins as plugin_api
+
+    ds = plugin_api.open_source(spec)
+
+    accept = list(spec.qc.accept_flags)
+    rows: list[pd.DataFrame] = []
+    wanted = pd.to_datetime(list(model_times)) if model_times is not None else None
+    n_available = 0
+    n_kept = 0
+
+    # `profile` is the axis open_source concatenates several stations along.
+    n_stations = int(ds.sizes.get("profile", 1))
+    for station_index in range(n_stations):
+        one = ds.isel(profile=station_index) if "profile" in ds.dims else ds
+
+        station = str(one.attrs.get("station", "") or f"station{station_index}")
+        wmo = str(one.attrs.get("wmo_platform_code", "") or station)
+        lat = float(one["lat"].values)
+        lon = float(one["lon"].values)
+
+        times = pd.to_datetime(one["time"].values)
+        depths = np.asarray(one["depth"].values, dtype="float64")
+        values = np.asarray(one["TEMP"].values, dtype="float64")
+        flags = np.asarray(one["TEMP_QC"].values, dtype="float64")
+        n_available += len(times)
+
+        if wanted is not None and len(wanted) and len(times):
+            # Nearest reported day to each model step, deduplicated: two model
+            # steps can share a nearest day when the mooring has a gap.
+            picks = sorted({int(np.argmin(np.abs(times - w))) for w in wanted})
+        else:
+            picks = list(range(len(times)))
+
+        for i in picks:
+            temp = values[i]
+            flag = flags[i]
+            keep = np.isfinite(temp) & np.isin(flag.astype("int16"), accept)
+            if not keep.any():
+                continue
+            n_kept += 1
+            stamp = pd.Timestamp(times[i])
+            rows.append(
+                pd.DataFrame(
+                    {
+                        "profile_id": f"{wmo}_{stamp.strftime('%Y%m%dT%H%M%S')}",
+                        "wmo": wmo,
+                        "time": stamp,
+                        "lat": lat,
+                        "lon": lon,
+                        # A mooring measures at a KNOWN DEPTH on a fixed line,
+                        # not at a pressure it has to convert. Left absent
+                        # rather than back-computed: a pressure this instrument
+                        # never measured would be an invented number.
+                        "pres": np.nan,
+                        "depth": depths[keep],
+                        "temp": temp[keep],
+                        "temp_qc": flag[keep].astype("int16"),
+                    }
+                )
+            )
+
+    if not rows:
+        return pd.DataFrame()
+    out = pd.concat(rows, ignore_index=True)
+    out.attrs["n_profiles_available"] = n_available
+    out.attrs["n_profiles_kept"] = n_kept
+    return out
+
+
+def _has_reader(spec) -> bool:
+    """True when a plugin has registered a reader for this source's kind."""
+    from app import plugins as plugin_api
+
+    return plugin_api.load_plugins().source_reader(spec.kind) is not None
+
+
+def model_timesteps(store: Path):
+    """The cube's own time axis, so a daily instrument can be sampled to it."""
+    try:
+        ds = xr.open_zarr(store)
+    except Exception:
+        return None
+    return pd.to_datetime(ds["time"].values)
+
+
 def process_argo(
     jobs: list[tuple[object, list[Path]]],
     *,
     window: tuple[pd.Timestamp, pd.Timestamp] | None = None,
+    model_times=None,
 ) -> Path | None:
     """Parse every profile source into ONE table, tagged with where each row came from.
 
@@ -137,6 +260,39 @@ def process_argo(
     frames = []
     per_source: dict[str, dict] = {}
     for spec, files in jobs:
+        # A source whose KIND has a registered plugin reader is opened through
+        # the plugin, not by a parser hardcoded here. That is the whole point of
+        # the extension point: adding a moored buoy needed a plugin file and a
+        # sources.yaml entry, and this branch, rather than a new parser in the
+        # core for every instrument anyone might bring.
+        if _has_reader(spec):
+            print(f"{spec.id}: via the {spec.kind!r} plugin reader")
+            df = profiles_from_reader(spec, model_times)
+            available = df.attrs.get("n_profiles_available") if not df.empty else 0
+            kept = df.attrs.get("n_profiles_kept") if not df.empty else 0
+            print(
+                f"  {kept} profile(s) kept of {available} reported, "
+                f"{len(df)} accepted levels"
+            )
+            if not df.empty:
+                df["source_id"] = spec.id
+                frames.append(df)
+            per_source[spec.id] = {
+                "title": spec.title,
+                "citation": spec.citation,
+                "source_url": spec.url,
+                "variables": [v.name for v in spec.variables],
+                "qc_accept_flags": spec.qc.accept_flags,
+                "prefer_adjusted": spec.qc.prefer_adjusted,
+                "n_files": 0,
+                "read_by_plugin": spec.kind,
+                # The discard is disclosed: a mooring reports daily and only
+                # the day nearest each model step is drawn.
+                "n_profiles_reported": int(available or 0),
+                "n_profiles_kept": int(kept or 0),
+            }
+            continue
+
         if not files:
             continue
         print(f"{spec.id}: {len(files)} file(s)")
@@ -233,11 +389,165 @@ def process_argo(
     return out
 
 
+def process_warnings(reg) -> Path | None:
+    """Every `kind: cap` source into one warnings.json (HazardWatch, PRD F13).
+
+    JSON rather than parquet or zarr, and that is a considered choice: a CAP
+    alert is a nested document with a variable number of languages and areas,
+    which is exactly what a columnar store is bad at, and the whole national
+    feed comes to a few hundred kilobytes. The API reads this file and nothing
+    else, so the offline path is the same code path as always.
+
+    Two things happen here that the parser deliberately does not do, because
+    both are pipeline decisions rather than readings of the format:
+
+      * SACHET's geometry SIDECAR is attached to the alert it belongs to. The
+        parser reads one document; joining two is ingest's job.
+      * Oversized rings are SIMPLIFIED, with the reduction recorded on the
+        alert. A single real Gujarat alert carried 93,478 points.
+    """
+    sources = [s for s in reg.enabled() if s.kind == "cap"]
+    if not sources:
+        return None
+
+    print("warnings: CAP sources")
+    records = []
+    refused = []
+    for spec in sources:
+        root = REPO / spec.url if not Path(spec.url).is_absolute() else Path(spec.url)
+        # A remote source keeps its endpoint in `url` and its local landing
+        # directory in `path_template`; a local one puts the directory in `url`
+        # and a glob in `path_template`. Both shapes resolve to a directory.
+        if spec.url.startswith("http"):
+            root = REPO / (spec.path_template or "")
+            pattern = "*.cap.xml"
+        else:
+            pattern = spec.path_template or "*.cap.xml"
+
+        if not root.is_dir():
+            print(f"  {spec.id}: nothing at {root.relative_to(REPO)} (skipped)")
+            continue
+
+        found = sorted(root.glob(pattern))
+        kept = 0
+        for f in found:
+            try:
+                alert = cap_reader.parse_alert(f.read_bytes(), source=spec.id)
+            except cap_reader.CapError as exc:
+                # Counted and named. A CAP document we cannot read is a warning
+                # we are not showing, and that has to be visible in the output
+                # rather than inferred from a shorter list.
+                refused.append({"file": f.name, "source": spec.id, "reason": str(exc)})
+                continue
+
+            sidecar = f.with_name(f.name.replace(".cap.", ".polygon."))
+            if not alert.geometry() and sidecar.is_file() and sidecar.stat().st_size:
+                try:
+                    alert.attach_geometry(cap_reader.parse_polygon_sidecar(sidecar.read_bytes()))
+                except cap_reader.CapError as exc:
+                    alert.notes.append(f"polygon sidecar unreadable: {exc}")
+
+            alert.simplify()
+            records.append(alert.as_dict())
+            kept += 1
+
+        drawn = sum(1 for r in records[-kept:] if r["areas"]) if kept else 0
+        print(f"  {spec.id}: {kept} alerts from {len(found)} files, {drawn} with geometry")
+
+    if not records:
+        print("  no CAP alerts on disk; HazardWatch will report an empty layer")
+
+    vertices = sum(
+        len(ring) for r in records for a in r["areas"] for ring in a["polygons"]
+    )
+    payload = {
+        "generated_from": [s.id for s in sources],
+        "citations": {s.id: s.citation for s in sources},
+        "method": cap_reader.METHOD,
+        "simplify_tolerance_deg": cap_reader.SIMPLIFY_TOLERANCE_DEG,
+        "count": len(records),
+        "vertices": vertices,
+        "unreadable": refused,
+        "alerts": records,
+    }
+    dest = CUBE / "warnings.json"
+    dest.write_text(json.dumps(payload, indent=1, ensure_ascii=False), encoding="utf-8")
+    print(f"  -> {dest.relative_to(REPO)}  ({dest.stat().st_size / 1024:.0f} KB, "
+          f"{vertices} vertices)")
+    if refused:
+        print(f"  !! {len(refused)} CAP documents were unreadable and are listed in the file")
+    return dest
+
+
 def build_fixtures() -> None:
-    """A tiny synthetic cube so CI can exercise the offline path with no network."""
-    print("building synthetic fixture cube (no network)")
+    """Build the demo cube from the COMMITTED SAMPLE, with no network (CI).
+
+    `data/sample/` holds 614 KB of real data: the INCOIS griddap subset exactly
+    as tools/fetch_sample.py downloads it, and the processed in-situ profile
+    table. See the README beside them for why they are in the repository when
+    data/raw and data/cube are not.
+
+    This used to synthesise a small invented field instead, and that was a
+    quiet hole in the build. The browser suite in e2e/ asserts claims about the
+    REAL Bay of Bengal by design (the surface is warmer than 2000 m, the
+    cartouche cites incois_argo_10d_VAM, a BGC float really serves chlorophyll,
+    the 26 degC surface varies in depth and splits in two on 10 July), and not
+    one of those is reachable against an invented field. Four of six browser
+    tests could not pass on CI however correct the application was, so the
+    suite only really ran when somebody remembered to run it locally.
+
+    The synthetic path survives below as a FALLBACK, for a checkout where the
+    sample is missing. It builds something the API can serve so nothing hard
+    crashes, and it says plainly that the demo-path claims cannot be tested
+    against it.
+    """
     CUBE.mkdir(parents=True, exist_ok=True)
-    depth = np.array([5, 10, 20, 50, 100, 200, 500, 1000], dtype="float64")
+    reg = load_registry_from(SOURCES)
+
+    model = SAMPLE / "incois_vam_bob.nc"
+    profiles = SAMPLE / "profiles.parquet"
+
+    if not model.is_file():
+        print(f"no committed sample at {SAMPLE.relative_to(REPO)}; "
+              "falling back to a synthetic cube")
+        _build_synthetic_cube()
+    else:
+        print(f"building from the committed sample ({SAMPLE.relative_to(REPO)}, no network)")
+        process_model(reg.get("incois_vam_argo"), model)
+
+        if profiles.is_file():
+            dest = CUBE / "profiles.parquet"
+            dest.write_bytes(profiles.read_bytes())
+            prov = SAMPLE / "profiles.provenance.json"
+            if prov.is_file():
+                (CUBE / "profiles.provenance.json").write_bytes(prov.read_bytes())
+            n = len(pd.read_parquet(dest)["profile_id"].unique())
+            print(f"  -> {dest.relative_to(REPO)}  ({n} real profiles)")
+        else:
+            print("  no sample profile table; the instrument panels will be empty")
+
+    # The warning layer either way: the rehearsal CAP bulletins are committed
+    # under data/warnings/incois, which is exactly why they are committed. The
+    # SACHET source finds nothing on a fresh checkout because its downloads
+    # live under the gitignored data/raw, and that is printed rather than
+    # passed over.
+    process_warnings(reg)
+
+
+def _build_synthetic_cube() -> None:
+    """A tiny invented field, for a checkout with no committed sample.
+
+    Enough for the API to serve and for the offline smoke check to pass. NOT
+    enough for the demo-path browser suite, whose assertions are claims about
+    the real ocean, and that limit is stated here rather than discovered as
+    four red tests.
+    """
+    print("  SYNTHETIC field: the demo-path browser tests cannot be met by this")
+    depth = np.array(
+        [5, 10, 20, 30, 50, 75, 100, 125, 150, 200, 250, 300, 400, 500,
+         600, 700, 800, 900, 1000, 1200, 1400, 1600, 1800, 2000],
+        dtype="float64",
+    )
     lat = np.arange(5.5, 25.5, 1.0)
     lon = np.arange(80.5, 95.5, 1.0)
     time = pd.date_range("2026-07-10", periods=3, freq="10D")
@@ -265,8 +575,8 @@ def build_fixtures() -> None:
     write_provenance(
         store,
         source_id="incois_vam_argo",
-        title="INCOIS VAM (synthetic CI fixture)",
-        citation="SYNTHETIC FIXTURE -- not real data, do not cite",
+        title="INCOIS VAM (synthetic fallback)",
+        citation="SYNTHETIC FALLBACK -- not real data, do not cite",
         variables=["TEMP"],
         extra={"fixture": True},
     )
@@ -275,7 +585,11 @@ def build_fixtures() -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--fixtures", action="store_true", help="build a synthetic cube for CI")
+    ap.add_argument(
+        "--fixtures",
+        action="store_true",
+        help="build the cube from data/sample, no network (this is what CI runs)",
+    )
     args = ap.parse_args()
 
     CUBE.mkdir(parents=True, exist_ok=True)
@@ -291,6 +605,17 @@ def main() -> int:
         print(f"missing {model_src.relative_to(REPO)} -- run tools/fetch_sample.py first")
         return 1
     process_model(model_spec, model_src)
+
+    # Depth-resolved currents (PS F1). Additive: absent is not an error, since
+    # this source needs a Copernicus account and a checkout without one still
+    # has a complete demo of everything INCOIS can answer.
+    if reg.has("glorys12_cur") and reg.get("glorys12_cur").enabled:
+        cur_src = RAW / "glorys" / "glorys12_cur_bob.nc"
+        if cur_src.is_file():
+            process_model(reg.get("glorys12_cur"), cur_src)
+        else:
+            print("no GLORYS currents in data/raw/glorys "
+                  "(needs COPERNICUS_USERNAME and COPERNICUS_PASSWORD in .env)")
 
     argo_files = sorted((RAW / "argo").glob("*_prof.nc"))
     if not argo_files:
@@ -309,8 +634,22 @@ def main() -> int:
         print("no BGC files in data/raw/argo_bgc (none found in the demo box); "
               "core floats only")
 
-    window = model_time_window(CUBE / 'incois_vam_bob.zarr')
-    process_argo(jobs, window=window)
+    # Any source whose kind has a plugin reader joins the same job list. The
+    # core does not know what a mooring is; the plugin does.
+    for spec in reg.enabled():
+        if spec.id in {j[0].id for j in jobs}:
+            continue
+        if _has_reader(spec):
+            jobs.append((spec, []))
+
+    # Warnings are independent of the field pipeline: they need no cube, no
+    # time window and no model grid, so a failure in either half cannot take
+    # the other down.
+    process_warnings(reg)
+
+    window = model_time_window(CUBE / "incois_vam_bob.zarr")
+    model_times = model_timesteps(CUBE / "incois_vam_bob.zarr")
+    process_argo(jobs, window=window, model_times=model_times)
 
     print("cube ready. Start the API:  ./tasks.ps1 api")
     return 0

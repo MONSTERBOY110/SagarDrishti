@@ -42,6 +42,22 @@ export interface SceneState {
    *  when the variable changes, because 26 is a thermocline in degC and
    *  nothing at all in psu. */
   isovalue: number;
+  /**
+   * Show CAP alerts whose status is Exercise, that is, drills (PS F13).
+   *
+   * ON in this build, and that is a deliberate, stated choice rather than a
+   * convenience. The three ocean hazards the problem statement names by name
+   * (tsunami, high wave, swell surge) are the ones we could not obtain a live
+   * machine feed for, so the only ocean bulletins we have are rehearsals. With
+   * this off, the hazard layer over the demo's own timesteps is empty and the
+   * feature reads as broken rather than as honest.
+   *
+   * It is safe because nothing hides what these are: they carry CAP status
+   * Exercise in the file, the server refuses them unless this flag is passed,
+   * the globe draws them unfilled, and the panel stamps itself. The control is
+   * on screen so a judge can switch it off and watch them go.
+   */
+  rehearsal: boolean;
 }
 
 export interface SceneActions {
@@ -77,6 +93,7 @@ export const INITIAL_SCENE: SceneState = {
   // 26 degC: the base of the layer that can fuel a cyclone, and the same
   // threshold the D26 product uses, so the surface and the scalar agree.
   isovalue: 26,
+  rehearsal: true,
 };
 
 export const useScene = create<SceneState & SceneActions>((set) => ({

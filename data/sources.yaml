@@ -97,11 +97,17 @@ sources:
     dims:
       profile: N_PROF
       level: N_LEVELS
+    # DOCUMENTATION, not an applied correction. cf_overrides is consumed in
+    # exactly one place, app/cf.py:normalize_dataset, which runs only on
+    # gridded sources. An Argo file is parsed by app/argo.py, which reads the
+    # pressure axis itself and never looks at this block. It is kept because it
+    # records the convention a reader must know: PRES is decibars, NOT metres,
+    # and app/argo.py converts it with gsw.z_from_p (TEOS-10).
     cf_overrides:
       PRES:
         standard_name: sea_water_pressure
         units: dbar
-        positive: down    # pressure, NOT metres. Converted via gsw.z_from_p.
+        positive: down
 
   # ---------------------------------------------------------------------------
   # The ASCII half of F3. Cruise CTD and glider text casts. Adding another text
@@ -321,44 +327,258 @@ sources:
     dims:
       profile: N_PROF
       level: N_LEVELS
+    # DOCUMENTATION, not an applied correction. cf_overrides is consumed in
+    # exactly one place, app/cf.py:normalize_dataset, which runs only on
+    # gridded sources. An Argo file is parsed by app/argo.py, which reads the
+    # pressure axis itself and never looks at this block. It is kept because it
+    # records the convention a reader must know: PRES is decibars, NOT metres,
+    # and app/argo.py converts it with gsw.z_from_p (TEOS-10).
     cf_overrides:
       PRES:
         standard_name: sea_water_pressure
         units: dbar
         positive: down
 
+
+
+  # ---------------------------------------------------------------------------
+  # A MOORED BUOY, and the running example for the source-reader half of the
+  # plugin interface (PS requirement F6, which names moorings by name).
+  #
+  # The plugin framework has offered two extension points from the start.
+  # Derived products had a live example (D26); source readers had a checked
+  # contract, error codes D1 to D5, documentation, and nothing registered
+  # against them. `kind: mooring` here is served by
+  # services/api/plugins/rama_mooring.py, so both halves now have something
+  # running rather than one half having only tests.
+  #
+  # WHY THIS SOURCE. RAMA is the Research moored Array for African-Asian-
+  # Australian Monsoon Analysis, the Indian Ocean arm of the global tropical
+  # moored buoy array, and INCOIS is one of its partners. Three of its moorings
+  # sit inside the demo box on the 90 E line, at 8 N, 12 N and 15 N, and they
+  # report DAILY and CURRENTLY: 15n90e (WMO 23009) returned 17 levels from 1 m
+  # to 500 m for 2026-07-30, the same day as the model timestep the scene opens
+  # on. Contemporaneity is the property that made this worth ingesting and the
+  # Oceansat-2 chlorophyll source not.
+  #
+  # THREE REAL DEFECTS THIS SOURCE BRINGS, all handled in the reader:
+  #
+  #  1. A DIFFERENT QC VOCABULARY. TAO/RAMA flags are 0 no sensor, 1 highest
+  #     quality, 2 default quality, 3 adjusted, 4 lower quality, 5 SENSOR
+  #     FAILED. Argo's scale means something different above 2 and has no 5 at
+  #     all, so the two agree on 1 and 2 by coincidence and disagree beyond.
+  #     Filtering RAMA flags with Argo's rules would compare a failed sensor
+  #     against a scale it does not belong to. The reader maps them explicitly.
+  #
+  #  2. A FOURTH FILL CONVENTION, 1.0E35. The cube already handles -9999.0
+  #     (VAM), -1.0E34 (value-added and ocean colour) and 99999.0 (Argo BGC).
+  #     None is a rounding of another.
+  #
+  #  3. A FLAT TABLE, NOT A GRID. ERDDAP tabledap serves one row per
+  #     (time, depth) with the position repeated on every row, 527 rows for one
+  #     mooring over a month. The reader pivots it, using the depths actually
+  #     present rather than an assumed set, because a mooring loses and regains
+  #     sensors mid-deployment.
+  #
+  # `url` is a LOCAL DIRECTORY, not an endpoint, and that is the offline rule
+  # rather than an oddity: tools/fetch_sample.py is the only file that touches
+  # the network, and a reader runs against what it left on disk.
+  # ---------------------------------------------------------------------------
+  - id: rama_mooring_bob
+    title: "RAMA moored buoys, Bay of Bengal (90 E line)"
+    kind: mooring
+    enabled: true
+    url: data/raw/moorings
+    path_template: "rama_*.nc"
+    citation: >-
+      TAO/TRITON, RAMA and PIRATA moored buoy array, NOAA PMEL, served via the
+      OSMC ERDDAP (dataset pmelTaoDyT). RAMA is supported by NOAA PMEL, India's
+      Ministry of Earth Sciences and INCOIS, JAMSTEC, BMKG and CSIRO.
+    # Empty means "discover them": tools/fetch_sample.py asks the array which
+    # stations lie in the demo box rather than trusting a pasted list, the same
+    # way the BGC floats are found. Pin one here only to force a rehearsal onto
+    # a known-good mooring.
+    platforms: []
+    variables:
+      - name: TEMP
+        canonical: sea_water_temperature
+        label: Temperature
+        units: "degC"
+    dims:
+      time: time
+      depth: depth
+    qc:
+      # After the reader has mapped RAMA's vocabulary onto this scale. Same
+      # policy as every other instrument in the project, which is the point of
+      # mapping rather than special-casing.
+      accept_flags: [1, 2]
+      prefer_adjusted: false
+
+  # ---------------------------------------------------------------------------
+  # INCOIS ocean colour. The PS names CHLOROPHYLL among the fields F1 asks for,
+  # and this is INCOIS's own product for it, on the same open ERDDAP the model
+  # field comes from. It is registered here, and DISABLED, and the three
+  # reasons are worth stating because each one is a decision rather than a
+  # missing feature.
+  #
+  # 1. IT IS NOT CONTEMPORANEOUS. The series ends 2020-05-01. The model cube
+  #    covers three dates in July 2026. There is no honest way to draw a 2020
+  #    field under the same time scrubber as a 2026 one: a scrubber reading
+  #    2026-07-30 above a 2020 chlorophyll layer is a false statement made by
+  #    the interface itself, and it would be made silently. Nothing in the
+  #    scene today can express "this layer has its own epoch", so the choice is
+  #    between building that and not drawing the layer.
+  #
+  # 2. IT IS A SURFACE FIELD. Ocean colour is measured by satellite and has no
+  #    profile, so this source has dims (time, lat, lon) and NO vertical axis,
+  #    while every cube in the store today is 4D. A sweep of the codebase found
+  #    the client is single-dataset by construction and would answer
+  #    "the depth cursor is at NaN metres", print "0 depth levels from 0 to 0
+  #    metres", and unmount the scale bar (taking the frame-rate readout with
+  #    it) for a source with no levels. Three real bugs that sweep found are
+  #    already fixed, because they were live without this source; the client
+  #    empty-state work is not, and drawing this layer without it would look
+  #    broken in a way a judge would reasonably read as broken.
+  #
+  # 3. PAYLOAD. At 0.04 degrees this is roughly 375 x 500 = 187,500 cells for
+  #    ONE surface timestep inside the demo box, against 300 cells per level
+  #    and 7,200 for the ENTIRE 24-level volumetric column. A single timestep
+  #    is about 26 times the whole water column we render today, and /field
+  #    transports it as a JSON array of nullable floats. The ingest has to
+  #    decimate before any of this is worth scheduling, and the decimation
+  #    factor is a decision with a scientific cost that nobody has taken yet.
+  #
+  # WHAT IT WOULD TAKE, so the estimate is on the record rather than rediscovered:
+  # a `vertical: surface` marker and an epoch marker in the registry, a
+  # depth-tolerant catalog entry, an empty-state path through the depth rack,
+  # scale bar and scene summary, a decimating ingest, and a time axis that
+  # refuses to join two epochs. That is a real piece of work and it is not on
+  # the PS's own P0 list, so it waits behind the requirements that are.
+  #
+  # Chlorophyll DOES already reach the screen from the other direction: the BGC
+  # floats under `argo_bgc_indian` carry measured chlorophyll PROFILES that are
+  # contemporaneous with the model field, and those are live.
+  #
+  # Probed 2026-09-08. CHL is mg/m3, KD490 is m-1, TSM is mg/L, all three with
+  # _FillValue -1.0E34, which is the second of the three fill conventions the
+  # CF layer already handles.
+  # ---------------------------------------------------------------------------
+  - id: incois_oceansat2_chl
+    title: "INCOIS Oceansat-2 OCM ocean colour (surface, 2011 to 2020)"
+    kind: erddap_griddap
+    enabled: false
+    disabled_reason: >-
+      Not contemporaneous with the model field: the series ends 2020-05-01
+      while the cube covers July 2026, and the scene cannot yet express a layer
+      with its own epoch. Also a SURFACE source with no vertical axis, which
+      the single-dataset client has no empty state for, and about 187,500 cells
+      per timestep against 7,200 for the entire volumetric column, so the
+      ingest needs a decimation decision first. Contemporaneous chlorophyll IS
+      available as BGC float profiles, see argo_bgc_indian.
+    url: https://erddap.incois.gov.in/erddap
+    dataset_id: incois_oceansat2_datasets
+    citation: "INCOIS ERDDAP, incois_oceansat2_datasets (Oceansat-2 OCM ocean colour)."
+    variables:
+      - name: CHL
+        canonical: mass_concentration_of_chlorophyll_a_in_sea_water
+        label: Chlorophyll-a
+        units: "mg/m3"
+      - name: KD490
+        canonical: volume_attenuation_coefficient_of_downwelling_radiative_flux_in_sea_water
+        label: Diffuse attenuation at 490 nm
+        units: "m-1"
+      - name: TSM
+        canonical: mass_concentration_of_suspended_matter_in_sea_water
+        label: Total suspended matter
+        units: "mg/L"
+    dims:
+      time: time
+      lat: latitude
+      lon: longitude
+      # NO depth. Deliberately absent rather than left over from a copied
+      # entry: app/cf.py skips a declared axis it cannot find, so a stale
+      # `depth: ZAX` here would be silently ignored and the source would look
+      # volumetric in the config while being flat in the data.
+    cf_overrides:
+      CHL:
+        _FillValue: -1.0e34
+      KD490:
+        _FillValue: -1.0e34
+      TSM:
+        _FillValue: -1.0e34
+
   # ---------------------------------------------------------------------------
   # PS-official reanalysis. DISABLED until Copernicus credentials exist.
   # The ONLY source with depth-resolved currents (U/V) - required by F1's
   # current-vector layer. Enable = set enabled: true + put creds in .env.
   # ---------------------------------------------------------------------------
-  - id: glorys12
-    title: "Copernicus GLORYS12V1 global reanalysis (1/12 deg, 50 levels)"
+  # ---------------------------------------------------------------------------
+  # DEPTH-RESOLVED CURRENTS. The problem statement names current vectors among
+  # the fields F1 must render, and INCOIS's free ERDDAP publishes SURFACE
+  # geostrophic currents only, so this is the one part of F1 that no INCOIS
+  # source can answer. It was blocked on a Copernicus account until 2026-09-09.
+  #
+  # THE DATASET ID CHANGED WHEN THE ACCOUNT ARRIVED, and the reason is the same
+  # trap that keeps the Oceansat-2 chlorophyll source disabled below.
+  #
+  # This entry originally named `cmems_mod_glo_phy_my_0.083deg_P1D-m`, the
+  # GLORYS12V1 multi-year REANALYSIS. Probed with real credentials on
+  # 2026-09-09, that product runs 1993-01-01 to **2026-06-23**. Our cube's three
+  # analysis steps are 2026-07-10, 07-20 and 07-30. Every one of them is after
+  # the reanalysis ends, so the originally configured source could not have
+  # produced a single contemporaneous field, and a time scrubber reading
+  # 2026-07-30 above a June current layer would be a false statement made by
+  # the interface itself.
+  #
+  # `cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m` is the analysis-and-forecast
+  # CURRENTS product: 2022-06-01 to 2026-09-18, 50 levels from 0.5 to 5728 m,
+  # carrying exactly `uo` and `vo`. It covers all three of our dates.
+  #
+  # Temperature and salinity are deliberately NOT taken from here even though
+  # the reanalysis carries them. INCOIS's own analysis is the PS-preferred
+  # source and is what the scorecard verifies; adding a second temperature
+  # field would mean two answers to one question with nothing to choose
+  # between them.
+  #
+  # GRID. 1/12 degree over the demo box is 241 x 181 cells per level against
+  # the INCOIS analysis's 21 x 16, so a level here is 128 times the cells. That
+  # is the visual upgrade the account buys and it is also why currents are
+  # drawn as a DECIMATED VECTOR FIELD rather than as volumetric slices: 43,561
+  # arrows on one level is not a picture anybody can read, and the JSON for it
+  # would not fit the frame budget in TRD section 5.
+  #
+  # Its depth axis is its OWN (40 levels to 1942 m, none of them shared with
+  # the INCOIS 24). It is not regridded onto the INCOIS levels: that would be
+  # an interpolation nobody asked for, applied to make two products look like
+  # one. The client asks for the nearest GLORYS level to the depth cursor and
+  # the response says which level it actually got.
+  # ---------------------------------------------------------------------------
+  - id: glorys12_cur
+    title: "Copernicus GLORYS analysis and forecast, currents (1/12 deg, 50 levels)"
     kind: copernicus
-    enabled: false
-    disabled_reason: "Awaiting Copernicus Marine credentials (COPERNICUS_USER / COPERNICUS_PASS in .env). See docs/adr/0003."
+    enabled: true
     url: https://data.marine.copernicus.eu
-    dataset_id: cmems_mod_glo_phy_my_0.083deg_P1D-m
-    citation: "E.U. Copernicus Marine Service Information, GLOBAL_MULTIYEAR_PHY_001_030 (GLORYS12V1)"
+    dataset_id: cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m
+    citation: >-
+      E.U. Copernicus Marine Service Information, Global Ocean Physics Analysis
+      and Forecast (GLOBAL_ANALYSISFORECAST_PHY_001_024), currents product
+      cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m. Generated using E.U. Copernicus
+      Marine Service Information.
     variables:
-      - name: thetao
-        canonical: sea_water_temperature
-        label: Temperature
-      - name: so
-        canonical: sea_water_practical_salinity
-        label: Salinity
       - name: uo
         canonical: eastward_sea_water_velocity
         label: Eastward current
+        units: "m s-1"
       - name: vo
         canonical: northward_sea_water_velocity
         label: Northward current
+        units: "m s-1"
     dims:
       time: time
       depth: depth
       lat: latitude
       lon: longitude
-    cf_overrides: {}   # GLORYS12 is CF-clean; kept explicit to prove the contrast
+    cf_overrides: {}   # Copernicus is CF-clean; kept explicit to prove the contrast
 
   # ---------------------------------------------------------------------------
   # The OFFLINE=1 target. Written by tools/preprocess.py, read by the API.
@@ -377,3 +597,64 @@ sources:
         from_source: argo_gdac_indian
         format: parquet
     citation: "Derived from the sources named in each store's provenance.json"
+
+  # ---------------------------------------------------------------------------
+  # HazardWatch (PRD F13, TRD M8). The problem statement's portal theme IS
+  # Disaster Management and "timely hazard assessment" is its first stated
+  # mandate, so these two entries are the half of the brief the field layers do
+  # not answer.
+  #
+  # WHY TWO SOURCES AND NOT ONE, which is the honest part of this feature.
+  #
+  # TRD M8 planned for curated CAP samples "where a machine feed isn't public".
+  # Probing on 2026-09-09 found that one IS: NDMA SACHET, India's national CAP
+  # backbone, publishes a live public RSS index of real CAP v1.2 alerts, and it
+  # carried 99 of them that afternoon from CWC, IMD and the state disaster
+  # authorities. That is strictly better than anything we could write, so it is
+  # the first source and the parser is proven against it.
+  #
+  # What that feed did NOT carry at ingest time is any of the three OCEAN
+  # hazards the PS names by name: tsunami, high wave, swell surge. Those come
+  # from INCOIS's own ITEWC, which is a UNESCO-IOC Tsunami Service Provider and
+  # does issue CAP, but the same probe found no public machine-readable CAP or
+  # RSS endpoint for it (tsunami.incois.gov.in answers, its ITEWS/cap.jsp and
+  # ITEWS/rss.jsp do not). So the ocean hazards are the second source, and
+  # every file in it is marked with CAP's OWN `status: Exercise`.
+  #
+  # `Exercise` is not a workaround. It is the field the standard provides for
+  # exactly this case, it is what a real drill uses, and it means no file we
+  # authored can ever be mistaken for a live warning by any CAP reader,
+  # including ours: app/cap.py refuses a non-Actual alert unless a caller asks
+  # for a rehearsal, and the panel that draws one is required to say so.
+  # ---------------------------------------------------------------------------
+  - id: cap_sachet_india
+    title: "NDMA SACHET national CAP alert feed (India)"
+    kind: cap
+    enabled: true
+    # The RSS index. tools/fetch_sample.py walks it, pulls each CAP document
+    # and the polygon sidecar SACHET puts the geometry in, and leaves them in
+    # the local directory below. The API never sees this URL.
+    url: https://sachet.ndma.gov.in/cap_public_website/rss/rss_india.xml
+    path_template: data/raw/cap/sachet
+    citation: >-
+      Common Alerting Protocol bulletins issued in the public interest by
+      Indian government agencies (India Meteorological Department, Central
+      Water Commission and the State Disaster Management Authorities) and
+      disseminated through NDMA SACHET, India's national CAP backbone.
+
+  - id: cap_incois_ocean
+    title: "INCOIS ocean-hazard bulletins, CAP v1.2 (rehearsal set)"
+    kind: cap
+    enabled: true
+    # A LOCAL directory. There is no endpoint because there is no public
+    # machine feed; see the block above.
+    url: data/warnings/incois
+    path_template: "*.cap.xml"
+    citation: >-
+      Ocean-hazard bulletins in OASIS CAP v1.2, authored for this project and
+      modelled on the bulletin structure of the Indian Tsunami Early Warning
+      Centre (ITEWC) at INCOIS, a UNESCO-IOC Tsunami Service Provider. Every
+      file carries CAP status Exercise: these are rehearsal bulletins and are
+      not, and must never be presented as, live warnings. No public
+      machine-readable CAP feed for ITEWC was found when this was written
+      (probed 2026-09-09).

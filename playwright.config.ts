@@ -34,12 +34,24 @@ const PYTHON =
 
 const WEB = "http://127.0.0.1:3100";
 const API = "http://127.0.0.1:8100";
+/* The agent plane. Booted here so the suite can prove the ask panel works,
+   and on its own port so that killing it is a one-line change if we ever want
+   to assert the "kill the agent and every P0 still passes" property directly. */
+const AGENT = "http://127.0.0.1:8110";
 
 export default defineConfig({
   testDir: "./e2e",
-  // The scene needs time to build 24 textured slices on an integrated GPU.
-  timeout: 120_000,
-  expect: { timeout: 30_000 },
+  /* MEASURED against a SOFTWARE renderer, which is the case that matters.
+     Playwright's headless Chromium usually falls back to SwiftShader, and CI
+     has no GPU at all, so software rendering is the normal condition here and
+     a hardware GPU is the lucky one. Measured on this machine: the same four
+     tests take 1.8 minutes with the Intel UHD GPU and 8.1 minutes on
+     SwiftShader, and the longest single test goes from 46 seconds to 5.6
+     minutes. A 120 s timeout passed locally on the GPU and would have failed
+     every run on CI. The suite annotates the renderer it actually got, so a
+     slow run is diagnosable rather than mysterious. */
+  timeout: 420_000,
+  expect: { timeout: 60_000 },
   fullyParallel: false, // one browser at a time: these tests measure frame rate
   workers: 1,
   retries: process.env.CI ? 1 : 0,
@@ -71,11 +83,39 @@ export default defineConfig({
       env: { OFFLINE: "1" },
     },
     {
-      command: "pnpm --filter @sagardrishti/web exec next start -p 3100",
-      url: WEB,
-      timeout: 180_000,
+      // Samudra Sahayak. Depends on the API, so it is listed after it;
+      // Playwright starts webServers in parallel and the agent tolerates the
+      // API not being up yet (its /healthz reports that rather than failing).
+      command: `"${PYTHON}" -m uvicorn app.main:app --port 8110 --log-level warning`,
+      cwd: join(ROOT, "services", "agent"),
+      url: `${AGENT}/healthz`,
+      timeout: 120_000,
       reuseExistingServer: !process.env.CI,
-      env: { NEXT_PUBLIC_API_BASE: API },
+      env: { SAGAR_API_BASE: API },
+    },
+    {
+      /* The BUILD happens here, and that is the fix for a real bug rather than
+         a tidy-up. `NEXT_PUBLIC_*` is inlined by Next at BUILD time, so setting
+         NEXT_PUBLIC_API_BASE on `next start` did nothing at all: the served
+         bundle carried the default http://127.0.0.1:8000 while this suite
+         booted its API on 8100. It passed locally only because a development
+         API happened to be listening on 8000. On CI nothing listens there, so
+         every test would have failed with an empty scene and no clue why.
+         Building inside this command is what makes the env var take effect,
+         and it also retires the stale-build trap that has cost this project
+         time three times: the suite can no longer serve a bundle older than
+         the source it is testing. */
+      command:
+        "pnpm --filter @sagardrishti/web exec next build && " +
+        "pnpm --filter @sagardrishti/web exec next start -p 3100",
+      url: WEB,
+      timeout: 600_000,
+      reuseExistingServer: !process.env.CI,
+      // BOTH bases at build time, for the reason spelled out above:
+      // NEXT_PUBLIC_* is inlined by Next when it builds, so setting either of
+      // these on `next start` would do nothing at all and the client would
+      // call the default ports.
+      env: { NEXT_PUBLIC_API_BASE: API, NEXT_PUBLIC_AGENT_BASE: AGENT },
     },
   ],
 });

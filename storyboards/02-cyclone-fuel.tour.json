@@ -1,0 +1,55 @@
+{
+  "id": "cyclone-fuel",
+  "title": "The heat a cyclone feeds on",
+  "subtitle": "The 26 degree surface, and the day it broke in two",
+  "audience": "judge",
+  "source_id": "incois_vam_argo",
+  "steps": [
+    {
+      "narration": "Forecasters use one number for cyclone fuel: how deep you have to go before the water drops below 26 degrees. Above that line the ocean can feed a storm. Below it, it cannot.",
+      "hold": 9,
+      "patch": {
+        "variable": "TEMP",
+        "time": "2026-07-30T00:00:00Z",
+        "focusDepth": 100,
+        "isosurfaceOn": false
+      },
+      "evidence": [
+        "26 degC is the threshold the D26 derived product uses, declared in its plugin and printed in the catalog entry"
+      ]
+    },
+    {
+      "narration": "Switch the isosurface on and the tool draws that line as an actual surface in the water: every point where the temperature is exactly 26 degrees, threaded through the flat layers.",
+      "hold": 9,
+      "patch": { "isosurfaceOn": true, "isovalue": 26 },
+      "evidence": [
+        "the isosurface panel prints the extractor, the isovalue and its units for the mesh on screen"
+      ]
+    },
+    {
+      "narration": "It is not a picture drawn over the data. It is extracted from the same grid, by marching cubes, and it agrees to the last decimal place with the separate calculation of the same quantity that the tool already had.",
+      "hold": 9,
+      "patch": { "isosurfaceOn": true },
+      "evidence": [
+        "a test asserts every vertical vertex of the mesh matches the shipped D26 product exactly, in every column where both apply"
+      ]
+    },
+    {
+      "narration": "Notice it stops short of the coast, and says so with an orange line. Near the shore some of the surrounding measurements are missing, and rather than guess them the tool leaves a hole and reports how many cells it left out.",
+      "hold": 10,
+      "patch": { "isosurfaceOn": true },
+      "evidence": [
+        "the isosurface response carries the count of cells refused for a missing corner, and the panel prints it"
+      ]
+    },
+    {
+      "narration": "Now scrub back to the tenth of July. The surface comes back in two separate pieces. Nothing in our code knows that can happen; the data simply came out that way. A pocket of warmer water is sitting trapped under cooler water, which is a real Bay of Bengal effect of monsoon rain and river outflow.",
+      "hold": 12,
+      "patch": { "time": "2026-07-10T00:00:00Z", "isosurfaceOn": true },
+      "evidence": [
+        "the extractor reports 2 connected components on 2026-07-10 and 1 on the other two dates",
+        "the mesh on 2026-07-10 spans 54.7 to 107.5 metres"
+      ]
+    }
+  ]
+}

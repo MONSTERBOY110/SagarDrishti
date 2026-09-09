@@ -5,6 +5,7 @@
 #   ./tasks.ps1 setup     install Python + Node dependencies
 #   ./tasks.ps1 fetch     download real sample data (the only network step)
 #   ./tasks.ps1 api       run the FastAPI data plane on :8000
+#   ./tasks.ps1 agent     run the Samudra Sahayak agent plane on :8010
 #   ./tasks.ps1 web       run the Next.js client on :3000
 #   ./tasks.ps1 test      run the data-plane test suite
 #   ./tasks.ps1 offline   run the API with the network path disabled
@@ -22,7 +23,7 @@
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'fetch', 'api', 'web', 'test', 'offline', 'build', 'serve', 'demo', 'e2e')]
+    [ValidateSet('setup', 'fetch', 'api', 'agent', 'web', 'test', 'offline', 'build', 'serve', 'demo', 'e2e')]
     [string]$Task = 'test'
 )
 
@@ -68,6 +69,16 @@ switch ($Task) {
         Free-Port 8000
         Push-Location (Join-Path $root 'services\api')
         try { & $py -m uvicorn app.main:app --reload --port 8000 } finally { Pop-Location }
+    }
+    'agent' {
+        # Samudra Sahayak (TRD M4). A SEPARATE process on purpose: TRD section
+        # 6.5 states the property as "kill the agent and every P0 still
+        # passes", and the web client probes this port and simply omits the ask
+        # panel when nothing answers. Stopping this task is the demonstration.
+        Assert-Venv
+        Free-Port 8010
+        Push-Location (Join-Path $root 'services\agent')
+        try { & $py -m uvicorn app.main:app --reload --port 8010 } finally { Pop-Location }
     }
     'offline' {
         Assert-Venv

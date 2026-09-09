@@ -15,9 +15,12 @@
  * agent inherits in Phase 2 - it starts here, on a chart a human reads.
  *
  * Deliberately NOT here: any RMSE or bias number. The model curve is taken
- * from the nearest grid cell, which is not Class-4 co-location (TRD M5), and a
- * skill figure computed that way would be indefensible in front of an INCOIS
- * oceanographer. The panel says so on screen.
+ * from the nearest grid cell, and a skill figure computed that way would be
+ * indefensible in front of an INCOIS oceanographer. The verified comparison
+ * lives in ScorecardPanel, which interpolates the model to each cast's own
+ * position and depth (TRD M5, Ryan et al. 2015). This panel says so on screen
+ * and points at it, rather than leaving a reader to assume the dashed line is
+ * the verification.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -509,8 +512,10 @@ export default function ProfilePanel(p: Props) {
                 color: "var(--caution-ink)",
               }}
             >
-              Model curve is the nearest grid cell, not Class-4 co-location. No
-              skill figure is claimed here; the verified scorecard is TRD M5.
+              Model curve is the nearest grid cell, so no skill figure is
+              claimed on this chart. The verification certificate above is the
+              Class-4-style comparison, interpolated to each cast's own
+              position and depth.
             </p>
           </footer>
         </>

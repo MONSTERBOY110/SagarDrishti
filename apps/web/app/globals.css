@@ -448,13 +448,25 @@ button {
   overflow-x: hidden;
 }
 
+/* Two documents stack here now: the verification certificate over the cast it
+   is evidenced by. Ruled apart by the same gap the left column uses, so the
+   two margins read as one composition rather than as two accidents. */
 .panel-right {
   position: absolute;
   top: 1.25rem;
   right: 1.25rem;
   z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
   max-height: calc(100vh - 2.5rem);
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+/* A sheet in a scrolling flex column is squeezed by default, which turns the
+   certificate into a clipped strip the moment a cast is open. */
+.panel-right > section {
+  flex-shrink: 0;
 }
 
 /* --- the cartouche: a chart's title device, ruled and boxed ---------------- */
@@ -556,14 +568,25 @@ button {
    because it is the same kind of object: a reading aid over the scene, not a
    control. */
 
-.legend {
+/* The open band beside the sheet, which now holds two things: the station-mark
+   legend and the HazardWatch panel. They were each absolutely positioned at the
+   same offset and drew on top of one another, so they share a column instead.
+   Same offset the cartouche uses, and for the same reason: the bottom-left
+   corner belongs to the 24-row rack and the time rule. */
+.panel-mid {
   position: absolute;
-  /* Same offset the cartouche uses, and for the same reason: the bottom-left
-     corner belongs to the 24-row rack and the time rule, so an overlay placed
-     there sits on top of them. This takes the open band beside the sheet. */
   left: calc(var(--sheet-w) + 2.5rem);
   top: 1.25rem;
-  z-index: 2;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.625rem;
+  /* Clear of the cartouche in the bottom band. */
+  max-height: calc(100vh - 9rem);
+}
+
+.legend {
   padding: 0.4375rem 0.625rem 0.5rem;
   background: rgba(5, 8, 12, 0.78);
   border: 1px solid var(--stamp-soft);
@@ -635,7 +658,8 @@ button {
   .panel-stack,
   .panel-right,
   .provenance,
-  .legend,
+  .panel-mid,
+  .stage-foot,
   .scalebar {
     position: static;
     inset: auto;
@@ -823,4 +847,814 @@ button {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* --- the verification certificate -----------------------------------------
+   A separate document from the station logsheet, and printed like one: the
+   head is double-ruled, the three headline figures sit in their own boxed
+   band, and the caveat is set in the reserved ink at the foot where a
+   certificate carries its conditions. Hue stays on the measurement, so the
+   error bars are ink. */
+
+.verdict__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem 0.4375rem;
+  border-bottom: 3px double var(--ink);
+}
+.verdict__title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.verdict__sub {
+  margin: 0.125rem 0 0;
+  font-size: 0.6875rem;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The three figures share one band because they answer one question between
+   them. Ruled apart rather than spaced apart: on a form, a division is a line. */
+.verdict {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0 0.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+.verdict__fig {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  padding: 0.5rem 0.5rem 0.5625rem 0;
+}
+.verdict__fig + .verdict__fig {
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--rule-soft);
+}
+.verdict__figlabel {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.verdict__figvalue {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.verdict__fignote {
+  font-size: 0.625rem;
+  color: var(--ink-faint);
+}
+
+.verdict__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: calc(100% - 1.5rem);
+  margin: 0.375rem 0.75rem 0.25rem;
+  padding: 0.1875rem 0 0.25rem;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule-soft);
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.verdict__toggle:hover {
+  color: var(--ink);
+  background: rgba(22, 19, 13, 0.07);
+}
+
+/* --- error by depth: the rack's grammar, applied to residuals -------------- */
+
+/* Band, count, bias, the bar, and the figure the bar draws. The bar sits
+   immediately left of its own number so the two read as one column; with the
+   bias between them the table looked like it carried two RMSEs. The band
+   column is wide enough for "1000 to 2000" on one line, because a wrapped row
+   in a table of seven bands throws the whole rhythm out. */
+.scoretable__head,
+.scoretable__row {
+  display: grid;
+  grid-template-columns: 5.25rem 2rem 2.5rem 1fr 2.5rem;
+  align-items: center;
+  gap: 0.3125rem;
+}
+.scoretable__head {
+  padding: 0.25rem 0 0.1875rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.scoretable {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.scoretable__row {
+  padding: 0.1875rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  /* Seven bands of equal height. A row that wrapped its label to two lines
+     broke the rhythm of the column the eye is running down. */
+  white-space: nowrap;
+}
+/* A band nobody sampled is stated, never drawn as a zero-length bar that
+   would read as a perfect band. */
+.scoretable__row[data-empty="true"] {
+  color: var(--ink-faint);
+  border-bottom: 1px solid rgba(43, 106, 134, 0.14);
+}
+/* The band the model is worst in. Dashed reserved ink, the same grammar the
+   errata block uses: this is the line a forecaster has to know about. */
+.scoretable__row[data-worst="true"] {
+  border-bottom: 1px dashed var(--caution);
+  color: var(--ink);
+}
+.scoretable__bar {
+  display: block;
+  height: 0.5rem;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.scoretable__bar > span {
+  display: block;
+  height: 100%;
+  min-width: 1px;
+  background: var(--ink-soft);
+}
+.scoretable__row[data-worst="true"] .scoretable__bar > span {
+  background: var(--caution);
+}
+
+.scoretable__read {
+  margin: 0.4375rem 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* The certificate's key/value rows carry sentences, so they need more room for
+   the key than the cast head's 3.5rem column allows. */
+.castfield--wide {
+  grid-template-columns: 8.5rem 1fr;
+  font-size: 0.6875rem;
+}
+.castfield--wide dt {
+  white-space: nowrap;
+}
+/* A tally is a column of figures, so it is set flush right and the eye can run
+   down it. A note is a sentence, so it stays flush left and is allowed to wrap
+   rather than being clipped to an ellipsis mid-clause. */
+.castfield--tally dd {
+  text-align: right;
+}
+.castfield--notes dd {
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.35;
+}
+
+/* The conditions of the certificate. Reserved ink, at the foot, always
+   printed: a reader must not be able to reach the figures without it. */
+.verdict__caveat {
+  margin: 0.375rem 0.75rem 0;
+  padding: 0.4375rem 0 0.6875rem;
+  border-top: 1px dashed var(--caution);
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--caution-ink);
+}
+
+/* The instrument programmes the figures were scored against. One per line, so
+   three of them read as three sources rather than as one run-on sentence, and
+   each carries its full citation on the row. */
+.verdict__against {
+  display: block;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.verdict__sources {
+  list-style: none;
+  margin: 0.0625rem 0 0;
+  padding: 0;
+}
+.verdict__sources li {
+  padding-left: 0.6875rem;
+  text-indent: -0.6875rem;
+  line-height: 1.35;
+}
+.verdict__sources li::before {
+  content: "\00b7";
+  padding-right: 0.375rem;
+}
+
+/* --- HazardWatch -----------------------------------------------------------
+   On the water, not on a manila sheet, in the same instrument-box treatment
+   the scale bar and the station legend use. That separation is the point: a
+   sheet is a record of a cast, and a warning is a statement someone made about
+   the near future.
+
+   Hue stays on the measurement here too. Severity is carried by the weight of
+   the rule down the left of each row, in the one reserved caution ink, because
+   the field underneath is already using the whole spectrum and a second colour
+   scale would collide with it. */
+
+.hazard {
+  flex: 0 1 auto;
+  min-height: 0;
+  width: 21rem;
+  overflow-y: auto;
+  padding: 0.4375rem 0.625rem 0.5rem;
+  background: rgba(5, 8, 12, 0.86);
+  border: 1px solid var(--stamp-soft);
+  color: var(--stamp);
+}
+.hazard__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.3125rem;
+  border-bottom: 1px solid var(--stamp-soft);
+}
+.hazard__title {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--stamp-soft);
+}
+/* The stamp that must appear the moment a drill is on screen. Reserved ink,
+   the same overprint grammar as the sheets, on the water's own legible value. */
+.hazard__drill {
+  padding: 0.0625rem 0.3125rem;
+  border: 1px solid var(--caution-stamp);
+  outline: 1px solid var(--caution-stamp);
+  outline-offset: 2px;
+  color: var(--caution-stamp);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+}
+
+.hazard__list {
+  list-style: none;
+  margin: 0.3125rem 0 0;
+  padding: 0;
+}
+.hazard__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 0.5rem;
+  width: 100%;
+  margin-bottom: 0.25rem;
+  padding: 0.1875rem 0 0.25rem 0.4375rem;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--stamp);
+  /* border-left is set inline, per severity: the weight IS the ramp. */
+}
+.hazard__row:hover {
+  background: rgba(207, 216, 220, 0.08);
+}
+.hazard__event {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.hazard__tag {
+  font-weight: 400;
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--caution-stamp);
+}
+.hazard__meta {
+  font-size: 0.625rem;
+  color: var(--stamp-soft);
+  text-align: right;
+  align-self: baseline;
+}
+.hazard__where {
+  grid-column: 1 / -1;
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  color: var(--stamp-soft);
+}
+
+.hazard__detail {
+  margin: 0 0 0.4375rem 0.4375rem;
+  padding: 0.375rem 0 0.125rem 0.5rem;
+  border-left: 1px solid var(--stamp-soft);
+}
+.hazard__headline {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+.hazard__instruction {
+  margin: 0.25rem 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--caution-stamp);
+}
+.hazard__fields {
+  display: grid;
+  grid-template-columns: 4.75rem 1fr;
+  gap: 0;
+  margin: 0.375rem 0 0;
+  font-size: 0.625rem;
+}
+.hazard__fields dt {
+  padding: 0.125rem 0.375rem 0.125rem 0;
+  border-bottom: 1px solid rgba(127, 143, 153, 0.3);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--stamp-soft);
+}
+.hazard__fields dd {
+  margin: 0;
+  padding: 0.125rem 0;
+  border-bottom: 1px solid rgba(127, 143, 153, 0.3);
+  overflow-wrap: anywhere;
+}
+
+.hazard__foot {
+  margin-top: 0.4375rem;
+  padding-top: 0.375rem;
+  border-top: 1px solid var(--stamp-soft);
+}
+.hazard__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--stamp-soft);
+  cursor: pointer;
+}
+.hazard__toggle input {
+  accent-color: var(--caution-stamp);
+  margin: 0;
+}
+.hazard__note {
+  margin: 0.3125rem 0 0;
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--stamp-soft);
+}
+/* Errata are printed in the reserved ink here as on the sheets. */
+.hazard__errata {
+  margin: 0.25rem 0 0;
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--caution-stamp);
+}
+
+@media (max-width: 900px) {
+  .panel-mid {
+    order: 3;
+  }
+  .hazard {
+    width: auto;
+    max-height: none;
+  }
+}
+
+/* --- guided tours ----------------------------------------------------------
+   Bottom centre, over the water, in the instrument-box treatment. Centred
+   rather than tucked into a corner because when a tour is running the
+   narration IS the interface: a presenter reads from it and an audience reads
+   with them, and a caption belongs under the picture. */
+
+/* The foot of the stage: the two surfaces that NARRATE the scene rather than
+   control it, stacked in the one band that is still free.
+
+   The four corners are spoken for. Top left is the station sheet and bottom
+   left the time rule beneath it; the middle column holds the legend and
+   HazardWatch; the right column holds the verification certificate and the
+   cast panel; bottom right is the scale bar above Cesium's attribution, which
+   is a licensing obligation and may not be covered. What is left is the band
+   above the provenance cartouche, and both the guided tours and the agent
+   belong there for the same reason: when either is running, it is what the
+   room is reading.
+
+   Clear of the cartouche, which owns the bottom band and may never be
+   covered: a figure on this screen without its citation beside it is the one
+   thing CLAUDE.md forbids outright. */
+.stage-foot {
+  position: absolute;
+  left: 50%;
+  bottom: 7.5rem;
+  transform: translateX(-50%);
+  z-index: 4;
+  width: min(44rem, calc(100vw - 4rem));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  /* The band is mostly empty most of the time, and an invisible box over the
+     globe would eat orbit drags. Only the children take the pointer. */
+  pointer-events: none;
+}
+.stage-foot > * {
+  pointer-events: auto;
+}
+
+.tour {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* Closed, it is one small control that stays out of the way. */
+.tour__open {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.625rem;
+  background: rgba(5, 8, 12, 0.82);
+  border: 1px solid var(--stamp-soft);
+  color: var(--stamp);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.tour__open:hover {
+  border-color: var(--stamp);
+}
+.tour__count {
+  padding: 0 0.25rem;
+  border: 1px solid var(--stamp-soft);
+  font-size: 0.5625rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.tour__menu {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  width: 100%;
+  background: rgba(5, 8, 12, 0.9);
+  border: 1px solid var(--stamp-soft);
+}
+.tour__pick {
+  display: grid;
+  gap: 0.0625rem;
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid rgba(127, 143, 153, 0.28);
+  text-align: left;
+  cursor: pointer;
+  color: var(--stamp);
+}
+.tour__menu li:last-child .tour__pick {
+  border-bottom: 0;
+}
+.tour__pick:hover {
+  background: rgba(207, 216, 220, 0.09);
+}
+.tour__picktitle {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.tour__picksub {
+  font-size: 0.6875rem;
+  color: var(--stamp-soft);
+}
+.tour__picklen {
+  font-size: 0.625rem;
+  color: var(--stamp-soft);
+}
+
+/* --- running --------------------------------------------------------------
+   Wider, quieter and higher contrast than the menu: this is being read aloud
+   from three metres away, so the narration is set larger than anything else on
+   the water and the controls recede. */
+
+.tour__stage {
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.625rem;
+  background: rgba(5, 8, 12, 0.92);
+  border: 1px solid var(--stamp);
+  /* the double rule of the cartouche: this is a titled device, not a toast */
+  outline: 1px solid rgba(207, 216, 220, 0.26);
+  outline-offset: 3px;
+  color: var(--stamp);
+}
+.tour__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--stamp-soft);
+}
+.tour__title {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--stamp-soft);
+}
+.tour__step {
+  font-size: 0.625rem;
+  color: var(--stamp-soft);
+}
+
+/* One segment per step. A presenter has to know how much is left without
+   counting, and rule form carries the state as it does everywhere else. */
+.tour__ticks {
+  display: flex;
+  gap: 2px;
+  margin: 0.3125rem 0 0.4375rem;
+}
+.tour__ticks span {
+  flex: 1;
+  height: 2px;
+  background: rgba(127, 143, 153, 0.4);
+}
+.tour__ticks span[data-state="done"] {
+  background: var(--stamp-soft);
+}
+.tour__ticks span[data-state="here"] {
+  height: 4px;
+  margin-top: -1px;
+  background: var(--stamp);
+}
+
+.tour__narration {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--stamp);
+}
+
+/* What the sentence above rests on. Small, present, and not hidden behind a
+   hover: a judge who wants to check a number should be able to see where it
+   came from without asking. */
+.tour__evidence {
+  list-style: none;
+  margin: 0.4375rem 0 0;
+  padding: 0.375rem 0 0;
+  border-top: 1px dashed rgba(127, 143, 153, 0.5);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: var(--stamp-soft);
+}
+.tour__evidence li {
+  padding-left: 0.6875rem;
+  text-indent: -0.6875rem;
+}
+.tour__evidence li::before {
+  content: "\00b7";
+  padding-right: 0.375rem;
+}
+
+.tour__controls {
+  display: flex;
+  gap: 0.3125rem;
+  margin-top: 0.5rem;
+}
+.tour__controls .tick {
+  border-color: var(--stamp-soft);
+  color: var(--stamp);
+}
+.tour__controls .tick[aria-pressed="true"] {
+  background: var(--stamp);
+  color: var(--abyss);
+}
+.tour__controls .tick:disabled {
+  color: var(--stamp-soft);
+  border-style: dashed;
+}
+.tour__end {
+  margin-left: auto;
+}
+
+.tour__problem {
+  margin: 0;
+  padding: 0.3125rem 0.5rem;
+  max-width: 100%;
+  background: rgba(5, 8, 12, 0.9);
+  border: 1px dashed var(--caution-stamp);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: var(--caution-stamp);
+}
+
+@media (max-width: 900px) {
+  .stage-foot {
+    position: static;
+    transform: none;
+    width: auto;
+    margin: 0 1.25rem;
+    order: 6;
+  }
+}
+
+/* --- Samudra Sahayak, the ask panel ----------------------------------------
+   Bottom left, under the time rule, in the same instrument-box treatment as
+   the other readouts on the water. Not a floating chat bubble: this is an
+   instrument that reports, and it is rendered like the rest of them.
+
+   It occupies no space at all when the agent service is not running, which is
+   the "kill the agent and every P0 still passes" property made visible rather
+   than described. */
+
+.ask {
+  width: 100%;
+  max-height: 20rem;
+  overflow-y: auto;
+  padding: 0.4375rem 0.625rem 0.5rem;
+  background: rgba(5, 8, 12, 0.9);
+  border: 1px solid var(--stamp-soft);
+  color: var(--stamp);
+}
+
+.ask__form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.3125rem;
+  align-items: center;
+}
+.ask__label {
+  grid-column: 1 / -1;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--stamp-soft);
+}
+/* A value written into a ruled box, as on the sheets. */
+.ask__input {
+  min-width: 0;
+  padding: 0.1875rem 0.25rem;
+  background: rgba(207, 216, 220, 0.08);
+  border: 0;
+  border-bottom: 1px solid var(--stamp-soft);
+  border-radius: 0;
+  color: var(--stamp);
+  font-size: 0.8125rem;
+}
+.ask__input::placeholder {
+  color: var(--stamp-soft);
+}
+.ask__input:focus-visible {
+  outline: 2px solid var(--stamp);
+  outline-offset: 1px;
+}
+.ask .tick {
+  border-color: var(--stamp-soft);
+  color: var(--stamp);
+}
+
+/* Four questions that each exercise a different tool and land on a different
+   part of the screen, so clicking through them is itself a demo. */
+.ask__suggest {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0.4375rem 0 0;
+  padding: 0;
+}
+.ask__suggest button {
+  padding: 0.125rem 0.375rem;
+  background: none;
+  border: 1px dotted var(--stamp-soft);
+  color: var(--stamp-soft);
+  font-size: 0.625rem;
+  cursor: pointer;
+}
+.ask__suggest button:hover {
+  border-style: solid;
+  color: var(--stamp);
+}
+
+.ask__answer {
+  margin-top: 0.5rem;
+  padding-top: 0.4375rem;
+  border-top: 1px solid var(--stamp-soft);
+}
+.ask__text {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+/* A refusal is stated in the reserved ink, like every other refusal here. */
+.ask__text[data-refused="true"] {
+  color: var(--caution-stamp);
+}
+
+.ask__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.375rem;
+  font-size: 0.625rem;
+  color: var(--stamp-soft);
+}
+.ask__planner {
+  letter-spacing: 0;
+}
+.ask__tracetoggle {
+  padding: 0 0.25rem;
+  background: none;
+  border: 1px solid var(--stamp-soft);
+  color: var(--stamp-soft);
+  font-size: 0.625rem;
+  cursor: pointer;
+}
+.ask__tracetoggle:hover {
+  color: var(--stamp);
+  border-color: var(--stamp);
+}
+
+/* The working. TRD M4 asks for a panel where judges can watch it think. */
+.ask__trace {
+  margin: 0.375rem 0 0;
+  padding-left: 1.125rem;
+  font-size: 0.625rem;
+  color: var(--stamp-soft);
+}
+.ask__trace > li {
+  margin-bottom: 0.25rem;
+}
+.ask__trace > li[data-ok="false"] .ask__tool {
+  color: var(--caution-stamp);
+}
+.ask__tool {
+  font-weight: 700;
+  color: var(--stamp);
+}
+.ask__toolerr {
+  color: var(--caution-stamp);
+}
+.ask__facts {
+  list-style: none;
+  margin: 0.0625rem 0 0;
+  padding: 0;
+}
+.ask__facts li {
+  padding-left: 0.6875rem;
+  text-indent: -0.6875rem;
+  line-height: 1.3;
+}
+.ask__facts li::before {
+  content: "\00b7";
+  padding-right: 0.375rem;
+}
+
+.ask__cites {
+  list-style: none;
+  margin: 0.375rem 0 0;
+  padding-top: 0.3125rem;
+  border-top: 1px dashed rgba(127, 143, 153, 0.5);
+  font-size: 0.5625rem;
+  line-height: 1.35;
+  color: var(--stamp-soft);
+}
+
+@media (max-width: 900px) {
+  .ask {
+    max-height: none;
+  }
 }

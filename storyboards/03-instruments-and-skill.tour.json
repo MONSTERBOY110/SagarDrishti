@@ -1,0 +1,73 @@
+{
+  "id": "instruments-and-skill",
+  "title": "The instruments, and whether the model agrees with them",
+  "subtitle": "Real floats, and a number for how wrong the model is",
+  "audience": "judge",
+  "source_id": "incois_vam_argo",
+  "steps": [
+    {
+      "narration": "The small marks on the water are not decoration. Each one is a real instrument that was in the Bay of Bengal in July, and the shape tells you what kind.",
+      "hold": 8,
+      "patch": {
+        "variable": "TEMP",
+        "time": "2026-07-30T00:00:00Z",
+        "focusDepth": 100,
+        "isosurfaceOn": false,
+        "selection": null
+      },
+      "evidence": [
+        "25 profiles from 17 platforms: 13 Argo squares, 9 profiles from 3 biogeochemical floats drawn as diamonds, and 3 from a moored buoy drawn as a circle, counted in the station legend"
+      ]
+    },
+    {
+      "narration": "Squares are ordinary Argo floats, measuring temperature and salinity. Diamonds are floats carrying biogeochemical sensors, so they also read oxygen, chlorophyll, nitrate and pH. The circle is a moored buoy anchored to the seabed on the ninety east line, part of the RAMA array that India's Ministry of Earth Sciences helps run.",
+      "hold": 12,
+      "patch": { "selection": null },
+      "evidence": [
+        "the station legend names the three classes and counts them",
+        "each profile panel prints the dataset its measurements are cited to"
+      ]
+    },
+    {
+      "narration": "Open one of the biogeochemical floats and it reads one and seven tenths micromole of oxygen per kilogram at a hundred and forty metres. That is the Bay of Bengal oxygen minimum zone: water with effectively nothing left in it for a fish to breathe, sitting under a warm surface.",
+      "hold": 12,
+      "patch": { "selection": "2903831_20260728T141348" },
+      "evidence": [
+        "float 2903831, profile of 2026-07-28: 1.71 micromole per kilogram at 140.9 metres, the lowest oxygen value in the served set",
+        "units micromole/kg come from the source file and are checked against the registry at parse time"
+      ]
+    },
+    {
+      "narration": "The dashed line beside the measurement is the model at the same place. Where the two separate is where the model disagrees with the ocean. But eyeballing two curves is not evidence, so the tool also prints the disagreement as a number.",
+      "hold": 10,
+      "patch": { "selection": "2903831_20260728T141348" },
+      "evidence": [
+        "the profile panel states that its model curve is the nearest grid cell and claims no skill figure from it"
+      ]
+    },
+    {
+      "narration": "Top right. The model is on average two hundredths of a degree warm, with a root mean square error of six tenths of a degree, over eleven thousand seven hundred and eighteen matched measurement pairs.",
+      "hold": 11,
+      "patch": { "selection": null },
+      "evidence": [
+        "bias +0.026 degC, RMSE 0.602 degC, 11,718 pairs from 23 casts, printed on the verification certificate"
+      ]
+    },
+    {
+      "narration": "Break it down by depth and the shape is the point. Below a kilometre the model is nearly exact. Across the thermocline it is worst, at two degrees. That is the expected place for a model to struggle, and being able to point at it is what a reviewer is testing for.",
+      "hold": 12,
+      "patch": { "focusDepth": 75 },
+      "evidence": [
+        "0.12 degC RMSE in the 1000 to 2000 metre band, 2.07 in the 50 to 100 metre band, on the certificate's depth table"
+      ]
+    },
+    {
+      "narration": "And read the red text before you quote any of it. The INCOIS analysis already used these same floats when it was built, so this measures how closely it fits data it has seen. That is a real and useful number, and it is not forecast skill.",
+      "hold": 12,
+      "patch": {},
+      "evidence": [
+        "the caveat is printed in the reserved caution ink at the foot of the certificate and a test fails the build if it stops being rendered"
+      ]
+    }
+  ]
+}

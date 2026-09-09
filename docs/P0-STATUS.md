@@ -1,7 +1,7 @@
 # P0 status: the problem statement's own requirement list
 
-**Date of this measurement: 2026-09-07.** Every number below was read off the
-running service on the build laptop today, not copied from an earlier run. The
+**Measured 2026-09-07, extended 2026-09-08.** Every number below was read off
+the running service on the build laptop, not copied from an earlier run. The
 commands that produced them are in each row so anyone can re-run them and
 disagree with me.
 
@@ -24,26 +24,33 @@ forever, only that the PS's sentence is satisfied and proven.
 
 | # | Requirement | Verdict | The gap, if any |
 |---|---|---|---|
-| F1 | 3D volumetric rendering | **Partly met** | All three named TECHNIQUES are built. Depth-resolved current vectors are blocked on a Copernicus account; chlorophyll has an INCOIS source, not yet registered because it is a surface field and every source today is 4D. |
-| F2 | Instrument data overlay | **Partly met** | Argo floats and BGC floats both work end to end and are drawn as different marks. Glider and CTD parsers are built and tested, but no such cast is loaded, so those two classes do not yet appear. |
+| F1 | 3D volumetric rendering | **Partly met** | All three named TECHNIQUES are built. Depth-resolved currents are now INGESTED and served, on 40 levels at 1/12 degree, after the Copernicus account arrived on 2026-09-09; what is still owed is drawing them as vectors rather than as scalar fields. Chlorophyll is registered and deliberately disabled: the INCOIS series ends in 2020 and cannot share a 2026 scrubber. |
+| F2 | Instrument data overlay | **Partly met** | Three instrument classes work end to end and are drawn as different marks: Argo floats, BGC floats and a RAMA moored buoy. Glider and CTD parsers are built and tested, but no such cast is loaded, so those two classes do not yet appear. |
 | F3 | Multi-format data ingestion | **Met** | None. |
 | F4 | Customizable colorbar and variable controls | **Met** | None. |
 | F5 | Web-based, scalable architecture | **Partly met** | The Docker path is authored and never executed, because Docker is not installed here. |
-| F6 | Extensible design | **Partly met** | The registry works, carries a live product, and that product is now served through WMS and WCS. No source reader is registered yet, so one half of the interface has tests but no running example. |
+| F6 | Extensible design | **Met** | Both extension points have a running example: the D26 derived product, served through WMS and WCS, and a `mooring` source reader on real RAMA buoy data. |
 | F7 | Open standards (OGC WMS/WCS, CF) | **Met** | None. Stored variables and plugin-derived products are both served. |
 
-Four of seven have no gap. Three have a named gap: one blocked on the team
-lead (Docker), one blocked on data availability (a glider or CTD file), and one
-mine to close (isosurface extraction). The order is at the bottom of this file.
+Five of seven have no gap. Two have a named gap: one blocked on the team lead
+(Docker) and one blocked on data availability (a glider or CTD file). The
+chlorophyll field is a deliberate refusal rather than missing work. The order
+is at the bottom of this file.
 
 ## Test and check counts behind these verdicts
 
 ```
-services/api      281 tests   (argo 20, cf 13, colormap 10, field 24,
-                               isosurface 27, offline 3, ogc 58, plugins 60,
-                               text profiles 66)
-e2e                 4 tests   production build, real browser, off-origin guard
+services/api      398 tests   (argo 20, cap 47, cf 20, colormap 10, field 29,
+                               isosurface 27, offline 3, ogc 58, plugins 69,
+                               scorecard 24, storyboards 25, text profiles 66)
+services/agent     68 tests   (guard 13, planner 53, scene-key drift 2)
+e2e                 8 tests   production build, real browser, off-origin guard
 ```
+
+The two Python suites are run separately, and must be: both declare a `tests`
+package, so pytest resolves the second one's modules against the first one's
+rootdir and collection fails. CI runs them as separate jobs for the same
+reason.
 
 Reproduce: `./tasks.ps1 test` and `./tasks.ps1 e2e`.
 
@@ -197,40 +204,95 @@ Turning the surface on is now FASTER than leaving it off, which also confirms
 the diagnosis. Four fewer full-domain translucent quads more than pay for the
 geometry.
 
-**No source: current vectors at depth.** INCOIS ERDDAP publishes surface
-geostrophic currents only, so there is nothing subsurface to render. The
-depth-resolved source is Copernicus GLORYS12, which is free but needs an
-account. `data/sources.yaml` already carries the `glorys12` entry shipped
-`enabled: false`; it becomes `true` the day credentials exist. This is item 2
-on the team lead's list in START-HERE.md.
+**Currents at depth: the data is now here.** INCOIS ERDDAP publishes surface
+geostrophic currents only, so this is the one part of F1 no INCOIS source can
+answer. The team lead created a free Copernicus Marine account on 2026-09-09
+and the source went live the same evening.
 
-**Chlorophyll: a source exists, and it is INCOIS's own.** An earlier draft of
-this file said there was none. That was wrong, and checking the ERDDAP catalogue
-rather than assuming corrected it. INCOIS publish two ocean-colour products on
-the same open server we already use:
+```
+python tools/fetch_sample.py     # 42 MB, about 4 minutes
+python tools/preprocess.py
 
-| Dataset | Variables | Grid | Span |
-|---|---|---|---|
-| `incois_oceansat2_datasets` | CHL, KD490, TSM | about 0.04 deg, 717 x 1317 | 2011-02-05 to 2020-05-01, daily |
-| `IRS_chlorophyll_datasets` | CHLOROPHYLL | about 0.01 deg, 2556 x 4315 | 2003 to 2006 |
+glorys12_cur   uo, vo   40 levels 0.49 to 1942 m   3 steps   241 x 181 cells
+               valid 64.6%   uo [-1.24, 1.46] m/s   vo [-1.03, 1.12] m/s
 
-Oceansat-2 is the better of the two: finer time resolution, three variables,
-and it declares `_FillValue = -1.0E34`, the second fill convention our CF tests
-already pin. Two things have to be said plainly when it is wired up. It is a
-SURFACE product, because ocean colour is measured from a satellite and has no
-profile, so it renders as a surface layer over the volume and not as part of
-it. And its latest date is 2020, so it cannot be shown under a 2026 time
-scrubber as though contemporaneous; it is a separate layer with its own date.
+curl ".../field/glorys12_cur/uo?bbox=85,12,86,13&time=2026-07-30&depth=100"
+  depth 92.33   units m s-1   169 cells   u -0.228 to 0.002
+```
 
-Registering it is not yet done. It is a change of shape rather than a change of
-scale: every source in the cube today is 4D `(time, depth, lat, lon)` and this
-one has no vertical axis at all, so the registry, the preprocessor and the
-renderer each need to accept a source with no depth dimension. That is a real
-piece of work and it is on the list below rather than claimed here.
+Note the `depth: 92.33` in that response. The request asked for 100 m and the
+answer says what it actually served: GLORYS has its own 40 levels, none of them
+shared with the INCOIS 24, and it is NOT regridded onto them. Regridding would
+be an interpolation nobody asked for, applied to make two products look like
+one.
 
-Chlorophyll DOES already reach the screen from a different direction: the BGC
-floats under F2 carry measured chlorophyll profiles, which is a profile
-quantity rather than a field.
+**The account also caught a configuration error that would have shipped
+quietly.** The registry entry named `cmems_mod_glo_phy_my_0.083deg_P1D-m`, the
+GLORYS12V1 multi-year reanalysis. Probed with real credentials, that product
+runs to **2026-06-23**. This cube's three steps are 2026-07-10, 07-20 and
+07-30, so every one of them is after the reanalysis ends and the configured
+source could not have produced a single contemporaneous field. It is the same
+trap that keeps the chlorophyll source disabled below, and it was invisible
+until somebody could log in. The analysis-and-forecast currents product,
+`cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m`, covers 2022-06-01 to 2026-09-18
+and is what is configured now. A test asserts the dataset id does not contain
+`_my_`, with the dates in the failure message.
+
+Temperature and salinity are deliberately NOT taken from Copernicus even though
+the reanalysis carries them: INCOIS's own analysis is the PS-preferred source
+and the one the scorecard verifies, and two answers to one question with
+nothing to choose between them is worse than one.
+
+**What is still owed on this clause: the vectors.** The currents are served
+through `/field` and, for free, through WMS and WCS. They are not yet DRAWN as
+arrows or particles, and they should not be drawn as volumetric slices: 1/12
+degree over the demo box is 241 x 181 = 43,561 cells per level against the
+INCOIS analysis's 336, so a slice stack of them would neither fit the frame
+budget in TRD section 5 nor be readable as a current field. A decimated vector
+overlay is the next piece of work.
+
+**Chlorophyll: the source exists, is registered, and is deliberately OFF.**
+INCOIS publish ocean colour on the same open ERDDAP the model field comes from,
+and `incois_oceansat2_chl` is now a real entry in `data/sources.yaml` carrying
+CHL, KD490 and TSM. It ships `enabled: false` with a `disabled_reason`, and the
+three reasons are decisions rather than missing work.
+
+**It is not contemporaneous.** The series ends 2020-05-01; the cube covers July
+2026. A scrubber reading 2026-07-30 above a 2020 chlorophyll layer is a false
+statement made by the interface itself, made silently, and nothing in the scene
+can yet express "this layer has its own epoch".
+
+**It is a surface field.** Ocean colour has no profile, so the source is
+(time, lat, lon) with no vertical axis, while every cube in the store is 4D. A
+sweep of the codebase for depth-axis assumptions found the client is
+single-dataset by construction and would answer "the depth cursor is at NaN
+metres", print "0 depth levels from 0 to 0 metres", and unmount the scale bar,
+taking the frame-rate readout with it.
+
+**Payload.** At 0.04 degrees this is about 375 x 500 = 187,500 cells for ONE
+surface timestep in the demo box, against 300 cells per level and 7,200 for the
+ENTIRE 24-level column. A single timestep is roughly 26 times the whole water
+column we render today, transported as JSON. The ingest needs a decimation
+decision with a scientific cost attached, and nobody has taken it.
+
+Registering it disabled is the honest middle state: the breadth is on the
+record, the reason is written down where the next person will find it, and no
+2020 frame can reach a projector. Contemporaneous chlorophyll DOES reach the
+screen from the other direction, as measured BGC float profiles under F2.
+
+**The sweep paid for itself before the feature.** Half of what it found were
+live bugs with no chlorophyll in the tree at all, each of them silent:
+
+| Defect | What it did | Now |
+|---|---|---|
+| `/field` served `"depth": 0.0` for D26 | A field whose own values run 41 to 96 m was labelled as coming from the surface level. The fabricated number is exactly what CLAUDE.md forbids, and it was shipping. | `depth` is null for a surface product. The one remaining `[0.0]` is a transport placeholder and the response says so in `surface_level_is_a_placeholder`. |
+| Canonical axis order keyed on the whole dataset | The target order was built from the union of every variable's dims, so a surface variable sharing a dataset with a volumetric one was left in the file's own order. Reproduced: `CHL` came back as `(lat, lon, time)` while `TEMP` was correct, with no error, under a comment promising the renderer never has to guess an axis. | Ordered per variable. A DECLARED variable carrying an axis outside the canonical set is refused by name; an auxiliary one (CF bounds carry `nv`) is left alone. |
+| A `cf_overrides` key naming nothing was ignored | One letter out (`CHLA` for `CHL`) left a -1.0E34 fill unmasked and the served minimum at -9.999999790214768e+33: a colorbar spanning 1e34 with every real value the same colour, a correct-looking legend, and no exception. | Refused at startup, against what the REGISTRY declares rather than what a file contains, so `incois_vam_argo` keeps its legitimate corrections for TERR and SERR which the Bay of Bengal subset does not fetch. |
+| The Argo `PRES` overrides did nothing | `cf_overrides` is consumed in exactly one place, `cf.normalize_dataset`, which runs only on gridded sources. Argo files are parsed by `app/argo.py`, which never reads them. | Kept, and labelled in `sources.yaml` as documentation of the file's convention rather than an applied correction. |
+| The time scrubber pointed at the wrong step | `Math.max(0, indexOf(current))` meant a time the axis does not contain drew the solid "you are here" tick on the FIRST step, and the play loop's `(-1 + 1 + n) % n` then jumped to step 0 as well, which made it look like it worked. On a projector that is a scrubber pointing confidently at a date the scene is not showing. | Not clamped. Off the axis, no tick is lit and the rule says "off axis". |
+| `/profiles` answered 200 for a date years away | A bare day-equality with no range check, so a request outside the observations returned count 0. That reads as a statement about the OCEAN ("no floats in this box") when the true statement is about the REQUEST. `/field` has refused this since the beginning through `store.nearest_time`; the two endpoints disagreed. | Refused with the range it does cover. A quiet day INSIDE the window still returns 200 with count 0, because that one is a real answer. |
+
+Eleven tests pin these, each naming the reproduction.
 
 ## F2. Instrument data overlay
 
@@ -532,10 +594,81 @@ the advertisement ambiguous and whichever the dict held last would win
 silently. A colliding name is skipped, and a test proves the stored variable
 keeps its layer.
 
-**Remaining gap: no source reader is registered.** The slot is built,
-contract-checked and documented, but `source_readers` is empty, so that half of
-the interface is demonstrated by tests rather than by a running example. The
-HF-radar or ADCP reader in PRD's P2 list is what fills it.
+**Closed: a source reader is registered and running.** The plugin framework
+has offered two extension points from the start. Derived products had a live
+example (D26); source readers had a checked contract, error codes D1 to D5,
+documentation, and nothing registered against them, so `plugins.open_source`
+was called by its own tests and by nothing else.
+
+`services/api/plugins/rama_mooring.py` now serves `kind: mooring`, and
+`tools/preprocess.py` routes any source whose kind has a reader through
+`open_source` rather than through a parser hardcoded in the core. Adding a
+moored buoy took a plugin file, a `sources.yaml` entry, and one branch in the
+preprocessor. That is the claim F6 makes, demonstrated rather than described.
+
+```
+curl http://127.0.0.1:8000/plugins
+
+  plugins       : ['d26_isotherm', 'rama_mooring']
+  derived       : ['D26']
+  source reader : kind=mooring plugin=rama_mooring
+  failures      : []
+
+curl "http://127.0.0.1:8000/profiles/23009_20260729T120000"
+
+  source_id     : rama_mooring_bob        platform_kind : mooring
+  citation      : TAO/TRITON, RAMA and PIRATA moored buoy array, NOAA PMEL ...
+     depth      temp
+       1.0    29.440
+      80.0    26.750
+     180.0    16.660
+     500.0    10.260
+```
+
+**Why RAMA and not a synthetic mooring.** RAMA is the Indian Ocean arm of the
+global tropical moored array and INCOIS is one of its partners. Three of its
+moorings sit inside the demo box on the 90 E line, and they report daily. A
+synthetic mooring would have exercised the plumbing and proved nothing about
+the data.
+
+**Three real defects it brought, each handled in the reader.**
+
+*A different QC vocabulary.* TAO/RAMA flags are 0 no sensor, 1 highest quality,
+2 default quality, 3 adjusted, 4 lower quality, 5 SENSOR FAILED. Argo's scale
+means something different above 2 and has no 5 at all, so the two agree on 1
+and 2 by coincidence and diverge beyond. Filtering RAMA with Argo's rules would
+compare a failed sensor against a scale it does not belong to. The reader maps
+them explicitly, and on the real mooring that catches 46 cells.
+
+*A fourth fill convention.* This source uses 1.0E35. The cube already handles
+-9999.0 (INCOIS VAM), -1.0E34 (value-added and ocean colour) and 99999.0 (Argo
+BGC). None is a rounding of another.
+
+*A flat table, not a grid.* ERDDAP serves one row per (time, depth) with the
+position repeated on every row, 527 rows for one mooring over a month. The
+reader pivots it using the depths actually present, because a mooring loses and
+regains sensors mid-deployment and assuming a rectangular sampling would either
+drop levels or invent them.
+
+**What the array itself said.** Asked which of its 154 stations lie in the demo
+box, RAMA answered three: 8n90e, 12n90e and 15n90e. Only **15n90e** is still
+reporting. 12n90e stopped on 2026-03-10 and 8n90e on 2025-09-12, so the Bay of
+Bengal line is currently one buoy of three. That is a real fact about the
+Indian Ocean observing system rather than a fetch failure, and the fetch says
+so in those words instead of printing an error.
+
+**One profile per model timestep, and the discard is counted.** A mooring
+reports daily from a fixed position, so a month is 36 profiles at one point: on
+a globe that is 36 coincident marks and an arbitrary pick when a judge clicks.
+It is subsampled to the day nearest each model step, which is the same shape a
+float gives, and `n_profiles_reported` and `n_profiles_kept` both ship in the
+provenance.
+
+Ten tests pin the reader, including that a failed sensor maps to bad, that the
+1.0E35 sentinel never reaches the output as a value, that a WMO id does not
+render as "23009.0" into a citation, and that the reader's output passes the
+framework's own D1 to D5 contract through `open_source` rather than by direct
+call.
 
 ## F7. Open standards
 
@@ -639,21 +772,297 @@ both appear in the literature, and both look entirely plausible on an axis. The
 registry's declaration is what labels the chart, so it may not be allowed to
 drift from the data it describes.
 
+## Beyond the PS list: F9, the verification certificate
+
+Not in the summary table above, because that table is the PS's own F1 to F7 and
+this is PRD F9. It is recorded here anyway, because it is the claim a screening
+reviewer is most likely to test and PRIOR-ART.md §B.12 names it as one of the
+four things that make this entry defensible: **no operational ocean viewer
+shows model skill next to the field it is drawing.**
+
+**Built.** `GET /scorecard/{source}/{var}` and a certificate panel beside the
+globe. Class-4-style verification in observation space (Ryan et al. 2015): the
+model is interpolated to each profile's own position, bilinearly from the four
+surrounding grid cells, and linearly in depth between the two bracketing model
+levels, and the residual is formed there. Per-depth-bin bias, RMSE, mean
+absolute error and residual spread.
+
+**Measured on the real cube, 2026-09-09.**
+
+```
+curl "http://127.0.0.1:8000/scorecard/incois_vam_argo/TEMP"
+
+overall   n=11,718  bias +0.026  rmse 0.602  mae 0.238   degC
+casts     23 profiles from 15 platforms
+offset    median 38.6 h from the analysis step, max 107.5 h
+
+     0 to    10 m   n=   80   bias -0.16   rmse 0.32
+    10 to    50 m   n=  334   bias -0.13   rmse 1.33
+    50 to   100 m   n=  407   bias -0.06   rmse 2.07   <- worst
+   100 to   200 m   n=  780   bias +0.57   rmse 1.35
+   200 to   500 m   n= 1924   bias +0.13   rmse 0.43
+   500 to  1000 m   n= 3068   bias -0.03   rmse 0.12
+  1000 to  2000 m   n= 5125   bias -0.04   rmse 0.12
+
+refused   4,672 total: 3,506 not measured, 566 model cell missing,
+                       493 outside the box, 107 beyond model depth,
+                       0 failed QC, 0 unflagged, 0 without a field in time
+```
+
+The shape of that column is the evidence that the method is right, and it is
+what the e2e test asserts rather than any single figure: the analysis is nearly
+exact below a kilometre, where the water barely changes, and worst across the
+thermocline, where a metre of vertical displacement is a degree of temperature.
+If that ordering ever inverts, the depth axis has been mishandled.
+
+**What it refuses.** A level whose four surrounding model cells are not all
+finite is refused rather than filled from the ones that remain, which is most
+of them near a coast. No extrapolation past the model's deepest or shallowest
+level. Observations filtered to QC flags 1 and 2. Every refusal is counted and
+served, so the pair count is never a selected number.
+
+**The caveat travels with every figure, in the reserved ink, on screen.** The
+INCOIS VAM analysis assimilates the very Argo profiles it is scored against, so
+this residual bounds how closely the analysis fits data it has already seen. It
+is a real and useful quantity. It is **not forecast skill**, the overprint on
+the panel says "analysis fit", and an e2e assertion fails the build if that
+sentence ever stops being rendered.
+
+One counter in this module was mislabelled during the build and the fix is
+worth recording, because it is the same class of error as the QC bug below. The
+3,506 levels where an instrument reported nothing were being counted as
+`rejected_qc`. Nothing on screen was wrong yet, and the number was correct, but
+the label told a reader that three and a half thousand observations had failed
+quality control. Verified before splitting it: of 16,390 level rows, 3,506 have
+no temperature and **zero** have a finite temperature with a bad flag.
+
+## Beyond the PS list: F13, HazardWatch
+
+Also not in the summary table, and also recorded here, because the problem
+statement's portal theme IS **Disaster Management** and "timely hazard
+assessment" is its first stated mandate. Until today the tool answered that
+with ocean fields and nothing else.
+
+**Built.** `GET /warnings` and a HazardWatch panel with warning areas drawn on
+the globe. OASIS Common Alerting Protocol v1.2, which is what INCOIS's own
+tsunami service and India's national alert backbone actually speak.
+
+**The feed is real, and better than what was planned.** TRD M8 provided for
+curated samples "where a machine feed isn't public". Probing on 2026-09-09
+found that one is: **NDMA SACHET**, India's national CAP backbone, publishes a
+public RSS index of real CAP documents, and it carried **99 live alerts** that
+afternoon from the Central Water Commission, the India Meteorological
+Department and the state disaster authorities. The parser is proven against it,
+and two of those files are committed as golden fixtures with a provenance
+sidecar (`services/api/tests/fixtures/`).
+
+**What that feed did NOT carry is the honest part.** Not one ocean hazard. The
+three the PS names by name (tsunami, high wave, swell surge) come from INCOIS's
+ITEWC, and the same probe found no public machine-readable CAP or RSS endpoint
+for it. So those three are authored in `data/warnings/incois/`, in the real
+format, and every one carries CAP's own `status: Exercise`.
+
+That is not a workaround, it is the field the standard provides for a drill,
+and four independent guards hang off it:
+
+1. Any conforming CAP reader anywhere treats them as drills. The marking is in
+   the file, not in our code.
+2. `app/cap.py:active()` refuses a non-`Actual` alert and counts it.
+   `allow_exercise` admits `Exercise` **only**: `Test`, `Draft` and `System`
+   stay refused even in rehearsal, because `Draft` is content an agency has not
+   approved for release and a flag meaning "let me rehearse" must never publish
+   it. A test pins that distinction.
+3. The globe draws a drill dashed and lighter; the panel stamps itself
+   `EXERCISE` whenever one is on screen, and the count comes from the server so
+   a client cannot forget to look.
+4. A test asserts that every file in `data/warnings/incois/` is still marked
+   `Exercise`. If one ever acquires `status: Actual`, that test fails.
+
+**What it refuses to draw, which is the whole design.** This is the one module
+here where a bug is not a wrong number but a FALSE ALARM, so most of its 47
+tests assert a negative: a `Cancel` withdraws the alerts it references; an
+`Update` supersedes them; an expired alert is not active, compared in its own
+timezone against a feed that stamps +05:30; one not yet effective is not active
+yet. Every refusal is counted and served beside the alerts.
+
+**The coordinate trap, pinned twice.** CAP writes coordinates **latitude
+first**. GeoJSON, Cesium and everything downstream write longitude first. A
+parser that forgets puts a Bay of Bengal warning in the Arctic and draws it
+perfectly convincingly. The transposition happens in exactly one function.
+
+**A real defect the real feed exposed.** One Gujarat alert carried a single
+polygon of **93,478 vertices**, and twelve alerts came to 114,412 between them,
+enough to blow the frame budget in TRD section 5 before a slice was drawn. The
+ingest now applies Ramer-Douglas-Peucker at a 0.01 degree tolerance, about
+1.1 km, against a model field on a ONE degree grid. 114,412 vertices become
+3,390. The reduction is recorded on each alert it touched and rendered in the
+panel, so a thinned boundary is never presented as the one the agency drew.
+
+**Measured, 2026-09-09.**
+
+```
+curl "http://127.0.0.1:8000/warnings?rehearsal=true"
+  12 live alerts, all status Actual, from 6 state disaster authorities
+  and IMD offices. Worst first: 4 Severe, 8 Moderate.
+
+curl "http://127.0.0.1:8000/warnings?at=2026-07-30T00:00:00Z&rehearsal=true&bbox=80,5,95,25"
+  Tsunami    Extreme  Immediate  circle r=220 km + coastal polygon, 3 languages
+  High Wave  Severe   Expected   polygon off north Andhra and south Odisha
+  refused 13: 12 not yet in force, 1 expired
+```
+
+The hazard layer shares the field's time axis rather than the wall clock, so
+scrubbing the time rule moves the warnings with it: nothing on 2026-07-10, the
+swell surge on 07-20, the tsunami and the high wave on 07-30.
+
+## Beyond the PS list: F8, Samudra Sahayak
+
+The agent is a **separate service** on :8010, and that is TRD section 6.5's
+"kill the agent and every P0 still passes" built rather than asserted: stop the
+process and the client omits the ask box, leaving no broken control behind.
+
+**What is real.** Eight tools over the public API (catalog, field summary,
+profiles, one profile, the verification card, warnings, tours, and a validated
+scene patch), a tool-call cap, a full trace served with every answer and
+printed in the UI, and citations on everything that quotes data. Asked "how
+good is the model?" it returns the RMSE, the pair count, the worst depth band
+AND the caveat, each traceable to the tool call that produced it.
+
+**The guard is the part worth defending.** CLAUDE.md's hard rule is that the
+agent never invents numbers. `services/agent/app/guard.py` makes that
+mechanical: every numeral in a finished answer must appear in a tool result,
+and an answer that fails is **withheld**, not corrected, because a silently
+scrubbed answer is one nobody knows was wrong. Thirteen tests cover it,
+including that a rounded figure is still backed by its source, that a thousands
+separator does not make a real number look invented, and that the question's
+own numerals count as grounding (an agent repeating "no platform 1111111 is in
+the box" is quoting, not fabricating; a failing test found that).
+
+Writing it now, while the planner is deterministic and could be trusted, is the
+whole point: the day a model is plugged in behind the same interface, the guard
+has already been the last step every answer passes through for weeks.
+
+**There is no language model, and it says so everywhere.** `planner: "rules"`
+is in every response, in `/healthz`, and printed in the UI. The reasons are
+concrete: PRD F11 promises an air-gapped demo so no cloud model is available on
+stage, there is no Ollama on this machine, and a small local model doing
+reliable tool-calling is a week of work with a real chance of failing in front
+of an audience. ROADMAP's own Phase 2 line asks for exactly this, a "first
+agent trick (scripted)". The SHAPE is the real one: the tools are the tools a
+model would be handed, with the schemas it would be handed, and `plan()` is the
+only function a model replaces.
+
+**Two refusals are tested because judges test them.** Out of scope gets a
+refusal that lists what the tool set can do and calls no tools at all. And a
+question about the FUTURE is refused outright: a test caught that "what will the
+temperature be next Tuesday" matched the temperature route perfectly and would
+have been answered, confidently and with citations, from a July 2026 analysis of
+the past.
+
+## Beyond the PS list: F12, the guided tours
+
+`GET /storyboards` and a player at the foot of the scene. A tour is a list of
+steps: a patch to the scene, a line of narration, and the evidence that line
+rests on. Playing one drives the SAME store the controls drive, so a tour can
+do nothing a presenter could not do by hand, and it needs no LLM at all: it
+replays identically with the network off.
+
+Four tours ship, running 50 to 77 seconds each: what a water column is, the
+26 degC surface a cyclone feeds on, the instruments and the verification
+certificate, and HazardWatch.
+
+**It is also the agent plane's plumbing, built a phase early.** TRD M4 gives
+Samudra Sahayak exactly one channel to affect the view, `set_scene` with a
+validated patch. This is that channel with a JSON file in front of it instead
+of a language model, and `run_storyboard(id)` will call this same route. When
+the agent lands it inherits a patch path already driven in front of an
+audience.
+
+**The rule that makes it defensible.** Narration is the one place in this whole
+project where a number can reach a judge WITHOUT passing through a tool result:
+everything else on screen is a value the API computed and cited, and a sentence
+in a tour is prose somebody typed. So every numeral in a narration line must be
+backed, by the patch that step applies or by the step's own `evidence` list,
+which is rendered on screen beside the sentence rather than hidden. A tour that
+fails that is refused at load and a test checks every shipped file.
+
+That guard also catches the failure that will actually happen: a figure going
+stale after the cube is refetched. A tour saying "eleven thousand seven hundred
+pairs" after a rebuild is wrong on stage, and the evidence line is what makes
+it findable.
+
+**And a step that cannot be applied says so.** Patch keys are checked against
+the live scene store, and an unknown key is reported on screen rather than
+skipped, because a step that quietly no-ops is indistinguishable from one that
+worked while the tour appears to run correctly.
+
+**Three of TRD M7's four named tours are not here, and the reason is data.**
+A cyclone cold-wake needs a cyclone, and no storm crosses the three July
+analysis steps on disk. Monsoon upwelling off Kerala is at 75 E and the demo
+box starts at 81 E. An eddy seen by a glider needs a glider, and none has been
+obtained. Those are written up in `storyboards/README.md` rather than narrated
+over data we do not have; the Argo explainer survives inside the instruments
+tour.
+
+## The browser suite could not run on CI, and now can
+
+Found while wiring HazardWatch into the build, and worth its own section
+because it was quietly undermining every other claim in this file.
+
+`tools/preprocess.py --fixtures` is what CI runs to get a cube without touching
+INCOIS. It built a small INVENTED field. The browser suite in `e2e/` asserts
+claims about the real Bay of Bengal on purpose (the surface is warmer than
+2000 m, the cartouche cites `incois_argo_10d_VAM`, a BGC float really serves
+chlorophyll which proves the adjusted product was read, the 26 degC surface
+varies in depth), and not one of those is reachable against an invented field.
+
+Measured rather than assumed. Running the suite against the fixture cube:
+
+```
+2 passed, 4 failed
+  the water column renders            .cartouche said "SYNTHETIC FIXTURE", not INCOIS
+  a BGC float is a different thing    no .legend: the fixture had one instrument class
+  the isosurface draws                depth_max == depth_min: the field was flat
+  a narrow window is honest           the same cartouche assertion
+```
+
+In all four the application was correct and truthfully reporting synthetic
+data. The suite therefore only really ran when somebody remembered to run it
+locally, which with a week to the round and a lot of building left is the wrong
+thing to rely on.
+
+**Fixed by committing the sample.** `data/sample/` now holds 614 KB of real
+data: the INCOIS griddap subset exactly as the fetcher downloads it (193 KB)
+and the processed in-situ profile table (421 KB), with a README covering
+provenance, size reasoning and the attribution each carries. `--fixtures`
+builds from those. CI gets the cube the demo runs on and still never reaches a
+government server.
+
+The Argo raw files are 6.6 MB each and the BGC synthetic profiles 6 to 7 MB, so
+the profile table is committed processed rather than raw. That is a size
+decision and it is stated in the sample README rather than left to be inferred.
+
+**Verified 2026-09-09:** `preprocess.py --fixtures` then the full suite,
+**6 of 6 browser tests pass**, which is the first time that job has been able
+to go green.
+
 ## What I am building next, in this order
 
 Ordered by how much PS text each closes per unit of work, which is also the
 order they matter to a screening reviewer.
 
-1. **F1: chlorophyll as a surface layer** from `incois_oceansat2_datasets`.
-   Needs the registry, the preprocessor and the renderer to accept a source
-   with no depth axis, which is also the shape every future satellite product
-   will have. The OGC side already handles a depth-less layer, since that is
-   what a derived surface product is.
-2. **F6: one source reader**, so both halves of the plugin contract have a
-   running example rather than one half having only tests.
+1. **F1: chlorophyll as a drawn surface layer.** Registered and disabled today,
+   for the three reasons above. The work is a `vertical: surface` marker and an
+   epoch marker in the registry, a depth-tolerant catalog entry, an empty-state
+   path through the depth rack and the scale bar, a decimating ingest, and a
+   time axis that refuses to join two epochs. It is not on the PS's own P0
+   list, so it waits behind the requirements that are.
 
-Done since this file was first written: F2's BGC clause, F6's
-derived-products-through-OGC gap, and F1's isosurface clause.
+Done since this file was first written: F2's BGC clause and its mooring class,
+F6's derived-products-through-OGC gap AND its source-reader half, F1's
+isosurface clause, F9's verification certificate, F13's HazardWatch layer,
+F12's guided tours, F8's agent plane, F1's depth-resolved currents, and the six
+silent defects above.
 
 **F2's remaining clause needs data, not code.** A glider or CTD cast would
 finish it, the parser and the marks are already there, and no such dataset is
@@ -661,12 +1070,43 @@ published on INCOIS's own ERDDAP. If the team can obtain one Indian Ocean
 glider or cruise CTD file in any delimited text format, that clause closes the
 day it lands.
 
+## The e2e suite would have failed on CI, and did not fail here
+
+Two problems, both found by running the suite the way CI runs it rather than
+the way this machine happens to be set up.
+
+**The built client called the wrong port.** `playwright.config.ts` set
+`NEXT_PUBLIC_API_BASE` as an environment variable on `next start`, but Next
+inlines `NEXT_PUBLIC_*` at BUILD time, so the setting did nothing: the served
+bundle carried the default `127.0.0.1:8000` while the suite booted its API on
+8100. It passed locally only because a development API happened to be
+listening on 8000. On CI nothing listens there, so every test would have failed
+with an empty scene and no clue why, and the off-origin guard would not have
+caught it because 127.0.0.1 is local. The build now happens inside the
+webServer command, where the variable takes effect. Verified by killing the
+port-8000 API and running the suite: 4 passed.
+
+That also retires the stale-build trap, which has cost this project time three
+times: the suite can no longer serve a bundle older than the source it tests.
+
+**The timeout assumed a GPU.** Playwright's headless Chromium falls back to
+SwiftShader, and CI has no GPU at all, so software rendering is the normal
+condition and a hardware GPU is the lucky one. Measured on this machine: the
+same four tests take 1.8 minutes on the Intel UHD GPU and 8 to 12 minutes on
+SwiftShader, and the longest single test goes from 46 seconds to over 5
+minutes. A 120 second timeout passed locally and would have failed every CI
+run. The timeout is now sized for software rendering, and the suite annotates
+which renderer it actually got, so a slow run is diagnosable instead of looking
+like a broken scene. That diagnosis cost real time here before the annotation
+existed.
+
 ## What needs the team lead, not me
 
 | # | Item | Which requirement it unblocks |
 |---|---|---|
-| 1 | Free Copernicus Marine account | F1 current vectors at depth, and the 1/12 degree upgrade |
+| ~~1~~ | ~~Free Copernicus Marine account~~ | **Done 2026-09-09.** The currents are ingested and serving; see F1 above |
 | 2 | Docker Desktop installed, or an explicit decision to skip it | F5 deployability, the last unproven claim in it |
+| 3 | One glider or ship CTD file, any delimited text format | F2's remaining instrument classes; the reader is built and is the most tested module here |
 
-Both are already items 2 and 4 in START-HERE.md §4, restated here so this file
-stands alone.
+Restated in `docs/required.md`, which is the working list, so this file stands
+alone.

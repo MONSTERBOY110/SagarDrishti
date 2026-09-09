@@ -687,17 +687,30 @@ def test_a_surface_product_is_served_as_a_single_level_at_the_surface(fixture_cu
     )
 
     # The existing volumetric client asks for the whole column in one call, so
-    # a 2-D diagnostic is served as one level. No frontend change needed.
+    # a 2-D diagnostic is served as one level. That single 0.0 is a TRANSPORT
+    # PLACEHOLDER, not a level the field sits at, and the response says so.
     assert slab.depths == [0.0]
     assert slab.values.shape == (1, len(slab.lats), len(slab.lons))
     assert slab.units == "m"
+    assert _prov["surface_level_is_a_placeholder"] is True
 
-    single, _p2 = P.compute_derived(
+    single, p2 = P.compute_derived(
         "incois_vam_argo", "D26", ds,
         bbox=(85.0, 10.0, 88.0, 14.0), time="2026-07-30", registry=reg,
     )
-    assert single.depths is None and single.depth == 0.0
     assert single.values.shape == (len(single.lats), len(single.lons))
+    # NO FABRICATED DEPTH. This used to be 0.0, and /field answered
+    # `"depth": 0.0` for a field whose own values run from 41 to 96 metres: a
+    # reader was told the slab came from the surface level while the field
+    # describes the whole water column and its values ARE depths. There is no
+    # depth to report for a surface product, so none is reported.
+    assert single.depths is None
+    assert single.depth is None, (
+        "a surface product must not claim to have come from a depth"
+    )
+    # And the placeholder flag is absent here, because there is no placeholder:
+    # a flag that appeared on every response would stop meaning anything.
+    assert "surface_level_is_a_placeholder" not in p2
 
 
 def test_a_column_product_is_served_level_by_level_like_a_stored_variable():
@@ -1007,3 +1020,261 @@ def test_a_field_with_no_inversion_carries_no_inversion_note():
 
     assert notes["columns_with_multiple_crossings"] == 0
     assert "multiple_crossings_note" not in notes
+
+
+# --- the source-reader half of the plugin interface, on a real mooring ------
+#
+# PS requirement F6 names moorings. The framework has offered a source-reader
+# extension point from the start, with a checked contract and its own error
+# codes, and until now nothing was registered against it: that half was
+# demonstrated by tests of the FRAMEWORK and by no actual reader.
+#
+# services/api/plugins/rama_mooring.py is the running example, on RAMA, the
+# Indian Ocean arm of the tropical moored array that INCOIS partners on. These
+# tests cover the three things it has to get right, each of which is a real
+# property of the real data rather than an invented edge case.
+
+def _rama_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "rama_mooring_under_test", PLUGIN_DIR / "rama_mooring.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _mooring_file(tmp_path, *, times, depths, values, flags, lat=15.0, lon=90.0,
+                  station="15n90e", wmo=23009.0):
+    """An ERDDAP tabledap export: a FLAT TABLE, one row per (time, depth).
+
+    Deliberately flat and deliberately unsorted, because that is what the
+    service actually returns and the pivot is the reader's job.
+    """
+    import itertools
+
+    rows = list(itertools.product(range(len(times)), range(len(depths))))
+    n = len(rows)
+    ds = xr.Dataset(
+        {
+            "station": ("row", np.array([station] * n, dtype=object)),
+            "wmo_platform_code": ("row", np.full(n, wmo, dtype="float32")),
+            "longitude": ("row", np.full(n, lon, dtype="float32")),
+            "latitude": ("row", np.full(n, lat, dtype="float32")),
+            "time": ("row", np.array([times[i] for i, _ in rows], dtype="datetime64[ns]")),
+            "depth": ("row", np.array([depths[j] for _, j in rows], dtype="float32")),
+            "T_20": ("row", np.array([values[i][j] for i, j in rows], dtype="float32"),
+                     {"units": "degree_C"}),
+            "QT_5020": ("row", np.array([flags[i][j] for i, j in rows], dtype="float32")),
+        }
+    )
+    path = tmp_path / "rama_test.nc"
+    ds.to_netcdf(path)
+    return path
+
+
+def test_the_mooring_reader_is_registered_against_its_kind():
+    """The gap this closes: a contract with nothing registered against it."""
+    reg = P.load_plugins(directory=PLUGIN_DIR, strict=True)
+
+    reader = reg.source_reader("mooring")
+    assert reader is not None, "kind 'mooring' has no reader"
+    assert reader.plugin == "rama_mooring"
+    assert reader.doc, "a reader must say what it reads"
+    # Both halves of the interface now have a running example, which is the
+    # whole point of this file.
+    assert reg.derived("D26") is not None
+
+
+def test_a_flat_table_is_pivoted_onto_a_time_by_depth_grid(tmp_path):
+    """ERDDAP serves one row per (time, depth), 527 rows for one real mooring.
+
+    The pivot uses the depths ACTUALLY PRESENT rather than an assumed set: a
+    mooring loses and regains sensors mid-deployment, so assuming a rectangular
+    sampling would either drop levels or invent them.
+    """
+    rama = _rama_module()
+    times = ["2026-07-29", "2026-07-30"]
+    depths = [1.0, 20.0, 100.0]
+    values = [[29.4, 29.1, 22.8], [29.5, 29.2, 22.9]]
+    flags = [[2, 2, 2], [2, 2, 2]]
+
+    ds = rama.read_mooring(_mooring_file(tmp_path, times=times, depths=depths,
+                                         values=values, flags=flags))
+
+    assert ds["TEMP"].dims == ("time", "depth")
+    assert ds.sizes == {"time": 2, "depth": 3}
+    assert list(ds.depth.values) == [1.0, 20.0, 100.0]
+    assert ds["TEMP"].values[1][2] == pytest.approx(22.9)
+    # One position, as scalar coordinates: a mooring does not move.
+    assert float(ds.lat) == 15.0 and float(ds.lon) == 90.0
+
+
+def test_the_fourth_fill_convention_is_masked(tmp_path):
+    """1.0E35, which is none of the three the cube already handles.
+
+    -9999.0 (INCOIS VAM), -1.0E34 (value-added and ocean colour) and 99999.0
+    (Argo BGC) are all live in this project, and none is a rounding of another.
+    A sentinel read as a measurement is a 1e35 degree ocean.
+    """
+    rama = _rama_module()
+    ds = rama.read_mooring(_mooring_file(
+        tmp_path,
+        times=["2026-07-30"],
+        depths=[1.0, 20.0],
+        values=[[29.4, 1.0e35]],
+        flags=[[2, 2]],
+    ))
+
+    temps = ds["TEMP"].values.ravel()
+    assert temps[0] == pytest.approx(29.4)
+    assert np.isnan(temps[1]), "the 1.0E35 sentinel reached the output as a value"
+    assert not (np.nan_to_num(temps, nan=0.0) > 1e30).any()
+
+
+def test_a_failed_sensor_is_mapped_to_bad_rather_than_compared_to_the_wrong_scale(tmp_path):
+    """The decisive one, and the reason the mapping is written out.
+
+    TAO/RAMA flags are 0 no sensor, 1 highest, 2 default, 3 adjusted, 4 lower,
+    5 SENSOR FAILED. Argo's scale means something different above 2 and has no
+    5 at all, so the two agree on 1 and 2 by coincidence and diverge beyond.
+    Filtering RAMA flags with Argo's rules would compare a failed sensor
+    against a scale it does not belong to.
+    """
+    rama = _rama_module()
+
+    assert rama.QC_MAP[5] == 4, "a failed sensor must map to bad"
+    assert rama.QC_MAP[0] == 9, "no sensor is missing, not good"
+    assert rama.QC_MAP[1] == 1 and rama.QC_MAP[2] == 2
+
+    ds = rama.read_mooring(_mooring_file(
+        tmp_path,
+        times=["2026-07-30"],
+        depths=[1.0, 20.0, 100.0, 200.0],
+        values=[[29.4, 28.0, 22.8, 15.0]],
+        flags=[[2, 5, 0, 1]],          # good, FAILED, no sensor, highest
+    ))
+
+    mapped = ds["TEMP_QC"].values.ravel().astype(int).tolist()
+    assert mapped == [2, 4, 9, 1]
+    # The flag meanings travel with the data, so a reader of the file does not
+    # have to know RAMA's vocabulary to interpret it.
+    assert "flag_meanings" in ds["TEMP_QC"].attrs
+    assert "sensor failed" in ds["TEMP_QC"].attrs["comment"].lower()
+
+
+def test_an_unknown_flag_becomes_missing_rather_than_a_guess(tmp_path):
+    """An array can grow a flag value. An unknown one is not evidence of
+    quality in either direction, so it must not be assumed good."""
+    rama = _rama_module()
+    ds = rama.read_mooring(_mooring_file(
+        tmp_path,
+        times=["2026-07-30"],
+        depths=[1.0, 20.0],
+        values=[[29.4, 28.0]],
+        flags=[[2, 7]],
+    ))
+
+    assert ds["TEMP_QC"].values.ravel().astype(int).tolist() == [2, rama.QC_UNKNOWN]
+
+
+def test_a_wmo_id_is_not_rendered_with_a_decimal_point(tmp_path):
+    """ERDDAP types wmo_platform_code as a NUMBER, so str() gives '23009.0'.
+
+    That string would go straight into the citation printed under the chart,
+    and a WMO id with a decimal point in it is not a WMO id.
+    """
+    rama = _rama_module()
+    ds = rama.read_mooring(_mooring_file(
+        tmp_path, times=["2026-07-30"], depths=[1.0],
+        values=[[29.4]], flags=[[2]], wmo=23009.0,
+    ))
+
+    assert ds.attrs["wmo_platform_code"] == "23009"
+
+
+def test_a_file_reporting_two_positions_is_refused(tmp_path):
+    """A moored buoy has ONE position. Two means either two moorings in one
+    file or a drifting one, and both make the fixed-position assumption wrong."""
+    rama = _rama_module()
+    path = _mooring_file(tmp_path, times=["2026-07-30"], depths=[1.0, 20.0],
+                         values=[[29.4, 28.0]], flags=[[2, 2]])
+    with xr.open_dataset(path) as ds:
+        moved = ds.load()
+    moved["latitude"].values[1] = 12.0
+    path2 = tmp_path / "moved.nc"
+    moved.to_netcdf(path2)
+
+    with pytest.raises(ValueError, match="one fixed position"):
+        rama.read_mooring(path2)
+
+
+def test_the_reader_output_passes_the_frameworks_own_contract(tmp_path, monkeypatch):
+    """D1 to D5 are what stop a reader shipping something unusable.
+
+    Going through open_source rather than calling the reader directly is the
+    point: this is the path the pipeline uses, and it is where a flipped depth
+    axis or a missing unit would be caught.
+    """
+    rama = _rama_module()
+    _mooring_file(tmp_path, times=["2026-07-29", "2026-07-30"], depths=[1.0, 20.0],
+                  values=[[29.4, 28.0], [29.5, 28.1]], flags=[[2, 2], [2, 2]])
+    (tmp_path / "rama_test.nc").rename(tmp_path / "rama_x.nc")
+
+    reg = P.PluginRegistry()
+    reg._begin("rama_mooring", "test")
+    rama.register(reg)
+    reg._end()
+
+    from app.registry import SourceSpec
+
+    spec = SourceSpec(
+        id="m", title="m", kind="mooring", url=str(tmp_path),
+        path_template="rama_*.nc",
+        variables=[{"name": "TEMP", "units": "degC"}],
+        dims={"time": "time", "depth": "depth"},
+    )
+
+    ds = P.open_source(spec, registry=reg)
+
+    assert "TEMP" in ds.data_vars
+    assert ds["TEMP"].attrs["units"] == "degC"
+    assert np.all(np.diff(ds["depth"].values) > 0)
+    assert (np.asarray(ds["depth"].values) >= 0).all()
+
+
+def test_the_real_mooring_reaches_the_profile_table():
+    """End to end on the shipped cube: the plugin's output is in the parquet.
+
+    A registered reader that nothing calls is the gap this closes, so the
+    assertion that matters is that a mooring row exists in the same table the
+    Argo floats land in, carrying its own source id.
+    """
+    import pathlib
+
+    import pandas as pd
+
+    parquet = (
+        pathlib.Path(__file__).resolve().parents[3] / "data" / "cube" / "profiles.parquet"
+    )
+    if not parquet.is_file():
+        pytest.skip("no local cube; run tools/fetch_sample.py then tools/preprocess.py")
+
+    df = pd.read_parquet(parquet)
+    if "source_id" not in df.columns:
+        pytest.skip("profiles.parquet predates the source_id column")
+    moorings = df[df["source_id"] == "rama_mooring_bob"]
+    if moorings.empty:
+        pytest.skip("no mooring in the local cube; the RAMA line may be out of the water")
+
+    assert moorings["wmo"].nunique() == 1, "one mooring, one platform id"
+    # A fixed station: every row at the same position.
+    assert moorings["lat"].nunique() == 1 and moorings["lon"].nunique() == 1
+    # Physically sensible Bay of Bengal temperatures.
+    assert moorings["temp"].between(5.0, 32.0).all()
+    # Only accepted flags reached the table.
+    assert moorings["temp_qc"].isin([1, 2]).all()
+    # A mooring measures at a known depth and reports no pressure, and that
+    # absence is honest rather than back-computed.
+    assert moorings["pres"].isna().all()

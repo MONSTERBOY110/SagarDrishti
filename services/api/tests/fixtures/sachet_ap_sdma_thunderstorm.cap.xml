@@ -1,0 +1,63 @@
+<cap:alert xmlns:cap="urn:oasis:names:tc:emergency:cap:1.2">
+<cap:identifier>IN-1788952195339008_8</cap:identifier>
+<cap:sender>Andhra-Pradesh-SDMA</cap:sender>
+<cap:sent>2026-09-09T16:44:06+05:30</cap:sent>
+<cap:status>Actual</cap:status>
+<cap:msgType>Update</cap:msgType>
+<cap:scope>Public</cap:scope>
+<cap:restriction/>
+<cap:addresses/>
+<cap:note/>
+<cap:references>IMD-Visakhapatnam,IN-1788952195339008_68,2026-09-09T16:39:29+05:30</cap:references>
+<cap:incidents/>
+<cap:info>
+<cap:language>en-IN</cap:language>
+<cap:category>Met</cap:category>
+<cap:event>Moderate Thunderstorms with surface wind</cap:event>
+<cap:urgency>Expected</cap:urgency>
+<cap:severity>Severe</cap:severity>
+<cap:certainty>Likely</cap:certainty>
+<cap:audience>1</cap:audience>
+<cap:effective>2026-09-09T16:37:00+05:30</cap:effective>
+<cap:onset>2026-09-09T16:44:06+05:30</cap:onset>
+<cap:expires>2026-09-09T19:37:00+05:30</cap:expires>
+<cap:headline>Moderate Thunderstorms accompanied with Lightning with strong gusty wind speed reaching 40-50 kmph and Moderate Rainfall is very likely to occur at a few places over Eluru, Tadepallegudem, Rajahmundry, Nidadavolu areas of East Godavari, Eluru and West Godavari districts in next 3 hours.</cap:headline>
+<cap:description/>
+<cap:instruction>Take safe shelters, do not take shelter under trees.</cap:instruction>
+<cap:contact/>
+<cap:parameter>
+<cap:valueName>Polygon URL</cap:valueName>
+<cap:value>https://sachet.ndma.gov.in/cap_public_website/FetchPolygonXMLFile?identifier=1788952195339008</cap:value>
+</cap:parameter>
+<cap:area>
+<cap:areaDesc>Eluru, Tadepallegudem, Rajahmundry, Nidadavolu</cap:areaDesc>
+<cap:altitude>0</cap:altitude>
+<cap:ceiling>0</cap:ceiling>
+</cap:area>
+</cap:info>
+<cap:info>
+<cap:language>TL</cap:language>
+<cap:category>Met</cap:category>
+<cap:event>Moderate Thunderstorms with surface wind</cap:event>
+<cap:urgency>Expected</cap:urgency>
+<cap:severity>Severe</cap:severity>
+<cap:certainty>Likely</cap:certainty>
+<cap:audience>1</cap:audience>
+<cap:effective>2026-09-09T16:37:00+05:30</cap:effective>
+<cap:onset>2026-09-09T16:44:06+05:30</cap:onset>
+<cap:expires>2026-09-09T19:37:00+05:30</cap:expires>
+<cap:headline>మీ ప్రాంతంలో పిడుగులు పడే అవకాశం ఉంది.ఉరుములు మెరుపులతో కూడిన వర్షం పడేప్పుడు చెట్లు,టవర్స్,పోల్స్,పొలాలు,బహిరంగ ప్రదేశాల్లో ఉండరాదు.సురక్షితమైన భవనాల్లో ఆశ్రయం పొందండి-ఆంధ్రప్రదేశ్ ప్రభుత్వం.</cap:headline>
+<cap:description/>
+<cap:instruction>Take safe shelters, do not take shelter under trees.</cap:instruction>
+<cap:contact/>
+<cap:parameter>
+<cap:valueName>Polygon URL</cap:valueName>
+<cap:value>https://sachet.ndma.gov.in/cap_public_website/FetchPolygonXMLFile?identifier=1788952195339008</cap:value>
+</cap:parameter>
+<cap:area>
+<cap:areaDesc>Eluru, Tadepallegudem, Rajahmundry, Nidadavolu</cap:areaDesc>
+<cap:altitude>0</cap:altitude>
+<cap:ceiling>0</cap:ceiling>
+</cap:area>
+</cap:info>
+</cap:alert>

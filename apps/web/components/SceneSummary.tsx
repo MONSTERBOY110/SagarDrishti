@@ -18,6 +18,8 @@
  * drags it, and an assertive region would interrupt on every step.
  */
 
+import type { WarningAlert } from "@/lib/api";
+
 interface Props {
   datasetTitle: string | null;
   variable: string;
@@ -35,6 +37,10 @@ interface Props {
   selectedKind: string | null;
   vmin: number;
   vmax: number;
+  /** Warning areas drawn on the globe (PS F13). A hazard polygon is a shape on
+   *  a canvas and therefore invisible to a screen reader, which for a warning
+   *  is the least acceptable place in this product to leave silent. */
+  warnings: WarningAlert[];
 }
 
 /** Spoken names for the instrument classes. The visual legend tells them apart
@@ -63,6 +69,29 @@ function describeStations(kinds: Record<string, number>): string {
 function platformNoun(kind: string | null): string {
   const words = KIND_WORDS[kind ?? "gdac_geo"] ?? KIND_WORDS.gdac_geo;
   return words[0].charAt(0).toUpperCase() + words[0].slice(1);
+}
+
+/**
+ * The hazard layer, spoken.
+ *
+ * A drill is named as a drill in the FIRST clause about it, not in a trailing
+ * qualifier. A listener who hears "a tsunami warning is in force" and only
+ * afterwards "this is an exercise" has already had the wrong reaction, and on
+ * this layer that is the failure the whole design exists to prevent.
+ */
+function describeWarnings(alerts: WarningAlert[]): string {
+  if (alerts.length === 0) return " No hazard warning is in force over this water.";
+  return alerts
+    .map((a) => {
+      const kind =
+        a.status === "Actual"
+          ? `A ${a.severity.toLowerCase()} ${a.event.toLowerCase()} warning is in force`
+          : `A rehearsal bulletin, not a real warning, describes a ${a.severity.toLowerCase()} ${a.event.toLowerCase()}`;
+      const where = a.area_desc ? ` for ${a.area_desc}` : "";
+      const drawn = a.drawable ? " Its area is outlined on the globe." : " It has no area to draw.";
+      return ` ${kind}${where}.${drawn}`;
+    })
+    .join("");
 }
 
 export default function SceneSummary(p: Props) {
@@ -98,7 +127,7 @@ export default function SceneSummary(p: Props) {
         p.selectedWmo
           ? ` ${platformNoun(p.selectedKind)} ${p.selectedWmo} is selected, and its measured profile is shown beside the scene.`
           : " Select a station to read its measured profile against the model."
-      }`}
+      }${describeWarnings(p.warnings)}`}
     </p>
   );
 }

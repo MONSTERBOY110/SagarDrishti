@@ -29,7 +29,7 @@ import {
   MAX_DRAWN_SLICES_WITH_ISOSURFACE,
   sliceVisibility,
 } from "@/lib/scene";
-import type { FieldColumn, ProfileGlyph } from "@/lib/api";
+import type { FieldColumn, ProfileGlyph, WarningAlert } from "@/lib/api";
 
 export interface FpsSample {
   fps: number;
@@ -41,6 +41,8 @@ interface Props {
   /** The extracted isosurface, or null when the layer is off (PS F1). */
   isosurface: IsosurfaceMesh | null;
   profiles: ProfileGlyph[];
+  /** Active CAP warnings at the scene time (PS F13, HazardWatch). */
+  warnings: WarningAlert[];
   selection: string | null;
   focusDepth: number;
   exaggeration: number;
@@ -96,6 +98,9 @@ export default function OceanGlobe(props: Props) {
     Cesium: any;
     slices: any[];
     floats: any[];
+    /** HazardWatch polygons and circles. Their own list, so a change to the
+     *  warning layer does not rebuild the 24-slice stack beside it. */
+    hazards: any[];
     /** The isosurface primitive and the polyline drawing the rim of its holes.
      *  These live in `scene.primitives`, NOT in `viewer.entities`, which is why
      *  the teardown below had to learn about them: the existing cleanup removed
@@ -222,7 +227,7 @@ export default function OceanGlobe(props: Props) {
       viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
       cesiumRef.current = {
-        viewer, Cesium, slices: [], floats: [],
+        viewer, Cesium, slices: [], floats: [], hazards: [],
         isosurface: null, isoRim: null, isoMesh: null,
       };
 
@@ -275,6 +280,14 @@ export default function OceanGlobe(props: Props) {
           sliceCount: () => cesiumRef.current?.slices.length ?? 0,
           floatCount: () => cesiumRef.current?.floats.length ?? 0,
           entityCount: () => viewer.entities.values.length,
+          /** What the hazard layer actually drew, read from the entities
+           *  rather than from the prop: a hook keyed on a prop can claim a
+           *  warning is on screen before the effect that draws it has run. */
+          hazardCount: () => cesiumRef.current?.hazards.length ?? 0,
+          hazardSeverities: () =>
+            (cesiumRef.current?.hazards ?? []).map((e: any) =>
+              e.properties?.severity?.getValue?.(),
+            ),
           /** Window coordinates of a station mark, so a test can click the real
            *  glyph and exercise scene.pick rather than poking the store. */
           /** What the isosurface primitive actually carries, read from the
@@ -604,6 +617,138 @@ export default function OceanGlobe(props: Props) {
     viewer.scene.requestRender();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, props.profiles, props.selection]);
+
+  /* --- HazardWatch: CAP warning areas (PS requirement F13) ----------------
+     Drawn as entities on the ellipsoid rather than at depth. A CAP area is a
+     statement about a stretch of coast and sea SURFACE, not about a water
+     column, so hanging it at the depth cursor would invent a vertical extent
+     the bulletin never claimed.
+
+     COLOUR. Hue on this surface is reserved for the measurement (see the
+     direction contract in layout.tsx), and that rule earns its keep here more
+     than anywhere else: the field underneath is already using the whole
+     spectrum, so a red-amber-yellow severity ramp would put a "yellow warning"
+     next to yellow 28-degree water and neither would be readable. Every hazard
+     is therefore drawn in the ONE reserved caution ink, and severity is
+     carried by fill weight and border width, which is the same grammar the
+     errata blocks and the scorecard worst-band rule already use.
+
+     A DRILL LOOKS DIFFERENT. An Exercise alert gets no fill at all, only a
+     dashed outline. It cannot be mistaken for a live warning at a glance, and
+     that is a rendering guarantee on top of the server-side one. */
+  useEffect(() => {
+    const c = cesiumRef.current;
+    if (!ready || !c) return;
+    const { viewer, Cesium } = c;
+
+    for (const e of c.hazards) viewer.entities.remove(e);
+    c.hazards = [];
+
+    // Alpha by severity, in the reserved ink. Extreme is not opaque: the field
+    // it sits over is the evidence for the warning, and burying it would make
+    // the layer decorative.
+    const FILL: Record<string, number> = {
+      Extreme: 0.34,
+      Severe: 0.24,
+      Moderate: 0.16,
+      Minor: 0.1,
+      Unknown: 0.08,
+    };
+    // TWO values of the one reserved ink, and using the right one matters.
+    // globals.css defines --caution (#b23a22) for rules and borders ON THE
+    // MANILA PLATE, and --caution-stamp (#e8735a) as the value that stays
+    // legible ON THE WATER at 6.4:1. This layer is on the water. The first
+    // version used the plate value and the warning outlines were nearly
+    // invisible over a bright field, which for a hazard layer is not a
+    // cosmetic miss.
+    // ONE value, the on-water one, for both the stroke and the wash. The plate
+    // value (#b23a22) is a dark red, and a dark red at fifteen per cent over
+    // near-black water adds nothing a viewer can see: the fill was invisible
+    // until this changed.
+    const CAUTION = Cesium.Color.fromCssColorString("#e8735a");
+    const CAUTION_FILL = CAUTION;
+
+    for (const w of props.warnings) {
+      const drill = w.status !== "Actual";
+      // A drill is drawn LIGHTER and DASHED, not invisible. The first version
+      // gave it no fill at all, which distinguished it perfectly and also made
+      // the only ocean hazards we have almost unreadable over a bright field.
+      // Dash is the primary signal here, as it is everywhere else on this
+      // surface, and the panel stamps itself besides.
+      const alpha = (FILL[w.severity] ?? FILL.Unknown) * (drill ? 0.45 : 1);
+      const stroke = drill
+        ? new Cesium.PolylineDashMaterialProperty({ color: CAUTION, dashLength: 12.0 })
+        : new Cesium.ColorMaterialProperty(CAUTION);
+      const width = w.severity === "Extreme" ? 4 : w.severity === "Severe" ? 3 : 2;
+
+      const common = {
+        properties: {
+          alertId: w.identifier,
+          severity: w.severity,
+          status: w.status,
+          event: w.event,
+        },
+      };
+
+      for (const area of w.areas) {
+        for (const ring of area.polygons) {
+          const flat: number[] = [];
+          for (const [lon, lat] of ring) flat.push(lon, lat);
+          const positions = Cesium.Cartesian3.fromDegreesArray(flat);
+          c.hazards.push(
+            viewer.entities.add({
+              ...common,
+              polygon: {
+                hierarchy: new Cesium.PolygonHierarchy(positions),
+                material: CAUTION_FILL.withAlpha(alpha),
+                outline: false,
+                perPositionHeight: false,
+              },
+              polyline: {
+                positions,
+                width,
+                material: stroke,
+                // NOT clampToGround. The terrain provider here is a bare
+                // ellipsoid with no elevation, so draping would buy nothing
+                // and would push every warning outline through Cesium's
+                // ground-primitive pipeline, which is the expensive one and
+                // this scene has a frame budget (TRD section 5).
+              },
+            }),
+          );
+        }
+
+        for (const [lon, lat, radiusKm] of area.circles) {
+          c.hazards.push(
+            viewer.entities.add({
+              ...common,
+              position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+              ellipse: {
+                // CAP gives the radius in KILOMETRES and Cesium wants metres.
+                // A factor of a thousand here draws a tsunami warning the size
+                // of a village, or of a hemisphere.
+                semiMajorAxis: radiusKm * 1000,
+                semiMinorAxis: radiusKm * 1000,
+                // Explicitly at height 0 rather than clamped to terrain.
+                // Cesium cannot outline a terrain-clamped ellipse and says so
+                // in a console warning it then acts on: the tsunami circle was
+                // drawing as a fill with NO EDGE, which is the one shape on
+                // this layer whose boundary is the information.
+                height: 0,
+                material: CAUTION_FILL.withAlpha(alpha * 0.6),
+                outline: true,
+                outlineColor: CAUTION,
+                outlineWidth: width,
+              },
+            }),
+          );
+        }
+      }
+    }
+
+    viewer.scene.requestRender();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, props.warnings]);
 
   return (
     <>

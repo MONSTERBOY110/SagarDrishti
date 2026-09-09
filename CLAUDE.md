@@ -22,7 +22,7 @@ Browser-native 3D digital twin of the Indian Ocean: INCOIS model fields (NetCDF)
 - Say "conductivity-derived salinity proxy," never "salinity sensor," for the TDS probe.
 
 ## Key dates (2026)
-Idea PDF via college SPOC: **Sep 20** · Internal college hackathon: **ask the lead for the confirmed date** · Grand finale: ~Dec (per 2025 pattern). Counter re-checks: Sep 15 & 19.
+Idea PDF via college SPOC: **Sep 20** · Internal college hackathon: **Wed 16 Sep** (confirmed by the lead 9 Sep) · Grand finale: ~Dec (per 2025 pattern). Counter re-checks: Sep 15 & 19.
 
 ## Environment notes
 - Windows 11, PowerShell primary. Python is `python` (not `python3`). Prefer `uv` for Python env if available.

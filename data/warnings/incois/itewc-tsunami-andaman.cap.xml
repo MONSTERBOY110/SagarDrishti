@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  EXERCISE BULLETIN. status is Exercise, which is CAP's own marking for a drill.
+  This describes nothing that happened. See the README beside this file.
+-->
+<cap:alert xmlns:cap="urn:oasis:names:tc:emergency:cap:1.2">
+  <cap:identifier>EXERCISE-ITEWC-2026-0916-001</cap:identifier>
+  <cap:sender>ITEWC-EXERCISE</cap:sender>
+  <cap:sent>2026-07-30T02:14:00+05:30</cap:sent>
+  <cap:status>Exercise</cap:status>
+  <cap:msgType>Alert</cap:msgType>
+  <cap:scope>Public</cap:scope>
+  <cap:note>Rehearsal bulletin. Not a live warning.</cap:note>
+
+  <cap:info>
+    <cap:language>en-IN</cap:language>
+    <cap:category>Geo</cap:category>
+    <cap:event>Tsunami</cap:event>
+    <cap:responseType>Evacuate</cap:responseType>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Extreme</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-30T02:14:00+05:30</cap:effective>
+    <cap:onset>2026-07-30T02:40:00+05:30</cap:onset>
+    <cap:expires>2026-07-30T11:00:00+05:30</cap:expires>
+    <cap:senderName>Indian Tsunami Early Warning Centre (exercise)</cap:senderName>
+    <cap:headline>EXERCISE EXERCISE EXERCISE. Tsunami warning for the Andaman and Nicobar Islands following an offshore earthquake in the Andaman Sea.</cap:headline>
+    <cap:description>EXERCISE. An earthquake has been located beneath the Andaman Sea. Tsunami waves are possible along the east-facing coasts of the Andaman and Nicobar Islands. First wave arrival is estimated at 26 minutes after origin time at the nearest coast. This is a rehearsal bulletin issued for a demonstration and describes no real event.</cap:description>
+    <cap:instruction>EXERCISE. Move away from the shoreline to higher ground or inland. Do not return until an all-clear is issued. Mariners at sea should remain in deep water.</cap:instruction>
+    <cap:parameter>
+      <cap:valueName>ExerciseNote</cap:valueName>
+      <cap:value>Drill bulletin authored for SagarDrishti. Not issued by INCOIS.</cap:value>
+    </cap:parameter>
+    <cap:area>
+      <cap:areaDesc>Andaman Sea, around the epicentre</cap:areaDesc>
+      <cap:circle>10.900,93.900 220.0</cap:circle>
+    </cap:area>
+    <cap:area>
+      <cap:areaDesc>East coast of the Andaman and Nicobar Islands</cap:areaDesc>
+      <cap:polygon>13.600,92.700 13.600,93.600 11.400,93.700 9.200,93.400 7.000,93.900 6.700,93.300 9.000,92.700 11.400,92.500 13.600,92.700</cap:polygon>
+    </cap:area>
+  </cap:info>
+
+  <cap:info>
+    <cap:language>hi-IN</cap:language>
+    <cap:category>Geo</cap:category>
+    <cap:event>सुनामी</cap:event>
+    <cap:responseType>Evacuate</cap:responseType>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Extreme</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-30T02:14:00+05:30</cap:effective>
+    <cap:expires>2026-07-30T11:00:00+05:30</cap:expires>
+    <cap:headline>अभ्यास अभ्यास अभ्यास। अंडमान सागर में भूकंप के बाद अंडमान और निकोबार द्वीप समूह के लिए सुनामी चेतावनी।</cap:headline>
+    <cap:instruction>अभ्यास। तट से दूर ऊँचे स्थान पर जाएँ। जब तक सुरक्षा की सूचना न मिले तब तक वापस न लौटें।</cap:instruction>
+    <cap:area>
+      <cap:areaDesc>अंडमान और निकोबार द्वीप समूह का पूर्वी तट</cap:areaDesc>
+    </cap:area>
+  </cap:info>
+
+  <cap:info>
+    <cap:language>ta-IN</cap:language>
+    <cap:category>Geo</cap:category>
+    <cap:event>ஆழிப்பேரலை</cap:event>
+    <cap:responseType>Evacuate</cap:responseType>
+    <cap:urgency>Immediate</cap:urgency>
+    <cap:severity>Extreme</cap:severity>
+    <cap:certainty>Observed</cap:certainty>
+    <cap:effective>2026-07-30T02:14:00+05:30</cap:effective>
+    <cap:expires>2026-07-30T11:00:00+05:30</cap:expires>
+    <cap:headline>பயிற்சி பயிற்சி பயிற்சி. அந்தமான் கடலில் நிலநடுக்கத்தைத் தொடர்ந்து அந்தமான் நிக்கோபார் தீவுகளுக்கு ஆழிப்பேரலை எச்சரிக்கை.</cap:headline>
+    <cap:instruction>பயிற்சி. கடற்கரையிலிருந்து விலகி உயரமான இடத்திற்குச் செல்லவும். அறிவிப்பு வரும் வரை திரும்ப வேண்டாம்.</cap:instruction>
+    <cap:area>
+      <cap:areaDesc>அந்தமான் நிக்கோபார் தீவுகளின் கிழக்குக் கரை</cap:areaDesc>
+    </cap:area>
+  </cap:info>
+</cap:alert>

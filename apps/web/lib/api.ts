@@ -113,6 +113,220 @@ export interface ProfileDetail {
   } & Record<string, (number | null)[]>;
 }
 
+/** One row of the verification card: the model's error over a depth band. */
+export interface ScoreBin {
+  depth_min: number;
+  depth_max: number;
+  n: number;
+  /**
+   * Model minus observation, averaged. Positive means the model runs warm (or
+   * salty). Null when the band held no matched pairs, which is NOT zero: zero
+   * would read as a perfect band.
+   */
+  bias: number | null;
+  rmse: number | null;
+  mae: number | null;
+  /** Spread of the residual: the part a constant correction could not remove. */
+  std: number | null;
+}
+
+/**
+ * Class-4-style model-versus-observation verification (PS requirement F9).
+ *
+ * `caveat` is not a footnote and must be rendered wherever these numbers are:
+ * the INCOIS analysis assimilates the very profiles it is scored against, so
+ * the residual bounds the ANALYSIS FIT and is not forecast skill.
+ */
+export interface Scorecard {
+  source_id: string;
+  variable: string;
+  units: string;
+  observed_column: string;
+  label: string;
+  method: string;
+  caveat: string;
+  citation: string;
+  retrieved_at: string | null;
+  overall: Omit<ScoreBin, "depth_min" | "depth_max">;
+  by_depth: ScoreBin[];
+  n_profiles: number;
+  n_platforms: number;
+  platforms: string[];
+  accept_flags: number[];
+  max_time_offset_hours: number;
+  time_offset_hours: { median: number | null; max: number | null };
+  /** Every level that did NOT become a pair, and why. Part of the answer. */
+  refused: {
+    total: number;
+    no_model_time: number;
+    outside_grid: number;
+    missing_stencil: number;
+    outside_depth_range: number;
+    no_observation: number;
+    rejected_qc: number;
+    no_qc_flag: number;
+  };
+  observation_sources: string[];
+  /** Registry titles for those sources: what to print, since a source id is
+   *  a database key and a reader needs the name of the instrument programme. */
+  observation_titles: string[];
+  observation_citations: string[];
+}
+
+/**
+ * What to PRINT for a unit the API served. Display only, never sent back.
+ *
+ * The INCOIS analysis declares `units: "1"` for salinity, and that is correct:
+ * CF stores practical salinity as a dimensionless quantity and puts the meaning
+ * in the standard name. It is also unreadable on a form, where "34.05 1" looks
+ * like a typo rather than like a measurement, and the salinity ramp was headed
+ * "SCALE IN 1".
+ *
+ * So the number stays exactly what the source declared and only the LABEL is
+ * translated, by standard name rather than by variable name: `units: "1"` on a
+ * chlorophyll field would not mean PSU. A dimensionless quantity we cannot name
+ * prints nothing at all, which is honest, rather than "1", which is noise.
+ *
+ * NOT for the wire. `/isosurface` checks the isovalue's units against the
+ * served ones and would refuse "PSU" where the cube says "1", correctly, so
+ * every request keeps using the raw string.
+ */
+export function displayUnits(units: string, canonical?: string | null): string {
+  if (units !== "1") return units;
+  if (canonical === "sea_water_practical_salinity") return "PSU";
+  return "";
+}
+
+/** One CAP `<area>`: what it is called, and where it is if we can tell. */
+export interface WarningArea {
+  desc: string;
+  /** Closed rings, LONGITUDE FIRST. CAP itself writes latitude first; the
+   *  server transposes once, in app/cap.py, so nothing downstream has to. */
+  polygons: [number, number][][];
+  /** [lon, lat, radiusKm]. CAP's radius is KILOMETRES, not metres or degrees. */
+  circles: [number, number, number][];
+  geocodes: Record<string, string>;
+  drawable: boolean;
+}
+
+/** CAP v1.2 severity, worst first. The vocabulary is closed; anything the
+ *  server could not read arrives as "Unknown" and ranks BELOW Minor, so an
+ *  unreadable alert can never displace a real Extreme one at the top of the
+ *  banner. */
+export type CapSeverity = "Extreme" | "Severe" | "Moderate" | "Minor" | "Unknown";
+export type CapStatus = "Actual" | "Exercise" | "System" | "Test" | "Draft";
+
+/**
+ * One active warning (PRD F13, HazardWatch).
+ *
+ * `status` is the field that matters most on this type. `Actual` is a real
+ * warning; `Exercise` is a drill, it reaches the client ONLY when the request
+ * asked for rehearsals, and anything rendering it is required to say so.
+ */
+export interface WarningAlert {
+  identifier: string;
+  sender: string;
+  sent: string | null;
+  status: CapStatus;
+  msg_type: string;
+  scope: string;
+  references: string[];
+  source: string;
+  event: string;
+  severity: CapSeverity;
+  /** 4 for Extreme down to 0 for Unknown. Sorting is done server-side; this is
+   *  here so the panel can pick a treatment without re-deriving the order. */
+  severity_rank: number;
+  urgency: string;
+  certainty: string;
+  effective: string | null;
+  expires: string | null;
+  languages: string[];
+  areas: WarningArea[];
+  /** Which language block the text below actually came from. CAP blocks are
+   *  authored per language rather than translated from a canonical one. */
+  language: string;
+  headline: string;
+  description: string;
+  instruction: string;
+  area_desc: string;
+  drawable: boolean;
+  /** Every departure from the standard the parser had to cope with, and every
+   *  change the ingest made, including geometry simplification. Rendered, so a
+   *  thinned boundary is never presented as the one the agency drew. */
+  notes: string[];
+}
+
+export interface WarningLayer {
+  /** The instant validity was evaluated at, echoed back. */
+  at: string;
+  count: number;
+  alerts: WarningAlert[];
+  /** Why alerts are NOT shown. Part of the answer, never a log line. */
+  refused: {
+    total: number;
+    not_actual: number;
+    not_a_warning: number;
+    cancelled: number;
+    superseded: number;
+    expired: number;
+    not_yet_effective: number;
+    not_drawable: number;
+    outside_bbox: number;
+  };
+  language: string;
+  rehearsal: boolean;
+  /** How many of the alerts being shown are drills. Computed server-side so a
+   *  client cannot forget to look. */
+  exercise_count: number;
+  method: string;
+  sources: string[];
+  citations: Record<string, string>;
+  simplify_tolerance_deg: number;
+  unreadable: { file: string; source?: string; reason: string }[];
+}
+
+/** One step of a guided tour (PRD F12).
+ *
+ * `patch` is applied to the live scene store, so a tour can do nothing a
+ * presenter could not do by hand. `evidence` is the citation discipline
+ * applied to PROSE: narration is the one place a number can reach a judge
+ * without passing through a tool result, so every numeral in a narration line
+ * has to appear either in the patch or here, and the server refuses a tour
+ * where it does not. */
+export interface TourStep {
+  narration: string;
+  /** seconds this step holds before the player advances */
+  hold: number;
+  patch: Record<string, unknown>;
+  evidence: string[];
+}
+
+export interface Tour {
+  id: string;
+  title: string;
+  subtitle: string;
+  /** "judge" or "classroom": the same product, pitched differently */
+  audience: string;
+  source_id: string;
+  steps: TourStep[];
+  n_steps: number;
+  seconds: number;
+}
+
+export interface TourIndex {
+  tours: Tour[];
+  count: number;
+  /** Tour files that could not be read, with the reason. Served rather than
+   *  logged: a tour that failed to load is one nobody can run, and finding
+   *  that out on stage is the failure mode. */
+  refused: { file: string; reason: string }[];
+  /** What a step is allowed to patch, per the server. The client checks the
+   *  same thing against its own store, so a disagreement surfaces as a visible
+   *  refusal rather than a silent no-op. */
+  patchable: string[];
+}
+
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`);
   if (!r.ok) {
@@ -158,6 +372,34 @@ export const api = {
   profiles: () => get<{ count: number; citation: string; profiles: ProfileGlyph[] }>("/profiles"),
 
   profile: (id: string) => get<ProfileDetail>(`/profiles/${encodeURIComponent(id)}`),
+
+  /** Per-depth-bin bias and RMSE against the in-situ profiles (F9).
+   *
+   * `observed` names the profile column, and it is passed explicitly rather
+   * than guessed from the model variable: scoring TEMP against psal would
+   * produce a number that looks like an answer. */
+  scorecard: (sourceId: string, variable: string, observed: string) =>
+    get<Scorecard>(
+      `/scorecard/${sourceId}/${variable}?observed=${encodeURIComponent(observed)}`,
+    ),
+
+  /** Active CAP warnings at an instant (F13, HazardWatch).
+   *
+   * `at` is the SCENE time, not the wall clock, so the hazard layer shares the
+   * field's time axis and scrubbing moves both. `rehearsal` is passed
+   * explicitly on every call: a drill must never reach the globe because a
+   * default was forgotten. */
+  /** The guided tours on the server (F12). One copy, so the files the
+   *  data-plane tests validate are the files the browser plays. */
+  storyboards: () => get<TourIndex>("/storyboards"),
+
+  warnings: (at: string, rehearsal: boolean, bbox?: string, lang = "en") =>
+    get<WarningLayer>(
+      `/warnings?at=${encodeURIComponent(at)}` +
+        `&rehearsal=${rehearsal ? "true" : "false"}` +
+        `&lang=${encodeURIComponent(lang)}` +
+        (bbox ? `&bbox=${encodeURIComponent(bbox)}` : ""),
+    ),
 };
 
 /** Index into a FieldColumn's flattened values. */
@@ -205,11 +447,12 @@ export function robustRange(col: FieldColumn, pct = 2): [number, number] {
  *
  * NEAREST CELL, NOT CLASS-4 CO-LOCATION. This is deliberately the honest cheap
  * version: it puts the model curve beside the observed one so a forecaster can
- * see agreement, and it computes no skill number. Proper verification in
- * observation space - interpolating the model to the profile's exact
- * lat/lon/depth/time and reporting per-depth-bin bias and RMSE - is TRD M5
- * (Ryan et al. 2015, PRIOR-ART §B.12) and lands in Phase 4. Until then nothing
- * here may be described as an RMSE, and the panel says so on screen.
+ * see agreement, and it computes no skill number. Verification in observation
+ * space - the model interpolated to the profile's own lat/lon/depth/time, with
+ * per-depth-bin bias and RMSE - is `api.scorecard` (TRD M5, Ryan et al. 2015,
+ * PRIOR-ART §B.12), served by the API and rendered by ScorecardPanel. NOTHING
+ * derived from this function may be described as an RMSE, and the panel that
+ * draws it says so on screen.
  */
 export function modelProfileAt(
   col: FieldColumn,

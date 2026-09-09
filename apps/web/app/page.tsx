@@ -23,17 +23,23 @@ import Cartouche from "@/components/Cartouche";
 import ScaleBar from "@/components/ScaleBar";
 import SceneSummary from "@/components/SceneSummary";
 import ProfilePanel from "@/components/ProfilePanel";
+import HazardPanel from "@/components/HazardPanel";
+import AskPanel from "@/components/AskPanel";
+import ScorecardPanel from "@/components/ScorecardPanel";
+import StoryPlayer from "@/components/StoryPlayer";
 import StationLegend from "@/components/StationLegend";
 import StationSheet from "@/components/StationSheet";
 import TimeRule from "@/components/TimeRule";
 import {
   api,
+  displayUnits,
   robustRange,
   type DatasetInfo,
   type FieldColumn,
   type ProfileDetail,
   type IsosurfaceMesh,
   type ProfileGlyph,
+  type WarningAlert,
 } from "@/lib/api";
 import { describeMesh } from "@/lib/isosurface";
 import { defaultIsovalue, useScene } from "@/lib/scene";
@@ -54,6 +60,11 @@ export default function Page() {
   /* Kept apart from `error`: a failed isosurface must not blank the scene the
      way a failed catalogue does. The slices and the floats are still valid. */
   const [isoError, setIsoError] = useState<string | null>(null);
+  /* Lifted out of HazardPanel so the globe draws exactly the list the panel
+     lists. Two components each fetching their own warnings could disagree
+     about what is being warned about, which on this layer is not a cosmetic
+     inconsistency. */
+  const [warnings, setWarnings] = useState<WarningAlert[]>([]);
 
   /* --- load the cast ------------------------------------------------------- */
   useEffect(() => {
@@ -128,6 +139,9 @@ export default function Page() {
       setIsosurface(null);
       return;
     }
+    // The RAW unit the cube declares, never the printed label: the server
+    // checks the isovalue against the served units and would rightly refuse
+    // "PSU" where the dataset says "1".
     const units = dataset.variables.find((v) => v.name === scene.variable)?.units ?? "";
     let cancelled = false;
 
@@ -158,6 +172,15 @@ export default function Page() {
 
   const column = columns[`${scene.variable}@${scene.time}`] ?? null;
   const depths = column?.depths ?? dataset?.depths ?? [];
+  /* What the panels PRINT for the unit. The cube declares salinity as CF's
+     dimensionless "1", which is correct and unreadable on a form, so the label
+     is translated by standard name while every request keeps the raw string
+     (lib/api.ts:displayUnits). */
+  const variableInfo = dataset?.variables.find((v) => v.name === scene.variable) ?? null;
+  const unitsLabel = displayUnits(
+    column?.units ?? variableInfo?.units ?? "",
+    variableInfo?.canonical ?? null,
+  );
   /* Which timesteps are actually in hand. The time rule rules an unfetched
      step with a dashed tick rather than pretending every step is ready. */
   const loadedTimes = new Set(
@@ -235,6 +258,7 @@ export default function Page() {
           column={column}
           isosurface={isosurface}
           profiles={profiles}
+          warnings={warnings}
           selection={scene.selection}
           focusDepth={scene.focusDepth}
           exaggeration={scene.exaggeration}
@@ -271,7 +295,7 @@ export default function Page() {
           dataRange={dataRange}
           isosurfaceOn={scene.isosurfaceOn}
           isovalue={scene.isovalue}
-          units={column?.units ?? ""}
+          units={unitsLabel}
           isoSummary={isoError ?? (isosurface ? describeMesh(isosurface) : null)}
           onToggleIsosurface={scene.toggleIsosurface}
           onIsovalue={scene.setIsovalue}
@@ -301,13 +325,23 @@ export default function Page() {
         )}
       </div>
 
-      {/* --- the clicked instrument, as its own profile ---------------------- */}
+      {/* --- the certificate, then the clicked instrument -------------------
+          The verification card sits ABOVE the profile, because it is the claim
+          the profile is evidence for: a reader meets "the model is 0.60 degC
+          off" before they meet one cast that shows why. */}
       <div className="panel-right">
+        <ScorecardPanel
+          sourceId={dataset?.id ?? null}
+          variable={scene.variable}
+          variableLabel={
+            dataset?.variables.find((v) => v.name === scene.variable)?.label ?? scene.variable
+          }
+        />
         <ProfilePanel
           detail={detail}
           column={column}
           variable={scene.variable}
-          units={column?.units ?? ""}
+          units={unitsLabel}
           palette={scene.palette}
           scale={scene.scale}
           vmin={scene.vmin}
@@ -325,7 +359,7 @@ export default function Page() {
       <SceneSummary
         datasetTitle={dataset?.title ?? null}
         variable={scene.variable}
-        units={column?.units ?? ""}
+        units={unitsLabel}
         focusDepth={scene.focusDepth}
         depthMin={depths.length ? depths[0] : 0}
         depthMax={depths.length ? depths[depths.length - 1] : 0}
@@ -338,10 +372,21 @@ export default function Page() {
         selectedKind={detail?.platform_kind ?? null}
         vmin={scene.vmin}
         vmax={scene.vmax}
+        warnings={warnings}
       />
 
-      {/* --- what the marks on the water are, when there is more than one kind */}
-      <StationLegend profiles={profiles} />
+      {/* --- the open band beside the sheet: what the marks are, and what is
+              being warned about over this water (PS F13) ------------------ */}
+      <div className="panel-mid">
+        <StationLegend profiles={profiles} />
+        <HazardPanel
+          at={column?.time ?? scene.time}
+          bbox={dataset ? dataset.bbox.join(",") : null}
+          rehearsal={scene.rehearsal}
+          onRehearsal={(rehearsal) => useScene.setState({ rehearsal })}
+          onLayer={setWarnings}
+        />
+      </div>
 
       {/* --- the vertical scale, so 200x is checkable rather than asserted -- */}
       <ScaleBar
@@ -351,6 +396,17 @@ export default function Page() {
         fps={fps.fps}
         p1={fps.p1}
       />
+
+      {/* --- the two surfaces that narrate rather than control ---------------
+          The agent (PS F8) and the guided tours (PS F12), in the one band the
+          four corners leave free. Both drive the same store the controls
+          drive, so there is no second path through the renderer to keep in
+          step, and the agent panel is absent entirely when its service is not
+          running, which is TRD section 6.5 made visible. */}
+      <div className="stage-foot">
+        <AskPanel />
+        <StoryPlayer />
+      </div>
 
       {/* --- provenance ------------------------------------------------------ */}
       <div className="provenance">

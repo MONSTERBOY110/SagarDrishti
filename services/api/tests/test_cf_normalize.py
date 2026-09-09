@@ -182,28 +182,31 @@ def test_registry_matches_the_live_source_shape():
     assert spec.cf_overrides["ZAX"]["positive"] == "down"
     assert {v.name for v in spec.variables} >= {"TEMP", "SAL"}
 
-    # GLORYS12 is registered but disabled pending credentials (ADR-0003).
-    glorys = reg.get("glorys12")
-    assert glorys.enabled is False and glorys.disabled_reason
-
-    # Only enabled sources are offered to the client.
-    assert "glorys12" not in [s.id for s in reg.enabled()]
-    assert "incois_vam_argo" in [s.id for s in reg.enabled()]
-
-
-# --- the depth axis must be STRICTLY increasing -----------------------------
-#
-# The module docstring has promised "depth positive down, metres, strictly
-# increasing" from the start, and the tests above assert it, but nothing
-# enforced it at runtime: `sortby("depth")` gives non-DECREASING, so a source
-# with a duplicated level sailed through and produced a zero-thickness cell.
-#
-# That matters because every consumer divides by that thickness. The D26 plugin
-# interpolates a crossing as (threshold - upper) / (lower - upper), and an
-# isosurface extractor does the same per cell edge. A duplicate level makes
-# both divide by zero, and numpy answers inf or nan rather than raising, so the
-# result would be a hole in a surface with no error anywhere to explain it.
-
+    # GLORYS is the depth-resolved current source (PS F1), and it is now LIVE:
+    # the Copernicus account arrived on 2026-09-09. What this pins is the thing
+    # the account revealed, because it is the kind of error that would have
+    # shipped quietly.
+    #
+    # The entry originally named the GLORYS12V1 multi-year REANALYSIS,
+    # cmems_mod_glo_phy_my_0.083deg_P1D-m. Probed with real credentials, that
+    # product ends 2026-06-23, and every one of this cube's three analysis
+    # steps is in July 2026. It could not have produced a single
+    # contemporaneous field. The analysis-and-forecast currents product covers
+    # them, and that is what is configured.
+    cur = reg.get("glorys12_cur")
+    assert cur.enabled is True
+    assert cur.kind == "copernicus"
+    assert cur.dataset_id == "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m"
+    assert "_my_" not in cur.dataset_id, (
+        "the multi-year reanalysis ends 2026-06-23, before every date in this cube"
+    )
+    assert {v.name for v in cur.variables} == {"uo", "vo"}
+    # Temperature and salinity are deliberately NOT taken from Copernicus even
+    # though the reanalysis carries them: INCOIS's own analysis is the
+    # PS-preferred source and the one the scorecard verifies, and two answers
+    # to one question with nothing to choose between them is worse than one.
+    assert not {"thetao", "so"} & {v.name for v in cur.variables}
+    assert "Copernicus Marine Service" in cur.citation
 def _cube_with_depths(depths, spec_id="local_cube"):
     """A minimal normalized-shape dataset with a chosen depth axis."""
     import numpy as np
@@ -290,3 +293,201 @@ def test_the_shipped_cube_has_a_strictly_increasing_depth_axis():
     assert np.all(np.isfinite(depths))
     assert np.all(np.diff(depths) > 0), "the shipped cube violates its own contract"
     assert depths[0] == 5.0 and depths[-1] == 2000.0
+
+
+# --- three silent wrongs, each reproduced before it was fixed ---------------
+#
+# Found by sweeping the codebase for places that assume a source has a depth
+# axis, ahead of registering a surface (satellite) source. All three were live
+# in shipped code, none of them raised, and each produced a plausible-looking
+# wrong picture rather than an error.
+
+
+def _mixed_dataset():
+    """A volumetric variable and a SURFACE variable in one dataset.
+
+    This is the ordinary shape of an ocean-colour file merged beside a model
+    field, and it is the shape that broke the canonical-order pass.
+    """
+    return xr.Dataset(
+        {
+            "TEMP": (
+                ("time", "ZAX", "latitude", "longitude"),
+                np.zeros((1, 2, 2, 2), dtype="float32"),
+                {"units": "degC"},
+            ),
+            # Deliberately NOT in canonical order.
+            "CHL": (
+                ("latitude", "longitude", "time"),
+                np.zeros((2, 2, 1), dtype="float32"),
+                {"units": "mg/m3"},
+            ),
+        },
+        coords={
+            "time": ("time", np.array(["2026-07-30"], dtype="datetime64[ns]")),
+            "ZAX": ("ZAX", np.array([5.0, 10.0]), {"positive": "down", "units": "m"}),
+            "latitude": ("latitude", np.array([10.0, 11.0])),
+            "longitude": ("longitude", np.array([85.0, 86.0])),
+        },
+    )
+
+
+def _mixed_spec(**over):
+    from app.registry import SourceSpec
+
+    base = dict(
+        id="mixed",
+        title="mixed",
+        kind="erddap_griddap",
+        url="x",
+        dims={"time": "time", "depth": "ZAX", "lat": "latitude", "lon": "longitude"},
+        variables=[{"name": "TEMP"}, {"name": "CHL"}],
+    )
+    base.update(over)
+    return SourceSpec(**base)
+
+
+def test_a_surface_variable_beside_a_volumetric_one_is_still_put_in_canonical_order():
+    """The canonical-order pass used to key on the WHOLE DATASET's dims.
+
+    It built one target order from `ds.dims`, the union over every variable,
+    then skipped any variable whose own dims did not match that union exactly.
+    So the moment a surface variable shared a dataset with a volumetric one,
+    the union contained `depth`, the surface variable never matched, and it was
+    left in whatever order the file happened to use.
+
+    Reproduced before the fix: TEMP came back as (time, depth, lat, lon) and
+    CHL as (lat, lon, time). The renderer indexes by position, so it would have
+    read CHL's TIME axis as latitude. Nothing raised. The comment above that
+    code promises the renderer never has to guess an axis, which is exactly
+    what it was forcing.
+    """
+    out = normalize_dataset(_mixed_dataset(), _mixed_spec())
+
+    assert out["TEMP"].dims == ("time", "depth", "lat", "lon")
+    assert out["CHL"].dims == ("time", "lat", "lon"), (
+        "a surface variable must be ordered by its OWN dims, not by the "
+        "dataset-wide union"
+    )
+
+
+def test_a_declared_variable_with_an_unindexable_axis_is_refused():
+    """Silently leaving it alone is what allowed the bug above."""
+    ds = _mixed_dataset()
+    ds["ODD"] = (
+        ("time", "latitude", "longitude", "nv"),
+        np.zeros((1, 2, 2, 2)),
+        {"units": "1"},
+    )
+
+    with pytest.raises(ValueError) as err:
+        normalize_dataset(ds, _mixed_spec(variables=[{"name": "ODD"}]))
+
+    message = str(err.value)
+    assert "ODD" in message and "nv" in message
+    assert "canonical" in message
+
+
+def test_an_auxiliary_variable_with_an_odd_axis_is_left_alone():
+    """CF bounds carry an `nv` dim and nothing reads them.
+
+    The refusal above must apply to variables the registry DECLARES, not to
+    everything in the file, or an ordinary CF file becomes unloadable.
+    """
+    ds = _mixed_dataset()
+    ds["lat_bnds"] = (("latitude", "nv"), np.zeros((2, 2)), {})
+
+    out = normalize_dataset(ds, _mixed_spec())
+
+    # The canonical RENAME still applies to it, which is right: `latitude`
+    # becomes `lat` everywhere in the dataset. What is skipped is the
+    # TRANSPOSE, because there is no defined position for `nv`.
+    assert out["lat_bnds"].dims == ("lat", "nv")
+    assert out["CHL"].dims == ("time", "lat", "lon")
+
+
+def test_a_cf_override_that_names_nothing_is_refused_at_startup():
+    """One letter out, and the defect it was written for stays in the data.
+
+    Reproduced before the fix: an override for `CHLA` on a source whose
+    variable is `CHL` left the -1.0E34 fill unmasked, and the served minimum
+    came back as -9.999999790214768e+33. Nothing raised. The only symptom would
+    have been a colorbar spanning 1e34, with every real value rendered the same
+    colour and a legend that looked entirely correct.
+    """
+    from app.registry import SourceSpec
+
+    with pytest.raises(Exception) as err:
+        SourceSpec(
+            id="colour",
+            title="colour",
+            kind="erddap_griddap",
+            url="x",
+            dims={"time": "time", "lat": "latitude", "lon": "longitude"},
+            variables=[{"name": "CHL"}],
+            cf_overrides={"CHLA": {"_FillValue": -1.0e34}},
+        )
+
+    message = str(err.value)
+    assert "CHLA" in message
+    assert "CHL" in message, "the message must show what was available"
+
+
+def test_an_override_for_a_declared_but_unfetched_variable_is_allowed():
+    """The registry describes the SOURCE; a download is often a subset.
+
+    `incois_vam_argo` declares corrections for TERR and SERR while the Bay of
+    Bengal subset fetches only TEMP and SAL. Refusing that would refuse a
+    correct config, so the check is against what the registry declares rather
+    than against the variables a file happens to contain.
+    """
+    from app.registry import SourceSpec
+
+    spec = SourceSpec(
+        id="colour",
+        title="colour",
+        kind="erddap_griddap",
+        url="x",
+        dims={"time": "time", "lat": "latitude", "lon": "longitude"},
+        variables=[{"name": "CHL"}, {"name": "KD490"}],
+        cf_overrides={"KD490": {"units": "m-1"}},
+    )
+    assert "KD490" in spec.cf_overrides
+
+
+def test_the_argo_pressure_block_is_not_checked_because_nothing_applies_it():
+    """cf_overrides is consumed in exactly one place: cf.normalize_dataset.
+
+    That runs only on gridded sources. An Argo file is parsed by app/argo.py,
+    which reads the pressure axis itself and never looks at cf_overrides, so
+    the `PRES` block on the gdac entries is documentation rather than an
+    applied correction. Checking those keys against a variable list they were
+    never meant to match would refuse a correct config for the wrong reason,
+    and this test is what stops the validator being tightened into doing that.
+    """
+    from app.registry import SourceSpec
+
+    spec = SourceSpec(
+        id="argo_like",
+        title="argo",
+        kind="gdac_geo",
+        url="x",
+        variables=[{"name": "TEMP"}, {"name": "PSAL"}],
+        cf_overrides={"PRES": {"units": "dbar"}},
+    )
+    assert spec.cf_overrides["PRES"]["units"] == "dbar"
+
+
+def test_the_shipped_registry_still_loads():
+    """The guards above must not have made the real config unloadable."""
+    import pathlib
+
+    from app.registry import load_registry_from
+
+    root = pathlib.Path(__file__).resolve().parents[3] / "data" / "sources.yaml"
+    if not root.is_file():
+        pytest.skip("no sources.yaml")
+
+    reg = load_registry_from(root)
+    assert len(reg.sources) >= 6
+    assert reg.has("incois_vam_argo")

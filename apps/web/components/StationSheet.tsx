@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
-import { levelMean, type DatasetInfo, type FieldColumn } from "@/lib/api";
+import { displayUnits, levelMean, type DatasetInfo, type FieldColumn } from "@/lib/api";
 import ColorbarEditor from "@/components/ColorbarEditor";
 import { cssFor, normalize, type Palette, type Scale } from "@/lib/colormap";
 
@@ -58,7 +58,12 @@ export default function StationSheet(p: Props) {
   const rackRef = useRef<HTMLUListElement>(null);
   const depths = p.column?.depths ?? p.dataset?.depths ?? [];
   const focusIndex = nearestIndex(depths, p.focusDepth);
-  const units = p.column?.units ?? "";
+  /* The PRINTED unit, resolved once by the page and passed in, not re-read
+     from the column here. Reading it from the column is what put "SCALE IN 1"
+     and a rack headed "SAL 1" on the sheet: the cube declares salinity as CF's
+     dimensionless "1", and only the standard name in the catalogue says that
+     "1" means practical salinity (lib/api.ts:displayUnits). */
+  const units = p.units || p.column?.units || "";
 
   /* Roving keyboard control of the rack. The depth cursor is the primary
      instrument on this surface, so it must be operable without a mouse. */
@@ -153,7 +158,7 @@ export default function StationSheet(p: Props) {
                 className="tick stamp"
                 aria-pressed={v.name === p.variable}
                 onClick={() => p.onVariable(v.name)}
-                title={`${v.label} (${v.units || "no units"})`}
+                title={`${v.label} (${displayUnits(v.units, v.canonical) || "no units"})`}
               >
                 {v.name}
               </button>

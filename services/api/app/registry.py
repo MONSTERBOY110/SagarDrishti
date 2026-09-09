@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .config import get_settings
 
@@ -35,10 +35,22 @@ SourceKind = Literal[
     "zarr",
     "mqtt",
     "file",
+    # OASIS Common Alerting Protocol v1.2 warnings (HazardWatch, PRD F13).
+    # Not a field and not a profile: a `cap` source yields warning polygons
+    # with an event, a severity and a validity window, so it is read by
+    # app/cap.py and never enters the variable catalog or the profile table.
+    "cap",
     "mooring",
     "hf_radar",
     "adcp",
 ]
+
+
+#: Kinds whose datasets pass through app/cf.py:normalize_dataset, and therefore
+#: the only kinds for which `cf_overrides` does anything. Everything else is
+#: parsed by a reader that handles its own conventions (app/argo.py for the
+#: Argo kinds, app/text_profiles.py for delimited text).
+_CF_NORMALIZED_KINDS = frozenset({"erddap_griddap", "zarr", "copernicus"})
 
 
 class VariableSpec(BaseModel):
@@ -136,6 +148,57 @@ class SourceSpec(BaseModel):
         if info.data.get("enabled") is False and not v:
             raise ValueError("a disabled source must carry a disabled_reason")
         return v
+
+    @model_validator(mode="after")
+    def _every_cf_override_names_something_real(self):
+        """A cf_overrides key must name a variable or an axis this source declares.
+
+        These corrections are the only defence against the CF defects the real
+        INCOIS files carry, and a key that matches nothing is applied to
+        nothing, silently. Reproduced before adding this: an override written
+        for `CHLA` on a source whose variable is `CHL`, one letter out, left the
+        -1.0E34 fill value unmasked, and the served minimum came back as
+        -9.999999790214768e+33. Nothing raised, nothing logged; the only symptom
+        would have been a colorbar spanning 1e34 with every real value rendered
+        as the same colour.
+
+        The check is against what the REGISTRY declares, deliberately, not
+        against the variables a downloaded file happens to contain.
+        `incois_vam_argo` legitimately declares corrections for TERR and SERR
+        while the Bay of Bengal subset fetches only TEMP and SAL, and refusing
+        that would be refusing a correct config.
+        """
+        if not self.cf_overrides:
+            return self
+
+        # Only for the kinds whose overrides are ACTUALLY APPLIED. They are
+        # consumed in exactly one place, cf.normalize_dataset, which runs only
+        # on gridded sources from tools/preprocess.py. An Argo file is parsed by
+        # app/argo.py, which never reads cf_overrides at all, so the `PRES`
+        # block on the two gdac entries is documentation of the file's own
+        # convention rather than a correction anything applies. Checking those
+        # keys against a variable list they were never meant to match would
+        # refuse a correct config for the wrong reason.
+        if self.kind not in _CF_NORMALIZED_KINDS:
+            return self
+
+        known = {v.name for v in self.variables}
+        for axis in (self.dims.time, self.dims.depth, self.dims.lat, self.dims.lon):
+            if axis:
+                known.add(axis)
+        # The canonical names are legal too: an override may target the axis
+        # after renaming rather than before it.
+        known.update({"time", "depth", "lat", "lon"})
+
+        unknown = sorted(set(self.cf_overrides) - known)
+        if unknown:
+            raise ValueError(
+                f"source {self.id!r} declares cf_overrides for {unknown}, which name "
+                f"neither a declared variable ({sorted(v.name for v in self.variables)}) "
+                f"nor a declared axis. An override that matches nothing is applied to "
+                f"nothing and the defect it was written for stays in the data."
+            )
+        return self
 
     def variable(self, name: str) -> VariableSpec | None:
         return next((v for v in self.variables if v.name == name), None)

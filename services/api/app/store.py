@@ -8,6 +8,7 @@ network client anywhere in `services/api`.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from functools import lru_cache
 from pathlib import Path
 
@@ -263,6 +264,26 @@ def load_profiles() -> pd.DataFrame:
                      "temp", "temp_qc", "psal", "psal_qc"]
         )
     return pd.read_parquet(path)
+
+
+def load_warnings() -> dict:
+    """CAP alerts from the local warnings.json, or an empty layer.
+
+    Written by tools/preprocess.py from every `kind: cap` source. An absent
+    file is not an error and must not read as one: a deployment with no warning
+    feed configured has an empty hazard layer, which is a true statement about
+    the world rather than a broken service.
+    """
+    path = get_settings().warnings_json
+    if not path.is_file():
+        return {"alerts": [], "count": 0, "citations": {}, "generated_from": []}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        # Same reasoning as above, one step stronger: a corrupt file must not
+        # take down the whole API, because every other layer is still valid.
+        return {"alerts": [], "count": 0, "citations": {}, "generated_from": [],
+                "unreadable": [{"file": str(path), "reason": "not readable as JSON"}]}
 
 
 def catalog_entries() -> list[dict]:

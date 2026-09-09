@@ -60,6 +60,22 @@ jobs:
       - run: pnpm web:typecheck
       - run: pnpm web:build
 
+  agent:
+    name: agent plane (tools, guard, refusals)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      # The agent's own tests stub the data plane, so this job needs no cube
+      # and no API: it tests the planner and the no-fabrication guard, which
+      # are the two things about the agent that are worth failing a build over.
+      - run: pip install -r services/api/requirements-dev.txt
+      - name: Agent tests
+        run: python -m pytest services/agent/tests -q
+
   offline:
     name: offline path (OFFLINE=1, no network)
     runs-on: ubuntu-latest
@@ -71,8 +87,8 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r services/api/requirements-dev.txt
-      # Builds a tiny cube from the committed fixtures - no network, no INCOIS.
-      - name: Build fixture cube
+      # Builds the cube from data/sample - no network, no INCOIS, real data.
+      - name: Build cube from the committed sample
         run: python tools/preprocess.py --fixtures
       - name: Boot API and hit the demo endpoints
         env:
@@ -83,11 +99,20 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/healthz && break; sleep 1; done
           curl -sf http://127.0.0.1:8000/healthz | tee /dev/stderr | grep -q '"offline":true'
           curl -sf "http://127.0.0.1:8000/catalog" > /dev/null
+          # The two newest routes read from disk like everything else, so they
+          # are part of the air-gapped promise and are checked here rather than
+          # assumed. The scorecard must produce pairs; the hazard layer must at
+          # minimum answer, since a deployment with no feed legitimately has no
+          # warnings.
+          curl -sf "http://127.0.0.1:8000/scorecard/incois_vam_argo/TEMP" \
+            | grep -q '"rmse"'
+          curl -sf "http://127.0.0.1:8000/warnings?at=2026-07-30T00:00:00Z&rehearsal=true" \
+            | grep -q '"alerts"'
 
   e2e:
     name: demo path (production build, air-gap guard)
     runs-on: ubuntu-latest
-    needs: [data-plane, web]
+    needs: [data-plane, web, agent]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -107,11 +132,30 @@ jobs:
           .venv/bin/python -m pip install -r services/api/requirements-dev.txt
           pnpm install --frozen-lockfile
           pnpm exec playwright install --with-deps chromium
-      # No network: the cube is built from the committed fixtures, so this job
-      # never reaches INCOIS and cannot go red because a government server is down.
-      - name: Build the fixture cube
+      # No network, and REAL data: `--fixtures` builds from data/sample, which
+      # holds 614 KB of genuine INCOIS field and Argo profiles committed for
+      # exactly this (see data/sample/README.md). So this job never reaches a
+      # government server and cannot go red because one is down, and it still
+      # runs the same cube the demo runs.
+      #
+      # It used to build a small INVENTED field instead, and that was a hole
+      # rather than a simplification. The demo-path assertions are claims about
+      # the real Bay of Bengal by design (the surface is warmer than 2000 m,
+      # the cartouche cites incois_argo_10d_VAM, a BGC float really serves
+      # chlorophyll, the 26 degC surface varies in depth), and four of the six
+      # browser tests could not pass against an invented field however correct
+      # the application was. Measured on 2026-09-09: 2 passed, 4 failed, all
+      # four because the app truthfully reported synthetic data.
+      - name: Build the cube from the committed sample
         run: .venv/bin/python tools/preprocess.py --fixtures
-      - name: Production build
+      # NOT a production build step any more. playwright.config.ts builds the
+      # web client itself, inside its own webServer command, because
+      # NEXT_PUBLIC_* is inlined at BUILD time: building here with no API base
+      # bakes in the default port 8000, and the suite then boots its API on
+      # 8100 and the page calls a port nothing is listening on. That failed
+      # silently as an empty scene. The build below stays only as a TYPE and
+      # BUILD check of the client in its own right.
+      - name: Web client builds at all
         run: pnpm web:build
       # The suite boots its own API and web server (see playwright.config.ts) and
       # fails on ANY off-origin request, which is how PRD F11's air-gapped promise

@@ -12,13 +12,14 @@ because the agent is required to cite dataset + timestamp for anything it says
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from . import cf, ogc, plugins, store
+from . import cap, cf, ogc, plugins, scorecard, storyboards, store
 from . import isosurface as isosurface_mod
 from .config import get_settings
 from .registry import load_registry
@@ -232,6 +233,9 @@ def field(
     if slab.depths is not None:
         body["depths"] = slab.depths
     else:
+        # None for a surface product: there is no depth this slab came from.
+        # Emitted rather than omitted so a client can tell "no depth applies"
+        # from "the key is missing because this response is malformed".
         body["depth"] = slab.depth
     if derived_prov is not None:
         # Method, params, plugin and the valid-cell count. A computed number has
@@ -277,6 +281,14 @@ def profiles(
     if df.empty:
         return {"profiles": [], "count": 0, "citation": ""}
 
+    # The observation window of the WHOLE table, captured before any filtering.
+    # The time refusal below must not depend on the bbox: narrowing the box
+    # would otherwise make a date that was valid a moment ago invalid, and the
+    # caller would have no way to tell which of their two parameters the
+    # service was objecting to.
+    observed_first = df["time"].min().normalize()
+    observed_last = df["time"].max().normalize()
+
     if bbox:
         try:
             w, s, e, n = store.parse_bbox(bbox)
@@ -285,12 +297,36 @@ def profiles(
         df = df[df["lon"].between(w, e) & df["lat"].between(s, n)]
 
     if time:
-        try:
-            import pandas as pd
+        import pandas as pd
 
+        try:
             day = pd.Timestamp(time).normalize()
         except (ValueError, TypeError):
             raise HTTPException(400, f"time {time!r} is not a valid ISO-8601 timestamp") from None
+        if pd.isna(day):
+            # NaT parses without raising and then compares False against
+            # everything, so the filter below would return an empty list and
+            # the caller would read it as "no floats that day".
+            raise HTTPException(400, f"time {time!r} is not a usable timestamp")
+
+        # OUT OF RANGE IS A REFUSAL, NOT AN EMPTY LIST. This used to be a bare
+        # equality against the requested day, so a date years away from the
+        # observations answered 200 with count 0. That reads as "no floats in
+        # this box", which is a statement about the ocean, when the true
+        # statement is "you asked outside the window these observations cover".
+        # The field endpoints have refused this since the beginning
+        # (store.nearest_time); the profile endpoint did not, and the two must
+        # agree or a client can hold a field and a float set from different
+        # eras and be told nothing.
+        slack = pd.Timedelta(days=10)
+        if day < observed_first - slack or day > observed_last + slack:
+            raise HTTPException(
+                400,
+                f"time {day.date()} is outside the range these profiles cover "
+                f"({observed_first.date()} to {observed_last.date()}). An empty "
+                f"list here would read as 'no floats in this box' rather than "
+                f"'no observations from that date'.",
+            )
         df = df[df["time"].dt.normalize() == day]
 
     from .argo import profile_summary
@@ -544,4 +580,356 @@ def isosurface(
         "dz_bracket": [round(float(v), 4) for v in mesh.dz_bracket],
         "on_edge": [bool(v) for v in mesh.on_edge],
         **mesh.counts,
+    }
+
+
+@app.get("/scorecard/{source_id}/{var}", tags=["data"])
+def scorecard_endpoint(
+    source_id: str,
+    var: str,
+    bbox: str | None = Query(
+        None, description="west,south,east,north; the whole cube if omitted"
+    ),
+    observed: str = Query("temp", description="the profile column to verify against"),
+) -> dict:
+    """Class-4-style model-versus-observation verification (TRD M5, PRD F9).
+
+    Every other route here serves data. This one says whether the model is any
+    good, as a number, with the observations behind it counted and the refusals
+    counted beside them.
+
+    Verification is in OBSERVATION SPACE (Ryan et al. 2015): the model is
+    interpolated to each profile's own position and depth and the residual is
+    formed there. The reverse, gridding observations onto the model, smooths
+    the observations and flatters the model.
+
+    READ THE `caveat` FIELD BEFORE QUOTING ANY NUMBER FROM THIS. The INCOIS VAM
+    analysis assimilates the same Argo profiles it is being scored against, so
+    the residual bounds how closely the analysis fits data it has already seen.
+    That is a real and useful quantity and it is NOT forecast skill.
+    """
+    reg = load_registry()
+    if not reg.has(source_id):
+        raise HTTPException(404, f"unknown dataset {source_id!r}; see GET /catalog")
+    spec = reg.get(source_id)
+    if not spec.enabled:
+        raise HTTPException(404, f"dataset {source_id!r} is disabled: {spec.disabled_reason}")
+
+    try:
+        ds, ref = store.open_cube(source_id)
+    except KeyError:
+        raise HTTPException(
+            404,
+            f"dataset {source_id!r} is registered but not materialized locally. "
+            f"Run tools/fetch_sample.py and tools/preprocess.py.",
+        ) from None
+
+    if var not in ds.data_vars:
+        # No fallback to a derived product on purpose: a plugin product is
+        # computed FROM this cube, so scoring it against observations would be
+        # scoring our own arithmetic, not INCOIS's model.
+        raise HTTPException(
+            404,
+            f"unknown variable {var!r} in {source_id!r}; available: "
+            f"{', '.join(sorted(ds.data_vars))}",
+        )
+
+    frame = store.load_profiles()
+    if frame.empty:
+        raise HTTPException(
+            404,
+            "there are no in-situ profiles to verify against. Run "
+            "tools/fetch_sample.py then tools/preprocess.py.",
+        )
+    if observed not in frame.columns:
+        raise HTTPException(
+            404,
+            f"no profile column {observed!r} to verify against; these profiles "
+            f"measure {', '.join(_measured_parameters(frame))}",
+        )
+
+    if bbox:
+        try:
+            w, s, e, n = store.parse_bbox(bbox)
+        except store.SubsetError as exc:
+            raise HTTPException(400, str(exc)) from None
+        frame = frame[frame["lon"].between(w, e) & frame["lat"].between(s, n)]
+
+    matches, refusals = scorecard.colocate(
+        ds,
+        frame,
+        variable=var,
+        observed_column=observed,
+        qc_column=f"{observed}_qc",
+        accept_flags=tuple(spec.qc.accept_flags),
+    )
+    card = scorecard.score(
+        matches,
+        refusals,
+        variable=var,
+        units=str(ds[var].attrs.get("units", "")),
+    )
+
+    card["source_id"] = source_id
+    card["observed_column"] = observed
+    card["citation"] = ref.provenance.get("citation") or spec.citation
+    card["retrieved_at"] = ref.provenance.get("retrieved_at")
+    card["accept_flags"] = list(spec.qc.accept_flags)
+    card["max_time_offset_hours"] = scorecard.MAX_TIME_OFFSET.total_seconds() / 3600.0
+    # Which observation programmes contributed, so the number is attributable
+    # to instruments rather than to "the data".
+    card["observation_sources"] = sorted({m.source_id for m in matches if m.source_id})
+    # The registry title as well as the id. A panel that printed
+    # "argo_bgc_indian, rama_mooring_bob" was attributing the number to a
+    # database key rather than to an instrument programme, which is the same
+    # information and none of the meaning.
+    card["observation_titles"] = [
+        reg.get(s).title for s in card["observation_sources"] if reg.has(s)
+    ]
+    card["observation_citations"] = [
+        reg.get(s).citation for s in card["observation_sources"] if reg.has(s)
+    ]
+    return card
+
+
+def _alert_in_bbox(alert: dict, box: tuple[float, float, float, float]) -> bool:
+    """Does any part of this alert's geometry fall inside the box?
+
+    A crude bounding-box overlap on purpose. The alternative is a real
+    polygon-intersection test, which would need a geometry library the offline
+    build does not carry, to answer a question that only decides whether a
+    warning is worth sending to a client that is about to clip it anyway.
+    Erring towards INCLUDING a warning is the right direction for the error:
+    the cost of sending one the viewer cannot see is a few kilobytes, and the
+    cost of withholding one is a hazard nobody was told about.
+    """
+    w, s, e, n = box
+    for area in alert.get("areas", []):
+        for ring in area.get("polygons", []):
+            if any(w <= lon <= e and s <= lat <= n for lon, lat in ring):
+                return True
+        for lon, lat, radius_km in area.get("circles", []):
+            # A degree of latitude is about 111 km everywhere; a degree of
+            # longitude is less, away from the equator. Using the latitude
+            # figure for both over-estimates the circle's east-west reach,
+            # which again errs towards including the warning.
+            pad = radius_km / 111.0
+            if w - pad <= lon <= e + pad and s - pad <= lat <= n + pad:
+                return True
+    return False
+
+
+def _alert_from_dict(body: dict) -> cap.Alert:
+    """The inverse of Alert.as_dict, for the ingest's own output.
+
+    Not a general CAP-JSON reader: it only ever sees what tools/preprocess.py
+    wrote, which is why it can assume the shape rather than validate it.
+    """
+    infos = []
+    for i in body.get("infos", []):
+        areas = [
+            cap.Area(
+                desc=a.get("desc", ""),
+                polygons=[[(p[0], p[1]) for p in ring] for ring in a.get("polygons", [])],
+                circles=[(c[0], c[1], c[2]) for c in a.get("circles", [])],
+                geocodes=a.get("geocodes", {}),
+            )
+            for a in i.get("areas", [])
+        ]
+        infos.append(
+            cap.Info(
+                language=i.get("language", ""),
+                category=i.get("category", ""),
+                event=i.get("event", ""),
+                urgency=i.get("urgency", "Unknown"),
+                severity=i.get("severity", "Unknown"),
+                certainty=i.get("certainty", "Unknown"),
+                effective=cap.parse_time(i.get("effective")),
+                onset=cap.parse_time(i.get("onset")),
+                expires=cap.parse_time(i.get("expires")),
+                headline=i.get("headline", ""),
+                description=i.get("description", ""),
+                instruction=i.get("instruction", ""),
+                web=i.get("web", ""),
+                parameters=i.get("parameters", {}),
+                areas=areas,
+            )
+        )
+    return cap.Alert(
+        identifier=body.get("identifier", ""),
+        sender=body.get("sender", ""),
+        sent=cap.parse_time(body.get("sent")),
+        status=body.get("status", "Unknown"),
+        msg_type=body.get("msg_type", "Alert"),
+        scope=body.get("scope", ""),
+        references=body.get("references", []),
+        infos=infos,
+        source=body.get("source", ""),
+        notes=body.get("notes", []),
+    )
+
+
+@app.get("/warnings", tags=["data"])
+def warnings(
+    at: str | None = Query(
+        None,
+        description=(
+            "ISO-8601 instant to evaluate validity at. Defaults to now. The "
+            "client passes the SCENE time, so scrubbing the time rule moves "
+            "the hazard layer with the field"
+        ),
+    ),
+    bbox: str | None = Query(None, description="west,south,east,north; everywhere if omitted"),
+    lang: str = Query("en", description="which CAP info block to serve the text from"),
+    rehearsal: bool = Query(
+        False,
+        description=(
+            "include alerts whose CAP status is Exercise. Off by default: a "
+            "drill must never reach a globe unless someone asked for it"
+        ),
+    ),
+) -> dict:
+    """Active CAP warnings for HazardWatch (PRD F13, TRD M8).
+
+    The problem statement's portal theme is DISASTER MANAGEMENT and "timely
+    hazard assessment" is its first stated mandate, so this route is the half
+    of the brief the field endpoints do not answer.
+
+    WHAT IT WILL NOT DO, which is the whole design:
+
+      * It will not serve a cancelled alert. A `Cancel` message withdraws what
+        it references, and a withdrawn tsunami warning still on a globe is the
+        worst thing this layer could do.
+      * It will not serve a superseded one, so a hazard is not drawn twice with
+        two different severities.
+      * It will not serve a drill unless `rehearsal=true`, and even then the
+        alert keeps its `Exercise` status all the way to the client, which is
+        required to say so.
+      * It will not serve an alert outside its own validity window, compared in
+        the alert's own timezone.
+
+    Every refusal is counted and returned beside the alerts, so "two warnings"
+    is never a number without the ones that were withheld and why.
+    """
+    import pandas as pd
+
+    payload = store.load_warnings()
+
+    if at:
+        try:
+            when = pd.Timestamp(at)
+        except (ValueError, TypeError):
+            raise HTTPException(400, f"at {at!r} is not a valid ISO-8601 instant") from None
+        if pd.isna(when):
+            raise HTTPException(400, f"at {at!r} is not a usable instant")
+        # A naive instant is read as UTC rather than as local time. Stated,
+        # because the difference is five and a half hours against a feed that
+        # stamps +05:30 and it would silently shift every validity window.
+        moment = when.tz_localize("UTC") if when.tzinfo is None else when
+        moment = moment.to_pydatetime()
+    else:
+        moment = datetime.now(timezone.utc)
+
+    box = None
+    if bbox:
+        try:
+            box = store.parse_bbox(bbox)
+        except store.SubsetError as exc:
+            raise HTTPException(400, str(exc)) from None
+
+    # Rehydrated into Alert objects rather than filtered as dicts: the
+    # cancel/supersede/expiry rules live in app/cap.py and are tested there,
+    # and a second implementation of them here is exactly how a false alarm
+    # gets shipped.
+    alerts = [_alert_from_dict(a) for a in payload.get("alerts", [])]
+    live, refusals = cap.active(alerts, now=moment, allow_exercise=rehearsal)
+
+    outside = 0
+    if box is not None:
+        inside = []
+        for a in live:
+            if _alert_in_bbox(a.as_dict(), box):
+                inside.append(a)
+            else:
+                outside += 1
+        live = inside
+
+    served = []
+    for a in live:
+        body = a.as_dict()
+        chosen = a.info(lang)
+        # The text comes from ONE language block and the response says which.
+        # CAP blocks are authored per language rather than translated from a
+        # canonical one, so silently mixing them would hand an English reader a
+        # Telugu instruction under an English headline.
+        body.update(
+            {
+                "language": chosen.language,
+                "headline": chosen.headline,
+                "description": chosen.description,
+                "instruction": chosen.instruction,
+                "area_desc": "; ".join(x.desc for x in chosen.areas if x.desc)
+                or "; ".join(x.desc for x in a.geometry() if x.desc),
+                "drawable": bool(a.geometry()),
+            }
+        )
+        del body["infos"]
+        served.append(body)
+
+    refused = refusals.as_dict()
+    refused["outside_bbox"] = outside
+    refused["total"] += outside
+
+    return {
+        "at": moment.isoformat(),
+        "count": len(served),
+        "alerts": served,
+        "refused": refused,
+        "language": lang,
+        "rehearsal": rehearsal,
+        # How many of what is being shown are drills. The panel needs this to
+        # decide whether to stamp itself, and it must come from the server so a
+        # client cannot forget to look.
+        "exercise_count": sum(1 for a in served if a["status"] == "Exercise"),
+        "method": payload.get("method", cap.METHOD),
+        "sources": payload.get("generated_from", []),
+        "citations": payload.get("citations", {}),
+        "simplify_tolerance_deg": payload.get(
+            "simplify_tolerance_deg", cap.SIMPLIFY_TOLERANCE_DEG
+        ),
+        # CAP documents on disk that could not be read at ingest. A warning we
+        # failed to parse is a warning nobody is being shown, so it is carried
+        # here rather than left in a build log.
+        "unreadable": payload.get("unreadable", []),
+    }
+
+
+@app.get("/storyboards", tags=["data"])
+def storyboard_index() -> dict:
+    """The guided tours available (PRD F12, TRD M7).
+
+    A tour is a list of steps: a patch to the scene, a line of narration, and
+    the evidence that line rests on. Replaying one drives the same controls a
+    person drives, so it can do nothing a user could not do by hand, and it
+    needs no LLM at all: it replays identically with the network off, which is
+    the whole point of shipping it before the agent plane exists.
+
+    Served from here rather than bundled into the client so there is ONE copy:
+    the same files the data-plane tests validate are the files the browser
+    plays, and TRD M4's `run_storyboard` tool will later call this same route
+    rather than a second one.
+
+    A malformed tour is refused by name and does not take the others down. One
+    typo should not cost a demo every tour it has.
+    """
+    tours, refused = storyboards.load_tours(get_settings().storyboards_dir)
+    return {
+        "tours": [t.as_dict() for t in tours],
+        "count": len(tours),
+        # Served, not logged. A tour that failed to load is a tour nobody can
+        # run, and finding that out on stage is the failure mode.
+        "refused": refused,
+        # What a step is allowed to patch, so a client can check the contract
+        # it is being asked to honour instead of guessing.
+        "patchable": sorted(storyboards.PATCHABLE),
     }

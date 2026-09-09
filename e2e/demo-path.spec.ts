@@ -56,6 +56,32 @@ function watch(page: Page): Watchers {
   return w;
 }
 
+/** Record which renderer Chromium actually got.
+ *
+ * Not decoration. The whole suite is five times slower on SwiftShader than on
+ * a real GPU, and when it timed out the failure looked like a broken scene
+ * rather than a slow one, which cost a diagnosis. Software rendering is the
+ * NORMAL case here (headless Chromium usually falls back to it, and CI has no
+ * GPU), so this annotation is what tells a reader of a slow report whether the
+ * machine or the code is at fault.
+ */
+async function recordRenderer(page: Page) {
+  const renderer = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    const gl = (canvas.getContext("webgl2") ||
+      canvas.getContext("webgl")) as WebGLRenderingContext | null;
+    if (!gl) return "no webgl";
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    return info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "unknown";
+  });
+  const software = /swiftshader|llvmpipe|software/i.test(renderer);
+  test.info().annotations.push({
+    type: software ? "renderer (SOFTWARE, expect a slow run)" : "renderer (hardware)",
+    description: renderer,
+  });
+  return { renderer, software };
+}
+
 /** Wait until the 3D scene has genuinely built AND painted its slice stack.
  *
  * Both conditions matter and they complete in separate effects: one builds the
@@ -85,6 +111,7 @@ test.describe("SagarDrishti demo path", () => {
 
     // --- 0. the scene loads at all -------------------------------------------
     await page.goto(PROBE, { waitUntil: "networkidle" });
+    await recordRenderer(page);
     await sceneReady(page);
 
     const scene = await page.evaluate(() => {
@@ -154,8 +181,14 @@ test.describe("SagarDrishti demo path", () => {
     await expect(panel.locator("h2")).toContainText(mark!.wmo, { timeout: 30_000 });
     await expect(panel).toContainText("Wong et al. 2020"); // the QC policy, cited
     await expect(panel).toContainText("Argo GDAC");
-    // We must NOT claim a skill figure from a nearest-cell comparison.
-    await expect(panel).toContainText(/not Class-4 co-location/i);
+    // We must NOT claim a skill figure from a nearest-cell comparison, and now
+    // that a real verification certificate exists this panel has to point at
+    // it rather than only disclaim itself: a reader who sees "no skill figure
+    // is claimed" beside a dashed model curve, with a certificate printing an
+    // RMSE directly above, must be told the two are different comparisons.
+    await expect(panel).toContainText(/nearest grid cell/i);
+    await expect(panel).toContainText(/no skill figure is claimed/i);
+    await expect(panel).toContainText(/verification certificate above/i);
 
     // --- 5. the colorbar is editable (PS requirement F4) ---------------------
     await page.getByRole("button", { name: "Edit" }).click();
@@ -285,9 +318,30 @@ test.describe("SagarDrishti demo path", () => {
     await sceneReady(page);
 
     // The legend names only the classes present, so its rows ARE the claim.
+    // Three instrument classes are live: core Argo floats, BGC floats, and a
+    // RAMA moored buoy read through the plugin source-reader extension point.
     const legend = page.locator(".legend");
     await expect(legend).toContainText("Argo float");
     await expect(legend).toContainText("BGC float");
+    await expect(legend).toContainText("Mooring");
+
+    // Each class is told apart by SILHOUETTE, not colour, so the legend swatch
+    // count must match the number of classes actually drawn.
+    const classes = await page.evaluate(() => {
+      const s = (
+        window as unknown as { __sagarScene?: { viewer: { entities: { values: any[] } } } }
+      ).__sagarScene!;
+      const seen: Record<string, number> = {};
+      for (const e of s.viewer.entities.values) {
+        const props = e.properties;
+        if (!props || !props.platformKind) continue;
+        const kind = props.platformKind.getValue();
+        seen[kind] = (seen[kind] ?? 0) + 1;
+      }
+      return seen;
+    });
+    expect(Object.keys(classes).sort()).toEqual(["gdac_bgc", "gdac_geo", "mooring"]);
+    expect(classes.mooring).toBeGreaterThan(0);
 
     // Find a BGC mark by the platform kind the entity carries, not by position.
     const mark = await page.evaluate(() => {
@@ -479,6 +533,289 @@ test.describe("SagarDrishti demo path", () => {
     );
 
     expect(w.offOrigin, "PRD F11: the mesh must come from our own origin").toEqual([]);
+    expect(w.consoleErrors, "no console error").toEqual([]);
+  });
+
+  test("the model is scored against the instruments, with its caveat attached", async ({
+    page,
+  }) => {
+    // PS requirement F9. This is the one surface that makes a CLAIM ABOUT THE
+    // MODEL rather than drawing it, so what is asserted here is not that a
+    // number appears but that it cannot appear WITHOUT the two things that make
+    // it defensible: the refusals it excluded, and the sentence saying it is an
+    // analysis fit and not forecast skill.
+    const w = watch(page);
+    await page.goto(PROBE, { waitUntil: "networkidle" });
+    await sceneReady(page);
+
+    const card = page.locator('section[aria-label="Model verification"]');
+    await expect(card).toBeVisible();
+
+    // Collapsed, the certificate still carries the headline claim beside the
+    // field. That IS the feature: PRIOR-ART section B.12 records that no
+    // operational viewer shows skill next to what it is drawing.
+    await expect(card).toContainText("Bias");
+    await expect(card).toContainText("RMSE");
+    // Bias AND RMSE, never one alone: a model 2 degrees warm in half the ocean
+    // and 2 cold in the other half has a bias of zero.
+    const figures = card.locator(".verdict__figvalue");
+    await expect(figures).toHaveCount(3);
+
+    // The caveat is visible BEFORE anything is expanded. If this ever fails,
+    // the tool is publishing a skill claim it cannot defend.
+    await expect(card.locator(".verdict__caveat")).toContainText("NOT forecast skill");
+    await expect(card.locator(".verdict__caveat")).toContainText("assimilates");
+
+    // --- the breakdown -------------------------------------------------------
+    await card.locator("button.verdict__toggle").click();
+
+    const bands = card.locator(".scoretable__row");
+    await expect(bands).toHaveCount(7);
+
+    // The refusals are served next to the pairs, so "11,718 pairs" can never be
+    // read without "and this many levels could not be paired".
+    await expect(card).toContainText("Levels not paired");
+
+    // At most one band is ever marked as the worst. Deliberately NOT asserting
+    // WHICH band: this suite runs against the synthetic fixture cube on CI and
+    // against the downloaded one locally, and a claim about the real Bay of
+    // Bengal must not rest on whichever cube happened to be on disk. That
+    // claim is made where it belongs, against real data, in
+    // services/api/tests/test_scorecard.py:
+    // test_the_real_cube_scores_worst_in_the_thermocline, which skips when the
+    // real cube is absent rather than quietly passing on a fixture.
+    const marked = card.locator('.scoretable__row[data-worst="true"]');
+    expect(await marked.count(), "never more than one worst band").toBeLessThanOrEqual(1);
+
+    // Every printed RMSE is a real number, which is the contract this surface
+    // owes regardless of which cube is behind it.
+    const rmse = await card.locator(".scoretable__row").evaluateAll((rows) =>
+      rows.map((r) => r.lastElementChild?.textContent?.trim() ?? ""),
+    );
+    expect(rmse).toHaveLength(7);
+    for (const v of rmse) expect(v === "n/a" || Number.isFinite(Number(v))).toBe(true);
+
+    // Attribution: the number belongs to instrument programmes, not to "data".
+    await expect(card).toContainText("Scored against");
+    await expect(card.locator(".verdict__sources li")).not.toHaveCount(0);
+
+    expect(w.offOrigin, "PRD F11: the certificate must come from our own origin").toEqual([]);
+    expect(w.consoleErrors, "no console error").toEqual([]);
+  });
+
+  test("a hazard is drawn over the water, and a drill can never pass for one", async ({
+    page,
+  }) => {
+    // PS requirement F13. The problem statement's portal theme IS Disaster
+    // Management, so this is the half of the brief the field layers do not
+    // answer, and it is also the one layer where a bug is a FALSE ALARM rather
+    // than a wrong number. Almost everything below asserts a negative.
+    const w = watch(page);
+    await page.goto(PROBE, { waitUntil: "networkidle" });
+    await sceneReady(page);
+
+    const panel = page.locator('[aria-label="HazardWatch warnings"]');
+    await expect(panel).toBeVisible();
+
+    // --- 1. the ocean hazards the PS names, drawn on the globe --------------
+    await expect(panel.locator(".hazard__row")).not.toHaveCount(0);
+    await expect(panel).toContainText("Tsunami");
+    await expect(panel).toContainText("High Wave");
+
+    const drawn = await page.evaluate(() => {
+      const s = (window as unknown as { __sagarScene?: any }).__sagarScene;
+      return { count: s.hazardCount(), severities: s.hazardSeverities() };
+    });
+    // A polygon and a circle for the tsunami, a polygon for the high wave.
+    expect(drawn.count, "warning geometry must reach the globe").toBeGreaterThanOrEqual(2);
+    expect(drawn.severities, "CAP severity travels to the entity").toContain("Extreme");
+
+    // --- 2. a drill is stamped as one, everywhere ---------------------------
+    // Four independent guards exist for this and the test checks the two a
+    // user can see. If a rehearsal bulletin can reach the globe unmarked, this
+    // tool is capable of announcing a tsunami that is not happening.
+    await expect(panel.locator(".hazard__drill")).toHaveText(/exercise/i);
+    await expect(panel.locator(".hazard__tag").first()).toHaveText(/exercise/i);
+
+    // --- 3. and it disappears the moment rehearsals are switched off --------
+    await panel.locator(".hazard__toggle input").uncheck();
+    await expect(panel.locator(".hazard__drill")).toHaveCount(0);
+    await expect(panel).toContainText(/no warning is valid/i);
+    // The ledger, not a bare empty state: the count of what did not apply and
+    // why is part of the answer here as it is on the scorecard.
+    await expect(panel).toContainText(/drills/i);
+
+    await page.waitForFunction(
+      () => (window as unknown as { __sagarScene?: any }).__sagarScene.hazardCount() === 0,
+      undefined,
+      { timeout: 20_000 },
+    );
+
+    await panel.locator(".hazard__toggle input").check();
+    await page.waitForFunction(
+      () => (window as unknown as { __sagarScene?: any }).__sagarScene.hazardCount() > 0,
+      undefined,
+      { timeout: 20_000 },
+    );
+
+    // --- 4. a warning opens into its own bulletin ---------------------------
+    await panel.locator(".hazard__row").first().click();
+    const detail = panel.locator(".hazard__detail");
+    await expect(detail).toBeVisible();
+    // Real CAP is multilingual, and the tsunami bulletin carries three
+    // languages. That is the same fact the voice layer will rest on.
+    await expect(detail).toContainText("hi-IN");
+    await expect(detail).toContainText("ta-IN");
+    await expect(detail).toContainText(/EXERCISE/);
+
+    // --- 5. the layer shares the field's time axis --------------------------
+    // Scrubbing to the first analysis step must change what is warned about.
+    // A hazard layer pinned to the wall clock while the field showed July
+    // would be two different days on one screen.
+    // The ticks are radios, not buttons: the time rule is a radiogroup.
+    await page.getByRole("radio", { name: "07-10" }).click();
+    await page.waitForFunction(
+      () => (window as unknown as { __sagarScene?: any }).__sagarScene.hazardCount() === 0,
+      undefined,
+      { timeout: 30_000 },
+    );
+    await expect(panel).toContainText(/no warning is valid/i);
+
+    expect(w.offOrigin, "PRD F11: warnings must come from our own origin").toEqual([]);
+    expect(w.consoleErrors, "no console error").toEqual([]);
+  });
+
+  test("a guided tour drives the real scene and shows its evidence", async ({ page }) => {
+    // PS requirement F12. Two things are being checked and the second is the
+    // one that matters.
+    //
+    // That a tour drives the SAME scene the controls drive, so it can do
+    // nothing a presenter could not do by hand, and a step that no-ops is
+    // caught here rather than on stage where it looks exactly like a step that
+    // worked.
+    //
+    // And that the narration carries its evidence. Narration is the one place
+    // in this product where a number can reach a judge without passing through
+    // a tool result, so the on-screen fact behind each sentence is rendered
+    // beside it rather than trusted.
+    const w = watch(page);
+    await page.goto(PROBE, { waitUntil: "networkidle" });
+    await sceneReady(page);
+
+    await page.locator(".tour__open").click();
+    const picks = page.locator(".tour__pick");
+    await expect(picks).not.toHaveCount(0);
+
+    // The tour that opens an instrument, because it is the one whose patch has
+    // to reach furthest into the application.
+    await picks.filter({ hasText: "The instruments" }).click();
+
+    const stage = page.locator('[aria-label="Guided tour"]');
+    await expect(stage).toBeVisible();
+    await expect(stage.locator(".tour__narration")).not.toBeEmpty();
+    // One progress segment per step, so a presenter can see what is left.
+    const segments = await stage.locator(".tour__ticks span").count();
+    expect(segments).toBeGreaterThanOrEqual(5);
+
+    // --- the tour really moves the scene ------------------------------------
+    // Step forward until the step that selects a float, then check the
+    // instrument panel actually opened on it. Paused first: an autoplaying
+    // tour and a test stepping through it would race.
+    await stage.getByRole("button", { name: "Pause" }).click();
+    const profile = page.locator('[aria-label="Instrument profile"]');
+    for (let i = 0; i < 6; i++) {
+      const header = await profile.locator("h2").innerText();
+      if (/2903831/.test(header)) break;
+      await stage.getByRole("button", { name: "Next" }).click();
+    }
+    await expect(profile.locator("h2")).toContainText("2903831", { timeout: 30_000 });
+    // Cited to the BGC files, which is the tour patching a real selection
+    // rather than the panel happening to be open.
+    await expect(profile).toContainText("BGC synthetic profiles");
+
+    // --- and shows what the sentence rests on -------------------------------
+    await expect(stage.locator(".tour__evidence li").first()).not.toBeEmpty();
+
+    // --- a presenter can drive it from the keyboard -------------------------
+    const before = await stage.locator(".tour__step").innerText();
+    await page.keyboard.press("ArrowRight");
+    await expect(stage.locator(".tour__step")).not.toHaveText(before);
+    await page.keyboard.press("ArrowLeft");
+    await expect(stage.locator(".tour__step")).toHaveText(before);
+
+    // --- and get out of it --------------------------------------------------
+    await page.keyboard.press("Escape");
+    await expect(stage).toHaveCount(0);
+    await expect(page.locator(".tour__open")).toBeVisible();
+
+    // No tour file failed to load. A tour nobody can run is worse than no tour.
+    await expect(page.locator(".tour__problem")).toHaveCount(0);
+
+    expect(w.offOrigin, "PRD F11: tours must come from our own origin").toEqual([]);
+    expect(w.consoleErrors, "no console error").toEqual([]);
+  });
+
+  test("the agent answers from tools, shows its working, and refuses the rest", async ({
+    page,
+  }) => {
+    // PS requirement F8, TRD M4. The one surface in this product where a
+    // sentence is COMPOSED rather than measured, so it is the one that owes
+    // the most evidence, and this test is mostly about the evidence.
+    const w = watch(page);
+    await page.goto(PROBE, { waitUntil: "networkidle" });
+    await sceneReady(page);
+
+    const ask = page.locator('[aria-label="Ask Samudra Sahayak"]');
+    await expect(ask).toBeVisible({ timeout: 30_000 });
+
+    // --- an answer built from a tool ----------------------------------------
+    await ask.getByRole("button", { name: "How good is the model?" }).click();
+    const text = ask.locator(".ask__text");
+    await expect(text).toContainText("RMSE", { timeout: 30_000 });
+    // The figure the certificate shows, reached through the agent.
+    await expect(text).toContainText("0.602");
+    // And the caveat, which must travel with it wherever it is quoted.
+    await expect(text).toContainText(/NOT forecast skill/i);
+
+    // --- it says what produced it -------------------------------------------
+    // "rules", because there is no language model in the loop. An audience
+    // that assumes otherwise has been misled, and being found out is worse
+    // than being modest.
+    await expect(ask.locator(".ask__planner")).toContainText("rules");
+
+    // --- and shows its working ----------------------------------------------
+    await ask.locator(".ask__tracetoggle").click();
+    const trace = ask.locator(".ask__trace > li");
+    await expect(trace).not.toHaveCount(0);
+    await expect(trace.first().locator(".ask__tool")).toContainText("compare_model_obs");
+    // Every answer that quotes data cites it.
+    await expect(ask.locator(".ask__cites li").first()).toContainText("INCOIS");
+
+    // --- it moves the scene, through the same store a click goes through -----
+    const depthBefore = await page.locator(".scalebar").innerText();
+    await ask.locator(".ask__input").fill("how warm is it at 500 m?");
+    await ask.getByRole("button", { name: "Ask" }).click();
+    await expect(text).toContainText("500 m", { timeout: 30_000 });
+    await expect(page.locator(".scalebar")).not.toHaveText(depthBefore);
+
+    // --- and refuses what it cannot answer -----------------------------------
+    // TRD M4 names this as something judges test. An ocean viewer asked about
+    // the cricket should say it cannot, not produce a sentence shaped like an
+    // answer.
+    await ask.locator(".ask__input").fill("who won the cricket");
+    await ask.getByRole("button", { name: "Ask" }).click();
+    await expect(text).toContainText(/cannot answer that/i, { timeout: 30_000 });
+    await expect(text).toHaveAttribute("data-refused", "true");
+    // A refusal that lists what it CAN do is useful; one that just says no is
+    // a dead end.
+    await expect(text).toContainText(/I can tell you/i);
+
+    // Nothing about a forecast, either, because nothing here forecasts.
+    await ask.locator(".ask__input").fill("what will the temperature be next Tuesday");
+    await ask.getByRole("button", { name: "Ask" }).click();
+    await expect(text).toContainText(/nothing here forecasts/i, { timeout: 30_000 });
+
+    expect(w.offOrigin, "PRD F11: the agent must be on our own origin").toEqual([]);
     expect(w.consoleErrors, "no console error").toEqual([]);
   });
 

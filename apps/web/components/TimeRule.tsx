@@ -23,12 +23,26 @@ interface Props {
 const STEP_MS = 1400;
 
 export default function TimeRule({ times, loaded, current, playing, onTime, onTogglePlay }: Props) {
-  const index = Math.max(0, times.indexOf(current));
+  /* -1 when the scene's time is not on THIS axis, and that is deliberately
+     not clamped to 0.
+       `Math.max(0, indexOf(current))` used to sit here, so a time the axis
+     does not contain drew the solid "you are here" tick on the FIRST step. On
+     a projector that is a scrubber pointing confidently at a date the scene is
+     not showing, which is worse than pointing at nothing. It is reachable
+     whenever the dataset changes before the scene time is reset to the new
+     axis, and it would become routine the day a second dataset with its own
+     epoch is added. */
+  const index = times.indexOf(current);
+  const offAxis = index < 0 && times.length > 0;
 
   useEffect(() => {
     if (!playing || times.length < 2) return;
     const t = setInterval(() => {
-      onTime(times[(times.indexOf(current) + 1 + times.length) % times.length]);
+      const at = times.indexOf(current);
+      // Same root cause as above: -1 made this land on step 0 and silently
+      // "work", which is what hid the defect. Off the axis, play starts from
+      // the beginning EXPLICITLY rather than by arithmetic accident.
+      onTime(at < 0 ? times[0] : times[(at + 1) % times.length]);
     }, STEP_MS);
     return () => clearInterval(t);
   }, [playing, times, current, onTime]);
@@ -54,8 +68,18 @@ export default function TimeRule({ times, loaded, current, playing, onTime, onTo
       </button>
 
       <div style={{ flex: 1, minWidth: "12rem" }}>
-        <div className="label" style={{ marginBottom: "0.3125rem" }}>
-          Time · UTC
+        <div
+          className="label label--split"
+          style={{ marginBottom: "0.3125rem" }}
+        >
+          <span>Time · UTC</span>
+          {/* Saying nothing here is how the old clamp got away with it: with no
+              tick lit and no message, the rule just looked idle. */}
+          {offAxis && (
+            <span className="overprint" title={`Scene time ${current} is not on this axis`}>
+              off axis
+            </span>
+          )}
         </div>
         <div
           role="radiogroup"

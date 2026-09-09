@@ -5,9 +5,15 @@ the API, the tests, the renderer -- reads what this leaves in data/raw/. That
 is what makes OFFLINE=1 the default posture rather than a mode we remember to
 switch on (PRD F11).
 
-Sources (both open, no credentials -- see docs/adr/0003):
+Sources. The first four are open and need no credentials (docs/adr/0003):
   * INCOIS ERDDAP griddap `incois_argo_10d_VAM`: 4D TEMP/SAL, 24 levels 5-2000 m
-  * Argo GDAC (Ifremer) geo/indian_ocean daily profile files
+  * Argo GDAC (Ifremer) geo/indian_ocean daily profile files, core and BGC
+  * RAMA moored buoys via the OSMC ERDDAP
+  * NDMA SACHET, India national CAP alert feed
+  * Copernicus Marine GLORYS currents. The ONE source needing an account, and
+    the only part of PS requirement F1 no INCOIS source can answer: their free
+    ERDDAP publishes surface geostrophic currents only. Credentials live in
+    .env, which is gitignored. Absent, the fetch says so and skips.
 
 Usage:
     python tools/fetch_sample.py                 # 3 model steps + 3 Argo days
@@ -19,7 +25,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -38,7 +46,17 @@ TIMEOUT = 180
 BBOX = (80.0, 5.0, 95.0, 25.0)  # west, south, east, north
 
 
-def _get(url: str, dest: Path, label: str) -> bool:
+def _get(url: str, dest: Path, label: str, *, empty_is_ok: bool = False) -> bool:
+    """Download to `dest`. False on failure, and the reason is printed.
+
+    `empty_is_ok` turns an ERDDAP 404 from an error into a stated fact. ERDDAP
+    answers 404 for "your constraints matched no rows", which for a moored
+    array is not a fault at all: it means that buoy was not in the water in the
+    window asked for. Two of the three Bay of Bengal RAMA moorings answer this
+    way today (12n90e stopped 2026-03-10, 8n90e stopped 2025-09-12), and
+    printing "!! HTTP 404" for a mooring that is simply not deployed would
+    read as a broken fetch rather than as a degraded array.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
     print(f"  {label}\n    <- {url}")
     try:
@@ -48,7 +66,10 @@ def _get(url: str, dest: Path, label: str) -> bool:
                 f.write(chunk)
                 total += len(chunk)
     except HTTPError as e:
-        print(f"    !! HTTP {e.code} {e.reason}")
+        if e.code == 404 and empty_is_ok:
+            print("    -- no data in this window (not an error)")
+        else:
+            print(f"    !! HTTP {e.code} {e.reason}")
         return False
     except URLError as e:
         print(f"    !! network error: {e.reason}")
@@ -76,6 +97,17 @@ def fetch_model(steps: int, list_only: bool = False) -> Path | None:
     if list_only:
         for t in times[-8:]:
             print(f"    {t}")
+        return None
+
+    if steps < 1:
+        # `times[-0:]` is `times[0:]`, which is EVERY timestep. This is the
+        # classic Python slice trap and it is not hypothetical: --steps 0,
+        # meant as "skip the model", downloaded all 813 steps back to 2004,
+        # 52 MB of them, and the next preprocess rebuilt the demo cube around
+        # a twenty-two year time axis that the renderer then tried to prefetch
+        # in full. Guarded here rather than at the argument parser so no caller
+        # of this function can reintroduce it.
+        print(f"  --steps {steps} means skip; nothing fetched")
         return None
 
     w, s, e, n = BBOX
@@ -228,6 +260,300 @@ def fetch_argo_bgc(core_files: list[Path]) -> list[Path]:
     return got
 
 
+#: The Bay of Bengal arm of the RAMA moored array, on the 90 E line. Found by
+#: asking the array itself which stations lie in the demo box rather than by
+#: pasting a list: tabledap/pmelTaoDyT.json?array,station,latitude,longitude
+#: &distinct() returns 154 stations globally, of which exactly three fall
+#: inside (80-95 E, 5-25 N).
+RAMA_TABLEDAP = "https://osmc.noaa.gov/erddap/tabledap/pmelTaoDyT.nc"
+RAMA_STATIONS = "https://osmc.noaa.gov/erddap/tabledap/pmelTaoDyT.json"
+RAMA_COLUMNS = (
+    "array,station,wmo_platform_code,longitude,latitude,time,depth,T_20,QT_5020"
+)
+
+
+def discover_rama_stations() -> list[str]:
+    """Which RAMA moorings are inside the demo box, asked of the array itself."""
+    url = RAMA_STATIONS + "?array,station,latitude,longitude&distinct()"
+    print(f"\nRAMA moored array: {url}")
+    try:
+        with urlopen(url, timeout=TIMEOUT) as r:
+            table = json.load(r)["table"]
+    except (HTTPError, URLError) as e:
+        print(f"    !! could not list stations: {e}")
+        return []
+
+    west, south, east, north = BBOX
+    columns = table["columnNames"]
+    i_station = columns.index("station")
+    i_lat = columns.index("latitude")
+    i_lon = columns.index("longitude")
+    inside = [
+        str(row[i_station])
+        for row in table["rows"]
+        if isinstance(row[i_lat], (int, float))
+        and isinstance(row[i_lon], (int, float))
+        and south <= row[i_lat] <= north
+        and west <= row[i_lon] <= east
+    ]
+    print(
+        f"    {len(inside)} of {len(table['rows'])} stations inside {BBOX}: "
+        f"{', '.join(inside) or 'none'}"
+    )
+    return inside
+
+
+def fetch_moorings(around: date, days: int = 30) -> list[Path]:
+    """One NetCDF per RAMA mooring, covering the model window.
+
+    The window is centred on the model's own latest date so the moorings are
+    CONTEMPORANEOUS with the field they are drawn beside. That is the property
+    the Oceansat-2 chlorophyll source could not offer, and it is the reason
+    this source is worth ingesting where that one is not.
+    """
+    reg = load_registry_from(REPO / "data" / "sources.yaml")
+    if not reg.has("rama_mooring_bob"):
+        return []
+    spec = reg.get("rama_mooring_bob")
+    if not spec.enabled:
+        print("\nRAMA: source disabled in sources.yaml, skipping")
+        return []
+
+    stations = spec.platforms or discover_rama_stations()
+    if not stations:
+        return []
+
+    start = (around - timedelta(days=days)).isoformat()
+    end = (around + timedelta(days=5)).isoformat()
+
+    got: list[Path] = []
+    for station in stations:
+        dest = RAW / "moorings" / f"rama_{station}.nc"
+        if dest.is_file():
+            print(f"  {dest.name} already present")
+            got.append(dest)
+            continue
+        # Tomcat rejects a raw quote, < or > in a query string (RFC 7230) and
+        # answers a bare HTML 400 that never mentions ERDDAP. Encode those and
+        # keep only the separators ERDDAP needs to parse the constraint list.
+        constraints = (
+            '&station="' + station + '"'
+            + f"&time>={start}T00:00:00Z&time<={end}T23:59:59Z"
+        )
+        url = RAMA_TABLEDAP + "?" + RAMA_COLUMNS + quote(constraints, safe="&=.:-_")
+        if _get(
+            url,
+            dest,
+            f"RAMA mooring {station}, {start} to {end}",
+            empty_is_ok=True,
+        ):
+            got.append(dest)
+
+    if got and len(got) < len(stations):
+        # Stated rather than left to be inferred from a shorter list. The Bay
+        # of Bengal RAMA line has a known loss and vandalism problem, so a
+        # partly reporting array is the normal condition, not a fetch bug.
+        missing = len(stations) - len(got)
+        print(
+            f"    {len(got)} of {len(stations)} moorings reported in this window; "
+            f"{missing} were not in the water"
+        )
+    return got
+
+
+def _dotenv() -> dict[str, str]:
+    """Read .env, which is the only place in this repository holding a secret.
+
+    Parsed here rather than exported into the process environment by a shell
+    step, so a reader of this file can see exactly which two variables the
+    fetch needs and where they come from. `.env` is gitignored.
+    """
+    path = REPO / ".env"
+    out: dict[str, str] = {}
+    if not path.is_file():
+        return out
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        out[k.strip()] = v.strip()
+    return out
+
+
+def fetch_currents(around: date) -> Path | None:
+    """Depth-resolved currents from Copernicus Marine (PS requirement F1).
+
+    THE ONE PART OF F1 NO INCOIS SOURCE CAN ANSWER. The problem statement names
+    current vectors among the fields to render, and INCOIS's free ERDDAP
+    publishes SURFACE geostrophic currents only. This needs a free Copernicus
+    account, which is why it was blocked until 2026-09-09.
+
+    Fetched to match the model cube EXACTLY: the same three dates, the same
+    Bay of Bengal box. Contemporaneity is not a nicety here. The registry
+    originally named the GLORYS12V1 multi-year reanalysis, and probing it with
+    real credentials showed it ends 2026-06-23, before every date in this cube;
+    an analysis-and-forecast product is configured instead. See the long block
+    above this source in data/sources.yaml.
+
+    Credentials never reach a log or an argument: the client reads them from
+    the environment we set here, and this function prints only the username's
+    presence, never its value.
+    """
+    reg = load_registry_from(REPO / "data" / "sources.yaml")
+    if not reg.has("glorys12_cur"):
+        return None
+    spec = reg.get("glorys12_cur")
+    if not spec.enabled:
+        print("\nCurrents: glorys12_cur disabled in sources.yaml, skipping")
+        return None
+
+    env = _dotenv()
+    user = env.get("COPERNICUS_USERNAME") or os.environ.get("COPERNICUS_USERNAME")
+    password = env.get("COPERNICUS_PASSWORD") or os.environ.get("COPERNICUS_PASSWORD")
+    if not user or not password:
+        print(
+            "\nCurrents: no Copernicus credentials. Put COPERNICUS_USERNAME and "
+            "COPERNICUS_PASSWORD in .env (free account at data.marine.copernicus.eu). "
+            "Everything else still works; this is the only source that needs them."
+        )
+        return None
+
+    try:
+        import copernicusmarine as cm
+    except ImportError:
+        print(
+            "\nCurrents: the copernicusmarine client is not installed. "
+            "pip install copernicusmarine"
+        )
+        return None
+
+    dest = RAW / "glorys" / "glorys12_cur_bob.nc"
+    if dest.is_file():
+        print(f"\nCurrents: {dest.name} already present")
+        return dest
+
+    w, s, e, n = BBOX
+    # The model cube's own three steps, so the currents and the field share a
+    # time axis and the scrubber cannot show one date above another.
+    wanted = [around - timedelta(days=20), around - timedelta(days=10), around]
+    print(f"\nCurrents: Copernicus {spec.dataset_id}")
+    print(f"  user {user[:2]}{'*' * max(0, len(user) - 2)}, "
+          f"{len(wanted)} dates ending {around}, box {BBOX}")
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        cm.login(username=user, password=password, force_overwrite=True)
+        ds = cm.open_dataset(
+            dataset_id=spec.dataset_id,
+            variables=[v.name for v in spec.variables],
+            minimum_longitude=w, maximum_longitude=e,
+            minimum_latitude=s, maximum_latitude=n,
+            # The demo column is 5 to 2000 m; the product goes to 5728 and
+            # those levels would triple the download for water nothing else
+            # here draws.
+            minimum_depth=0, maximum_depth=2000,
+            start_datetime=str(wanted[0]), end_datetime=str(wanted[-1]),
+        )
+        import pandas as _pd
+
+        sub = ds.sel(time=_pd.to_datetime([str(d) for d in wanted]), method="nearest")
+        got = [str(x)[:10] for x in _pd.to_datetime(sub.time.values)]
+        sub.to_netcdf(dest)
+        ds.close()
+    except Exception as exc:  # noqa: BLE001
+        # Additive, like BGC and the moorings: a Copernicus outage or a wrong
+        # password must not fail a run that already has a working demo.
+        print(f"    !! {type(exc).__name__}: {str(exc)[:200]}")
+        return None
+
+    print(f"    dates {got}")
+    print(f"    -> {dest.relative_to(REPO)}  ({dest.stat().st_size / 1e6:.1f} MB)")
+    return dest
+
+
+def fetch_warnings(limit: int) -> list[Path]:
+    """CAP v1.2 alerts from NDMA SACHET, India's national CAP backbone (F13).
+
+    TRD M8 planned for curated samples "where a machine feed isn't public".
+    Probing on 2026-09-09 found that one IS: SACHET publishes a public RSS
+    index of real CAP documents, and it carried 99 live alerts that afternoon
+    from CWC, IMD and the state disaster authorities. Reading the real feed
+    beats anything we could write, so this is what HazardWatch ingests.
+
+    Two shapes have to be handled, and both are real rather than defensive:
+
+      * The RSS item is an INDEX. The CAP document itself is behind the item's
+        link, so this is two requests per alert, not one.
+      * SACHET puts the GEOMETRY IN A SEPARATE FILE. The CAP document carries a
+        `Polygon URL` parameter instead of an inline `<cap:polygon>`, so an
+        alert fetched without its sidecar has no shape at all.
+
+    The ocean hazards the PS names by name (tsunami, high wave, swell surge)
+    were NOT on this feed at ingest time and INCOIS's ITEWC publishes no public
+    machine feed, so those are the second `kind: cap` source in sources.yaml,
+    marked with CAP's own `status: Exercise`. See data/warnings/incois/README.md.
+    """
+    reg = load_registry_from(REPO / "data" / "sources.yaml")
+    if not reg.has("cap_sachet_india"):
+        return []
+    spec = reg.get("cap_sachet_india")
+    if not spec.enabled:
+        print("\nCAP: cap_sachet_india disabled in sources.yaml, skipping")
+        return []
+
+    out = RAW / "cap" / "sachet"
+    out.mkdir(parents=True, exist_ok=True)
+    index = out / "_index.rss.xml"
+
+    print(f"\nCAP warnings: NDMA SACHET national feed (newest {limit})")
+    if not _get(spec.url, index, "SACHET alert index"):
+        return []
+
+    try:
+        root = ET.fromstring(index.read_bytes())
+    except ET.ParseError as e:
+        print(f"    !! the SACHET index is not well-formed XML: {e}")
+        return []
+
+    items = root.findall("./channel/item")
+    if not items:
+        print("    -- the feed carried no alerts (not an error: India can be quiet)")
+        return []
+
+    # Newest first is the feed's own order. The cap is STATED rather than
+    # applied silently: a reader of this output has to be able to tell
+    # "30 alerts" from "30 of 99 alerts".
+    if len(items) > limit:
+        print(f"    feed carries {len(items)} alerts; taking the {limit} newest")
+    items = items[:limit]
+
+    got: list[Path] = []
+    for item in items:
+        ident = (item.findtext("guid") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        if not ident or not link:
+            continue
+        dest = out / f"{ident}.cap.xml"
+        if not dest.is_file() and not _get(link, dest, f"CAP {ident}"):
+            continue
+        got.append(dest)
+
+        # The geometry sidecar. Absent is not a failure: an alert can be
+        # geocoded to a named district with no polygon at all, and the parser
+        # counts that as "named but not drawable" rather than dropping it.
+        poly = out / f"{ident}.polygon.xml"
+        if poly.is_file():
+            continue
+        url = link.replace("FetchXMLFile", "FetchPolygonXMLFile")
+        if url != link:
+            _get(url, poly, f"  geometry for {ident}", empty_is_ok=True)
+
+    drawable = sum(1 for p in got if (p.parent / p.name.replace(".cap.", ".polygon.")).is_file())
+    print(f"    {len(got)} alerts, {drawable} with geometry")
+    return got
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--steps", type=int, default=3, help="model timesteps to fetch")
@@ -235,6 +561,10 @@ def main() -> int:
     ap.add_argument("--argo-from", type=str, default=None, help="YYYY-MM-DD to walk back from")
     ap.add_argument("--list-times", action="store_true", help="show the model time axis and exit")
     ap.add_argument("--no-bgc", action="store_true", help="skip the BGC synthetic profiles")
+    ap.add_argument("--no-moorings", action="store_true", help="skip the RAMA moorings")
+    ap.add_argument("--no-warnings", action="store_true", help="skip the CAP alert feed")
+    ap.add_argument("--no-currents", action="store_true", help="skip the Copernicus currents")
+    ap.add_argument("--cap-alerts", type=int, default=30, help="newest CAP alerts to fetch")
     args = ap.parse_args()
 
     RAW.mkdir(parents=True, exist_ok=True)
@@ -262,11 +592,37 @@ def main() -> int:
     if argo and not args.no_bgc:
         bgc = fetch_argo_bgc(argo)
 
+    # Moorings are additive too, and fetched last for the same reason as BGC:
+    # a failure here must not fail a run that already has a working demo.
+    moorings: list[Path] = []
+    if not args.no_moorings:
+        moorings = fetch_moorings(around)
+
+    # Warnings are additive and fetched last, for the same reason as BGC and
+    # the moorings: a feed outage must not fail a run that already has a
+    # working demo. HazardWatch also still has its rehearsal bulletins, which
+    # live in the repository and need no network at all.
+    warnings: list[Path] = []
+    if not args.no_warnings:
+        warnings = fetch_warnings(args.cap_alerts)
+
+    # Currents last, and additive for the same reason as the rest: this is the
+    # only source needing an account, and a checkout without one still has a
+    # complete demo of everything INCOIS can answer.
+    currents: Path | None = None
+    if not args.no_currents:
+        currents = fetch_currents(around)
+
     print("\nsummary")
     print(f"  model file : {'ok' if model else 'FAILED'}")
     print(f"  argo files : {len(argo)}")
     print(f"  bgc files  : {len(bgc)}"
           f"{'  (none found in the demo box)' if not bgc else ''}")
+    print(f"  moorings   : {len(moorings)}"
+          f"{'  (none found in the demo box)' if not moorings else ''}")
+    print(f"  cap alerts : {len(warnings)}"
+          f"{'  (feed unreachable or quiet; rehearsal bulletins still apply)' if not warnings else ''}")
+    print(f"  currents   : {'ok' if currents else 'skipped (no Copernicus credentials)'}")
     if not model or not argo:
         print("\nIncomplete. Nothing downstream will work until both succeed.")
         return 1
