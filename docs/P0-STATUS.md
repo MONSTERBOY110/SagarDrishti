@@ -24,12 +24,12 @@ forever, only that the PS's sentence is satisfied and proven.
 
 | # | Requirement | Verdict | The gap, if any |
 |---|---|---|---|
-| F1 | 3D volumetric rendering | **Partly met** | All three named TECHNIQUES are built, and every field the PS names is now drawn except one: temperature, salinity and depth-resolved CURRENT VECTORS, the last live since the Copernicus account arrived on 2026-09-09. Chlorophyll is registered and deliberately disabled: the INCOIS series ends in 2020 and cannot share a 2026 scrubber. |
+| F1 | 3D volumetric rendering | **Partly met** | All three named TECHNIQUES are built, and every field the PS names is now drawn except one: temperature, salinity and depth-resolved CURRENT VECTORS, the last live since the Copernicus account arrived on 2026-09-09. Six gridded fields render in total, the other two being plugin-derived: D26 and SIG0 (potential density, TEOS-10). Chlorophyll is registered and deliberately disabled as a GRIDDED field: the INCOIS series ends in 2020 and cannot share a 2026 scrubber. It is served as in-situ BGC-float data, which is contemporary. |
 | F2 | Instrument data overlay | **Partly met** | Three instrument classes work end to end and are drawn as different marks: Argo floats, BGC floats and a RAMA moored buoy. Glider and CTD parsers are built and tested, but no such cast is loaded, so those two classes do not yet appear. |
 | F3 | Multi-format data ingestion | **Met** | None. |
 | F4 | Customizable colorbar and variable controls | **Met** | None. |
 | F5 | Web-based, scalable architecture | **Partly met** | The Docker path is authored and never executed, because Docker is not installed here. |
-| F6 | Extensible design | **Met** | Both extension points have a running example: the D26 derived product, served through WMS and WCS, and a `mooring` source reader on real RAMA buoy data. The PS's "additional sensors" clause also has a live device path: SagarNode posts to `/ingest/sagarnode` and appears on the globe, with `curl` as a sufficient device. |
+| F6 | Extensible design | **Met** | Both extension points have running examples: TWO derived products (D26, and SIG0 density via TEOS-10), both served through WMS and WCS, and a `mooring` source reader on real RAMA buoy data. The PS's "additional sensors" clause also has a live device path: SagarNode posts to `/ingest/sagarnode` and appears on the globe, with `curl` as a sufficient device. |
 | F7 | Open standards (OGC WMS/WCS, CF) | **Met** | None. Stored variables and plugin-derived products are both served. |
 
 Five of seven have no gap. Two have a named gap: one blocked on the team lead
@@ -40,11 +40,11 @@ is at the bottom of this file.
 ## Test and check counts behind these verdicts
 
 ```
-services/api      441 tests   (argo 20, cap 47, cf 20, colormap 10, currents 16,
-                               field 29, isosurface 27, offline 3, ogc 58,
-                               plugins 69, sagarnode 27, scorecard 24,
+services/api      462 tests   (argo 20, cap 47, cf 20, colormap 10, currents 16,
+                               density 19, field 29, isosurface 27, offline 3,
+                               ogc 58, plugins 71, sagarnode 27, scorecard 24,
                                storyboards 25, text profiles 66)
-services/agent     68 tests   (guard 13, planner 53, scene-key drift 2)
+services/agent     71 tests   (guard 13, planner 56, scene-key drift 2)
 e2e                10 tests   production build, real browser, off-origin guard
 ```
 

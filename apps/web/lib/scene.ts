@@ -129,6 +129,12 @@ export const useScene = create<SceneState & SceneActions>((set) => ({
 export function defaultIsovalue(variable: string, fallback: number): number {
   if (variable === "TEMP") return 26;
   if (variable === "SAL") return 35;
+  // Sigma-0 22 kg/m3 is the base of the Bay of Bengal's fresh surface layer
+  // in the monsoon: our own 2026-07-30 cube runs about 19.8 at the surface to
+  // 27.8 at 2000 m, and 22 sits at the foot of the river plume rather than in
+  // the middle of the colour bar. An isopycnal is the surface an oceanographer
+  // actually asks for, because water moves along one rather than across it.
+  if (variable === "SIG0") return 22;
   return fallback;
 }
 

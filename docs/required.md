@@ -152,9 +152,33 @@ statement (SIH26176) before the 20 September PDF deadline.
 
 ### 8. The idea PDF goes to the SPOC by 20 September
 
-Four days after the internal round. `docs/SUBMISSION-GUIDE.md` has the six-slide
-structure. I will draft it from what actually exists rather than from what we
-hoped to build, but you send it.
+Four days after the internal round. **The words are now drafted**, all six
+slides, in [`IDEA-PDF-DRAFT.md`](IDEA-PDF-DRAFT.md), written from what
+actually exists rather than from what we hoped to build: every claim is marked
+BUILT or PLANNED and every built one carries a measured number.
+
+Three things are still yours and the team's:
+
+1. **Design and Story sets it in the SIH template and exports the PDF.** The
+   draft is words and visual choices, not a layout.
+2. **Somebody redraws the TRD section 1 architecture diagram clean.** The
+   submission guide is right that slide 3 wins or loses screening, and a
+   diagram is the one thing I cannot produce for you.
+3. **Re-run the numbers the day it is exported.** They were read off the
+   running service on 10 September. A stale figure in a submitted PDF cannot
+   be withdrawn.
+
+### 8b. Rehearse the three-minute pitch, five times, with a timer
+
+[`PITCH-INTERNAL.md`](PITCH-INTERNAL.md) is written and timed to the second:
+the problem in INCOIS's own words, a four-beat demo, the tank, the competition
+math, and a line each for six people. It also carries the five questions to
+expect with answers, what to cut if the clock runs out, and the five things
+nobody may say on stage.
+
+A script nobody has said out loud is not a pitch. Three minutes is shorter
+than it reads, and the only way to find that out safely is in a room with a
+timer rather than in front of judges.
 
 ---
 
@@ -162,11 +186,15 @@ hoped to build, but you send it.
 
 ### 9. Commit and push
 
-You said you would handle git and I have not committed anything. There are
-around 35 changed files and 27 new ones waiting, including two new services'
-worth of code. Worth pushing before the round: this is a lot to have in one
-place. Worth pushing before the
-round so there is a recoverable copy that is not this laptop.
+You said you would handle git and I have not committed anything.
+
+**You committed on 10 September as `9ea32ee`, 33 files and about 3,900 lines,
+and that cleared the backlog this section used to describe.** Everything up to
+the live sensor station, the internal pitch script and the widened typography
+guard is in that commit. Thank you; it is a much safer place to be.
+
+The same request stands for whatever lands after it: push before the round, so
+there is a recoverable copy that is not this laptop.
 
 ---
 

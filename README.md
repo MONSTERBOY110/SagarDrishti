@@ -25,14 +25,19 @@ outstanding.
 [`docs/SAGARNODE-BOM.md`](docs/SAGARNODE-BOM.md) ·
 [decisions](docs/adr/)
 
-**Presenting it:** [`docs/PITCH-INTERNAL.md`](docs/PITCH-INTERNAL.md) is the
-three-minute internal-round script, timed, with the questions to expect and
-the things nobody may say on stage.
+**Presenting it:** [`docs/MENTOR-BRIEF-14-SEP.md`](docs/MENTOR-BRIEF-14-SEP.md)
+is the full current-state briefing: every parameter, every dataset with its
+size, the research paper behind each method, and the numbers to quote with the
+caveat that must follow each.
+[`docs/PITCH-INTERNAL.md`](docs/PITCH-INTERNAL.md) is the three-minute
+internal-round script, timed.
+[`docs/IDEA-PDF-DRAFT.md`](docs/IDEA-PDF-DRAFT.md) is the six-slide idea
+submission, written out, every claim marked built or planned.
 
 ## Repo layout (TRD §8)
 
 ```
-apps/web/            Next.js 15 + Cesium 1.145 + deck.gl 9 client
+apps/web/            Next.js 15 + Cesium 1.145 client (deck.gl installed, unused)
 services/api/        FastAPI data plane: REST + OGC WMS/WCS + plugin registry
 services/agent/      Samudra Sahayak agent plane (Phase 2) - detachable by design
 packages/scene/      SceneState schema shared by UI, deep links and the agent

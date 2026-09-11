@@ -392,7 +392,10 @@ def test_getcapabilities_advertises_one_layer_per_dataset_variable_present(ogc_c
     # does it appear in your WMS?". It used to be no: _layers() read the store
     # alone, so a plugin's product was visible to our own client through
     # /catalog and /field and invisible to QGIS.
-    assert names == {"incois_vam_argo/TEMP", "incois_vam_argo/SAL", "incois_vam_argo/D26"}
+    assert names == {
+        "incois_vam_argo/TEMP", "incois_vam_argo/SAL",
+        "incois_vam_argo/D26", "incois_vam_argo/SIG0",
+    }
     # TERR and SERR are in data/sources.yaml but not in the cube. Advertising a
     # layer /field would 404 on is the drift this pins shut.
     assert not any("ERR" in n for n in names)
@@ -1006,7 +1009,8 @@ def test_wcs_getcapabilities_is_wcs_100_with_a_lonlat_envelope(ogc_client):
 
     briefs = root.findall(f"{{{WCS}}}ContentMetadata/{{{WCS}}}CoverageOfferingBrief")
     assert {b.findtext(f"{{{WCS}}}name") for b in briefs} == {
-        "incois_vam_argo/TEMP", "incois_vam_argo/SAL", "incois_vam_argo/D26",
+        "incois_vam_argo/TEMP", "incois_vam_argo/SAL",
+        "incois_vam_argo/D26", "incois_vam_argo/SIG0",
     }
     for brief in briefs:
         assert _child_order_ok(brief, [
@@ -1085,7 +1089,10 @@ def test_wcs_describecoverage_declares_the_grid_the_time_axis_and_the_depth_axis
 def test_wcs_describecoverage_without_a_coverage_describes_all_of_them(ogc_client):
     root = ET.fromstring(_wcs(ogc_client, REQUEST="DescribeCoverage").content)
     names = {o.findtext(f"{{{WCS}}}name") for o in root.findall(f"{{{WCS}}}CoverageOffering")}
-    assert names == {"incois_vam_argo/TEMP", "incois_vam_argo/SAL", "incois_vam_argo/D26"}
+    assert names == {
+        "incois_vam_argo/TEMP", "incois_vam_argo/SAL",
+        "incois_vam_argo/D26", "incois_vam_argo/SIG0",
+    }
 
 
 def test_wcs_getcoverage_returns_a_netcdf_that_reopens_in_xarray(ogc_client):
@@ -1376,12 +1383,15 @@ def shipped_client(monkeypatch):
 def test_the_shipped_cube_serves_valid_capabilities_and_a_real_tile(shipped_client):
     _, root = _wms_caps(shipped_client)
     layers = _named_layers(root)
-    # Every materialized variable, from EVERY materialized source. The
-    # Copernicus currents arriving here for free is the point of F7 rather than
-    # an accident: a second dataset was added to the registry on 2026-09-09 and
-    # the OGC surface picked it up without a line of OGC code changing.
+    # Every materialized variable, from EVERY materialized source, plus every
+    # product a PLUGIN derives. Two separate demonstrations of the same claim
+    # live in this one assertion: a second dataset (Copernicus currents) was
+    # added to the registry on 2026-09-09, and a second derived product (SIG0,
+    # density) was added as a plugin on 2026-09-11. Both reached QGIS without
+    # a line of OGC code changing, which is what F6 and F7 assert jointly.
     assert set(layers) == {
-        "incois_vam_argo/TEMP", "incois_vam_argo/SAL", "incois_vam_argo/D26",
+        "incois_vam_argo/TEMP", "incois_vam_argo/SAL",
+        "incois_vam_argo/D26", "incois_vam_argo/SIG0",
         "glorys12_cur/uo", "glorys12_cur/vo",
     }
 

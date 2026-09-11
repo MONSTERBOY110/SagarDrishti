@@ -4,8 +4,21 @@ The PS asks for "a documented plugin interface for future sensors (moorings,
 HF-radar, ADCP) and ML-derived products". This is that interface.
 
 Implementation: `services/api/app/plugins.py`. Plugin directory:
-`services/api/plugins/`. Tests: `services/api/tests/test_plugins.py`. A worked
-example that runs against the real cube: `services/api/plugins/d26_isotherm.py`.
+`services/api/plugins/`. Tests: `services/api/tests/test_plugins.py`.
+
+**Two worked examples that run against the real cube**, and they are
+deliberately different shapes:
+
+| Plugin | Product | Output | Why it is here |
+|---|---|---|---|
+| `d26_isotherm.py` | `D26`, depth of the 26 degC isotherm | `surface`, one value per column | The operational cyclone variable. Shows a diagnostic that REFUSES to answer where no isotherm exists, rather than extrapolating |
+| `density_sigma0.py` | `SIG0`, potential density anomaly | `column`, a full 3D volume | Density is the variable that stratifies the ocean and is never measured. Shows a product with a published international standard behind it (TEOS-10) and a physical caveat that travels with the field |
+
+Between them they exercise both `output` shapes, both the single-input and the
+multi-input `requires` form, and both ways a derived field can be wrong:
+answering where it should not, and answering without saying which standard it
+used. Tests: `test_plugins.py` for the registration contract,
+`test_density.py` for the equation-of-state maths.
 
 ---
 

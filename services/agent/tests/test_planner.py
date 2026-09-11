@@ -192,6 +192,29 @@ def test_a_salinity_question_picks_the_salinity_variable(api):
     assert a.patch["focusDepth"] == 500.0
 
 
+def test_a_density_question_picks_density_and_not_salinity(api):
+    """Density is COMPUTED from salinity, so a salinity-first route would
+    answer "how dense" with "how salty" and look entirely plausible doing it.
+    SIG0 is also a plugin-derived product, so this proves the agent reaches
+    whatever the registry advertises rather than a list hardcoded in the
+    planner."""
+    a = planner.plan("how dense is the water at 100 m")
+    assert a.patch["variable"] == "SIG0"
+    assert a.patch["focusDepth"] == 100.0
+
+
+def test_asking_about_stratification_also_reaches_density(api):
+    a = planner.plan("how stratified is the bay")
+    assert a.patch["variable"] == "SIG0"
+
+
+def test_salinity_still_wins_when_density_is_not_mentioned(api):
+    """The density branch runs first, so this pins that it did not swallow
+    every salinity question on its way past."""
+    a = planner.plan("how salty is it at 200 m")
+    assert a.patch["variable"] == "SAL"
+
+
 def test_a_skill_question_returns_the_card_AND_its_caveat(api):
     """The caveat is not optional. An answer that quotes the RMSE without it is
     the one wrong thing this feature could say."""

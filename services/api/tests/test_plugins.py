@@ -396,6 +396,35 @@ def test_the_shipped_example_plugin_loads_from_the_real_plugin_directory():
     assert "26" in prod.method and "no extrapolation" in prod.method
 
 
+def test_the_density_plugin_registers_as_a_full_column_product():
+    """SIG0 is the second derived product and the first `column` one.
+
+    It matters that this shape is exercised from the real plugin directory:
+    D26 is a surface field, so until density landed the `output="column"`
+    branch of the contract had a test but no shipped user. The maths lives in
+    tests/test_density.py; what is checked here is the registration.
+    """
+    reg = P.load_plugins(directory=PLUGIN_DIR, strict=True)
+    prod = reg.derived("SIG0")
+    assert prod is not None, f"SIG0 not registered by {PLUGIN_DIR}"
+    assert prod.units == "kg m-3"
+    assert prod.requires == {"TEMP": "degC", "SAL": "1"}
+    assert prod.output == "column", "density is a volume, not a surface"
+    assert prod.canonical == "sea_water_sigma_theta"
+    # The served method has to name the standard: EOS-80 and TEOS-10 disagree,
+    # and a density with no equation of state named is not a citation.
+    assert "TEOS-10" in prod.method
+    assert "0 dbar" in prod.method
+
+
+def test_both_shipped_derived_products_are_advertised_together():
+    """A second product must not displace the first. The registry is a dict
+    keyed by name and a collision would silently keep whichever registered
+    last, which is the failure the name-shadowing guard exists for."""
+    reg = P.load_plugins(directory=PLUGIN_DIR, strict=True)
+    assert {"D26", "SIG0"} <= {p.name for p in reg.derived_products()}
+
+
 def test_d26_matches_a_hand_checked_synthetic_column():
     # T(50 m) = 28.546, T(75 m) = 25.211, so the 26 degC crossing sits between
     # them:  f = (28.546 - 26) / (28.546 - 25.211) = 0.7634182...

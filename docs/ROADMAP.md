@@ -79,8 +79,9 @@ both answered: the ocean is drawn, and the danger in it is named. That was the
 largest remaining gap against a portal whose theme is Disaster Management.
 - [x] F1-F4 minimum: globe + one variable volumetric + depth/time controls +
       colorbar editor + float click-through. All four, and past the minimum:
-      three variables, three rendering techniques, depth-resolved currents
-      from a second agency, and three instrument classes. Verdicts and
+      six gridded fields (two of them plugin-derived), three rendering
+      techniques, depth-resolved currents from a second agency, seven measured
+      in-situ parameters and three instrument classes. Verdicts and
       measurements in `docs/P0-STATUS.md`.
 - [x] **First agent trick (scripted)** - DONE 9 Sep, and larger than a trick.
       Samudra Sahayak is a separate service on :8010 with 8 tools over the
@@ -101,6 +102,17 @@ largest remaining gap against a portal whose theme is Disaster Management.
       on a network nobody controls). The sketch is written and marked as never
       having run on a board. **Blocked on the lead: buy the parts**
       (`docs/SAGARNODE-BOM.md`).
+- [x] **Density as a derived field (SIG0)** - DONE 11 Sep. Potential density
+      anomaly (sigma-0) computed from TEMP and SAL through TEOS-10, the
+      international standard, using the `gsw` toolbox the repo already trusted
+      for pressure-to-depth. A plugin, so it adds a selectable 3D variable
+      with no change to the store and no extra bytes on disk, and it reached
+      the OGC WMS and WCS surfaces without a line of OGC code changing. 19
+      tests, including reproduction of the published TEOS-10 check values to
+      six decimals. It also found that 213 of 225 wet columns in the bay are
+      statically unstable, 208 of them in the top 30 m, which is the monsoon
+      river plume rather than a defect; the census travels with the field
+      instead of being smoothed away.
 - [x] **HazardWatch v0** - DONE 9 Sep, and larger than v0. Real CAP v1.2 from
       NDMA SACHET, India's national alert backbone (99 live alerts on the feed
       when it was ingested), plus the three ocean hazards the PS names, authored
@@ -119,7 +131,14 @@ largest remaining gap against a portal whose theme is Disaster Management.
       half a document cannot do.
 
 ## Phase 3 - Idea submission (Sep 16 → 20)
-- [ ] 6-slide PDF per SUBMISSION-GUIDE.md; architecture diagram from TRD §1
+- [ ] 6-slide PDF per SUBMISSION-GUIDE.md; architecture diagram from TRD §1.
+      **Words drafted 10 Sep** in [`docs/IDEA-PDF-DRAFT.md`](IDEA-PDF-DRAFT.md):
+      all six slides written to the guide's structure, every claim marked
+      BUILT or PLANNED, and every built claim carrying a measured number.
+      **Still owed: Design and Story sets it in the SIH template, redraws the
+      TRD section 1 architecture diagram, and exports the PDF**; and every
+      figure is re-run against the running service the day it is exported,
+      because a stale number in a submitted PDF cannot be withdrawn.
 - [ ] **Check live idea counter on sih.gov.in for SIH26067** - if >~150, convene team, consider backup SIH26176 (max 2 ideas/team allows submitting both - decide deliberately)
 - [ ] Submit via SPOC; archive the exact PDF in `docs/submissions/`
 

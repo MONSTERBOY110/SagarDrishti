@@ -70,8 +70,9 @@ measured, against the model, at the same place and the same time."
 
 > **Say casts, not floats.** A float drifts and reports repeatedly, so
 > twenty-five marks were made by seventeen instruments and the screen says
-> both. Calling the marks floats would be a claim about the Indian Ocean
-> observing system that is off by a third, in front of the people who run it.
+> both. Calling the marks floats would put **eight instruments in the Bay of
+> Bengal that are not there**, in front of the people who run the array. For
+> the BGC floats alone it would be nine where there are three.
 
 **(1:05) The number nobody else prints.** Point at the verification card, top
 right.
@@ -105,9 +106,9 @@ answers to that are a paragraph. Here is ours."
 
 *Point at the tank. Point at its mark on the globe.*
 
-"An ESP32 in a bucket, posting to the same API the satellites and the floats
-go through. It appeared on that globe without one line of the data model
-changing.
+"An ESP32 in a bucket, posting to the same API the Argo floats and the moored
+buoys come through. It appeared on that globe without one line of the data
+model changing.
 
 Watch what happens when I warm it."
 
@@ -133,13 +134,18 @@ deployment story is not something we invented for a slide.
 in the problem statement and it has been true since the first week.
 
 **It is checkable.** Five hundred and nineteen automated tests, and ten of
-them drive a real browser through this exact demo. Every claim on this screen
-has a test behind it that fails if we break it.
+them drive a real browser through the demo you just watched. The demo path
+itself is a test, so it cannot rot quietly between now and December.
 
 **And almost nobody is attempting it.** This problem statement has no AI
 buzzword in the title and it needs NetCDF and WebGL, which most teams do not
-have. On the day we checked, it had zero ideas submitted against a cap of five
-hundred. The crowded ones were already full."
+have. When we checked on the seventh of September it had zero ideas against a
+cap of five hundred, while the crowded ones were already at their cap."
+
+> **Re-check the counter on 15 September and say the number you actually
+> see**, not the one written here. sih.gov.in/sih2026PS, PS SIH26067. Quoting
+> a stale figure to judges who can open the page on a phone is a bad trade for
+> a sentence that works either way.
 
 ---
 
@@ -154,11 +160,19 @@ about."
 
 Then close on one sentence and stop:
 
-"INCOIS makes a three-dimensional ocean every day and has nowhere to look at
-it. This is somewhere to look at it, it runs on their own data, it says how
-wrong it is, and it works with the internet off."
+"INCOIS makes a three-dimensional ocean every day, and their forecasters still
+have to change software to put it beside the instruments in the water. This
+puts them on one screen, on INCOIS's own data, with a number saying how far
+apart they are, and it works with the internet off."
 
 *Stop. Do not add anything. Let them ask.*
+
+> **Say it exactly as written.** An earlier draft closed with "and has nowhere
+> to look at it", which is the one claim CLAUDE.md forbids: INCOIS's Digital
+> Ocean portal advertises 3D and 4D visualisation, and one informed judge
+> sinks the whole pitch with that sentence. The gap the PS itself describes is
+> that forecasters are "forced to toggle between disparate software packages",
+> which is a different and defensible thing. Never upgrade it back.
 
 ---
 

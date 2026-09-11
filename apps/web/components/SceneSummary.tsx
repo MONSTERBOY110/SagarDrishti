@@ -79,7 +79,13 @@ function describeStations(
     .map(([kind, c]) => {
       const words = KIND_WORDS[kind] ?? [kind, kind];
       const n = c.platforms;
-      const each = c.profiles === n ? "" : `, ${c.profiles} casts between them`;
+      // "between them" needs more than one of them. The single RAMA buoy in
+      // this box reported three times, and "1 mooring, 3 casts between them"
+      // is the sentence a screen reader would actually have to say.
+      const each =
+        c.profiles === n
+          ? ""
+          : `, ${c.profiles} casts ${n === 1 ? "from it" : "between them"}`;
       return `${n} ${n === 1 ? words[0] : words[1]}${each}`;
     });
   if (parts.length <= 1) return parts[0] ?? "none";

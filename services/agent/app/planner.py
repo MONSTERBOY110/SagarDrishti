@@ -283,12 +283,26 @@ def plan(question: str) -> Answer:
             )
 
         # --- a field value at a depth -----------------------------------------
-        if re.search(r"temperat|warm|cold|salin|salt|degree|how (hot|deep)", low):
+        if re.search(
+            r"temperat|warm|cold|salin|salt|degree|how (hot|deep)|dens|sigma|stratif",
+            low,
+        ):
             when, cat = _latest_time()
             trace.append(cat)
             if not when:
                 return _refusal(q)
-            variable = "SAL" if re.search(r"salin|salt", low) else "TEMP"
+            # Density BEFORE salinity, because "how dense is the water" and
+            # "how salty is the water" are different questions and density is
+            # computed FROM salinity: a salinity-first test would answer the
+            # denser question with the saltier one. SIG0 is a derived product
+            # (a plugin), so this route also proves the agent reaches anything
+            # the registry advertises rather than a list hardcoded here.
+            if re.search(r"dens|sigma|stratif|isopycnal", low):
+                variable = "SIG0"
+            elif re.search(r"salin|salt", low):
+                variable = "SAL"
+            else:
+                variable = "TEMP"
             depth_hit = _DEPTH.search(q)
             depth = float(depth_hit.group(1)) if depth_hit else None
             r = run(
