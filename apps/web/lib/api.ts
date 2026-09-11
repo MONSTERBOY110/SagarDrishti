@@ -327,6 +327,119 @@ export interface TourIndex {
   patchable: string[];
 }
 
+/** One current arrow: the MEAN flow of a block of model cells, not one cell.
+ *
+ * `n` is how many source cells were behind it. The server block-averages
+ * rather than sampling, because taking every Nth cell of a velocity field
+ * aliases, and aliasing invents eddies that look exactly like the real ones. */
+export interface CurrentArrow {
+  lat: number;
+  lon: number;
+  /** eastward and northward components, in the response's own units */
+  u: number;
+  v: number;
+  speed: number;
+  n: number;
+}
+
+export interface CurrentField {
+  source_id: string;
+  variables: string[];
+  units: string;
+  time: string;
+  /** The depth ASKED FOR and the depth SERVED. GLORYS has its own 40 levels
+   *  and none is exactly 100 m, so the difference is information. */
+  requested_depth: number;
+  depth: number;
+  bbox: [number, number, number, number];
+  /** Block size used, in native cells. Disclosed so a thinned field is never
+   *  mistaken for the grid the model actually ran on. */
+  stride: number;
+  budget: number;
+  source_cells: number;
+  blocks: number;
+  count: number;
+  /** Blocks dropped for being mostly land. A sparse arrow field has to be
+   *  distinguishable from a broken one, which is why this is served. */
+  refused: number;
+  note: string;
+  citation: string;
+  retrieved_at: string | null;
+  arrows: CurrentArrow[];
+}
+
+/** One telemetry frame from the tabletop rig (PS F6, TRD M9).
+ *
+ * `ts_source` is the field to read before the numbers. An ESP32 has no
+ * battery-backed clock and an air-gapped hall has no time server, so the
+ * normal case is `"server"`: the board sent no timestamp and the API stamped
+ * the reading when it arrived. That is a RECEIPT time, not an observation
+ * time, and anything printing `ts` has to say which it is looking at.
+ */
+export interface SagarNodeReading {
+  station_id: string;
+  ts: string;
+  /** Optional, because the log is an append-only file that outlives a build:
+   *  a row written before the server started recording this has none, and
+   *  the honest reading of an absent value is "not known", not "device". */
+  ts_source?: "server" | "device";
+  received_at: string;
+  temp_c: number;
+  /** Total dissolved solids inferred from conductivity. A salinity PROXY, and
+   *  uncalibrated: the firmware uses the vendor's nominal curve. */
+  tds_ppm: number;
+  turbidity_ntu: number;
+}
+
+/** The rig's threshold trip, shaped like a CAP alert and always a drill.
+ *
+ * `status` is fixed at `"Exercise"` by the server. A bucket of warm water in a
+ * college hall is not a coastal hazard, and using CAP's own word for a drill
+ * means every guard written for the rehearsal bulletins applies to it
+ * unchanged. Nothing may render this without saying so.
+ */
+export interface SagarNodeAlert {
+  status: "Exercise";
+  source: string;
+  event: string;
+  severity: CapSeverity;
+  urgency: string;
+  certainty: string;
+  headline: string;
+  description: string;
+  instruction: string;
+  reading: SagarNodeReading;
+  mean_before: number;
+  delta_c: number;
+}
+
+/**
+ * The live sensor station (PS requirement F6, TRD M9).
+ *
+ * Served EMPTY rather than 404 when no rig is plugged in, because no rig is
+ * the normal state: on the judges' laptop, on CI, and on this machine most of
+ * the time. `count === 0` is the signal to render nothing at all.
+ *
+ * The position is the REGISTRY's, never the device's. A board that could say
+ * where it is could put a bucket in the Bay of Bengal on a globe carrying
+ * twenty-five real ocean casts.
+ */
+export interface SagarNodeStation {
+  station: {
+    id: string;
+    title: string;
+    lat: number;
+    lon: number;
+    note: string;
+  };
+  parameters: Record<string, { label: string; units: string }>;
+  count: number;
+  latest: SagarNodeReading | null;
+  readings: SagarNodeReading[];
+  alert: SagarNodeAlert | null;
+  citation: string;
+}
+
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`);
   if (!r.ok) {
@@ -392,6 +505,25 @@ export const api = {
   /** The guided tours on the server (F12). One copy, so the files the
    *  data-plane tests validate are the files the browser plays. */
   storyboards: () => get<TourIndex>("/storyboards"),
+
+  /** Depth-resolved current vectors, already reduced to a drawable count (F1).
+   *
+   * Not `/field` twice: at 1/12 degree the demo box is 43,621 cells per level,
+   * and the server block-averages them into a few hundred arrows and says by
+   * how much. The raw components are still on `/field` for anyone who wants
+   * the grid the model ran on. */
+  currents: (sourceId: string, bbox: string, time: string, depth: number) =>
+    get<CurrentField>(
+      `/currents/${sourceId}?bbox=${encodeURIComponent(bbox)}` +
+        `&time=${encodeURIComponent(time)}&depth=${encodeURIComponent(String(depth))}`,
+    ),
+
+  /** The tabletop sensor station and its recent readings (F6).
+   *
+   * Polled rather than pushed: one small JSON document a couple of times a
+   * second is a rounding error next to the field, and it keeps the data plane
+   * a plain request-response service with no socket to fail on stage. */
+  sagarnode: () => get<SagarNodeStation>("/sagarnode"),
 
   warnings: (at: string, rehearsal: boolean, bbox?: string, lang = "en") =>
     get<WarningLayer>(

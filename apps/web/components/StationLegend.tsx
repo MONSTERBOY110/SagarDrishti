@@ -30,6 +30,7 @@ const LABELS: Record<string, string> = {
   mooring: "Mooring",
   hf_radar: "HF radar",
   adcp: "ADCP",
+  sagarnode: "Demonstration rig",
 };
 
 /** Reading order: the classes we expect most of, first. */
@@ -51,22 +52,52 @@ function Swatch({ kind }: { kind: string }) {
   return <span ref={ref} aria-hidden style={{ width: 13, height: 13, flexShrink: 0 }} />;
 }
 
-export default function StationLegend({ profiles }: { profiles: ProfileGlyph[] }) {
+export default function StationLegend({
+  profiles,
+  platformCount,
+  sagarnode = false,
+}: {
+  profiles: ProfileGlyph[];
+  /** Distinct instruments behind the marks. A drifting float that reported
+   *  three times is three marks and one float, so the counts beside the
+   *  swatches are CASTS and this is what they were taken by. Printed only
+   *  when the two differ, because when they are equal it is noise. */
+  platformCount: number;
+  /** Is the tabletop rig reporting? Passed separately rather than folded into
+   *  `profiles`, because it is NOT one: SagarNode is a time series at a point
+   *  on a table, it serves no cast, and counting it among the profiles would
+   *  make a bucket one of the twenty-five Argo floats in every total on this
+   *  page. It is listed last for the same reason. */
+  sagarnode?: boolean;
+}) {
   const counts = new Map<string, number>();
   for (const p of profiles) {
     counts.set(p.platform_kind, (counts.get(p.platform_kind) ?? 0) + 1);
   }
-  const present = ORDER.filter((k) => counts.has(k));
+  const present: string[] = ORDER.filter((k) => counts.has(k));
   for (const kind of counts.keys()) {
-    if (!present.includes(kind as PlatformKind)) present.push(kind as PlatformKind);
+    if (!present.includes(kind)) present.push(kind);
+  }
+  if (sagarnode) {
+    counts.set("sagarnode", 1);
+    present.push("sagarnode");
   }
 
   // One class on its own needs no legend: the panel header already names it.
   if (present.length < 2) return null;
 
+  /* The rig reports a time series, not a cast, so it is outside this
+     reconciliation entirely: it is neither one of the casts nor one of the
+     instruments that took them. */
+  const casts = profiles.length;
+
   return (
     <aside className="legend" aria-label="Station marks">
-      <div className="legend__label">Stations</div>
+      {/* CASTS, not stations. Each mark is one profile at one position and
+          one time, and a drifting float that reported three times put three
+          marks on the globe. This heading used to read "Stations", which made
+          the nine marks from three BGC floats read as nine BGC floats. */}
+      <div className="legend__label">Casts</div>
       <ul className="legend__list">
         {present.map((kind) => (
           <li key={kind} className="legend__row">
@@ -76,6 +107,11 @@ export default function StationLegend({ profiles }: { profiles: ProfileGlyph[] }
           </li>
         ))}
       </ul>
+      {platformCount > 0 && platformCount !== casts && (
+        <p className="legend__foot">
+          from <span className="num">{platformCount}</span> instruments
+        </p>
+      )}
     </aside>
   );
 }

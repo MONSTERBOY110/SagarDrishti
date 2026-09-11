@@ -622,6 +622,15 @@ button {
   color: var(--stamp-soft);
   font-size: 0.625rem;
 }
+/* What took the casts above. Ruled off, because it reconciles the column of
+   numbers rather than adding another row to it. */
+.legend__foot {
+  margin: 0.3125rem 0 0;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(127, 143, 153, 0.3);
+  font-size: 0.5625rem;
+  color: var(--stamp-soft);
+}
 
 /* --- narrow viewports: one honest column ----------------------------------
    Not a target device (PRODUCT.md operating context is a forecast desk and a
@@ -1239,6 +1248,148 @@ button {
   color: var(--caution-stamp);
 }
 
+/* --- SagarNode: the tabletop rig, live ------------------------------------
+   Same instrument-box treatment as HazardWatch and the scale bar, and it
+   shares the band beside the sheet with them. It is a reading over the scene,
+   not a control, and it is the same kind of object as the warning panel: a
+   statement about something happening now rather than a record of a cast.
+
+   It carries the caution ink in exactly one place, the Exercise stamp and the
+   trip headline, on the same rule the hazard layer follows: hue belongs to
+   the measurement and caution is its one reserved exception. */
+.node {
+  /* Shrinkable, like the hazard panel beside it. On a short laptop screen the
+     two share one column, and a rigid rig panel would squeeze the warning
+     panel out of the viewport. HazardWatch is a P0 requirement and this is a
+     demonstration; if either has to give, it is this one. */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  width: 21rem;
+  padding: 0.4375rem 0.625rem 0.5rem;
+  background: rgba(5, 8, 12, 0.86);
+  border: 1px solid var(--stamp-soft);
+  color: var(--stamp);
+}
+.node__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.3125rem;
+  border-bottom: 1px solid var(--stamp-soft);
+}
+.node__title {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--stamp-soft);
+}
+/* The same overprinted stamp HazardWatch uses for a drill, because it is the
+   same claim: what follows is a rehearsal. */
+.node__drill {
+  padding: 0.0625rem 0.3125rem;
+  border: 1px solid var(--caution-stamp);
+  outline: 1px solid var(--caution-stamp);
+  outline-offset: 2px;
+  color: var(--caution-stamp);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+}
+
+.node__rows {
+  margin: 0.375rem 0 0;
+}
+.node__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 0 0.5rem;
+  padding: 0.1875rem 0;
+  border-bottom: 1px solid rgba(127, 143, 153, 0.3);
+}
+.node__name {
+  font-size: 0.625rem;
+  line-height: 1.35;
+  color: var(--stamp-soft);
+}
+/* The reading itself, sized up: this is the one number on screen a judge is
+   watching change while their hand is in the water. */
+.node__value {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.node__units {
+  font-size: 0.625rem;
+  font-weight: 400;
+  color: var(--stamp-soft);
+}
+
+.node__trend {
+  margin: 0.4375rem 0 0;
+}
+.node__spark {
+  display: block;
+  width: 100%;
+  height: 2.5rem;
+  overflow: visible;
+}
+.node__spark-line {
+  fill: none;
+  stroke: var(--stamp);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+/* The average the threshold tripped against. Dashed, in the reserved ink. */
+.node__spark-mean {
+  stroke: var(--caution-stamp);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.node__scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.125rem 0 0;
+  font-size: 0.5625rem;
+  color: var(--stamp-soft);
+}
+
+.node__headline {
+  margin: 0.4375rem 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--caution-stamp);
+}
+
+.node__foot {
+  margin-top: 0.4375rem;
+  padding-top: 0.375rem;
+  border-top: 1px solid var(--stamp-soft);
+}
+.node__note {
+  margin: 0.25rem 0 0;
+  font-size: 0.625rem;
+  line-height: 1.4;
+  color: var(--stamp-soft);
+}
+.node__note:first-child {
+  margin-top: 0;
+}
+.node__cite {
+  margin: 0.375rem 0 0;
+  font-size: 0.5625rem;
+  line-height: 1.4;
+  color: var(--stamp-soft);
+}
+
 @media (max-width: 900px) {
   .panel-mid {
     order: 3;
@@ -1246,6 +1397,9 @@ button {
   .hazard {
     width: auto;
     max-height: none;
+  }
+  .node {
+    width: auto;
   }
 }
 

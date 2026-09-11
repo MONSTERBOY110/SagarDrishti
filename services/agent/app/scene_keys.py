@@ -42,5 +42,6 @@ PATCHABLE = frozenset(
         "isosurfaceOn",
         "isovalue",
         "rehearsal",
+        "currentsOn",
     }
 )

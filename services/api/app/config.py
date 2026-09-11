@@ -36,6 +36,16 @@ class Settings(BaseModel):
         return self.cube_dir / "warnings.json"
 
     @property
+    def sagarnode_log(self) -> Path:
+        """Where the sensor station's readings land.
+
+        In the cube directory because it is runtime state written by a device,
+        not source: gitignored, rebuilt by whatever is plugged in, and safe to
+        delete between demos.
+        """
+        return self.cube_dir / "sagarnode.jsonl"
+
+    @property
     def storyboards_dir(self) -> Path:
         """Guided tours (PRD F12). Source files in the repository, NOT derived
         into data/cube: a tour is authored content like a CAP bulletin, not an

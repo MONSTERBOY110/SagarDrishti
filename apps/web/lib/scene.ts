@@ -58,6 +58,16 @@ export interface SceneState {
    * on screen so a judge can switch it off and watch them go.
    */
   rehearsal: boolean;
+  /**
+   * Draw the depth-resolved current arrows (PS F1).
+   *
+   * OFF by default, for the same reason the isosurface is: it is a second
+   * request and a second geometry pass, and the scene must open on the slices
+   * alone in case either is slow on the demo machine. It is also a different
+   * DATASET (Copernicus, not INCOIS), so switching it on is a deliberate act
+   * rather than something that happens to the viewer.
+   */
+  currentsOn: boolean;
 }
 
 export interface SceneActions {
@@ -94,6 +104,7 @@ export const INITIAL_SCENE: SceneState = {
   // threshold the D26 product uses, so the surface and the scalar agree.
   isovalue: 26,
   rehearsal: true,
+  currentsOn: false,
 };
 
 export const useScene = create<SceneState & SceneActions>((set) => ({

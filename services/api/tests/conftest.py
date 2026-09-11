@@ -421,3 +421,39 @@ def argo_bgc_like_nc(tmp_path):
             q[:] = src
 
     return path
+
+
+@pytest.fixture
+def shipped_currents_client(monkeypatch):
+    """Pointed at the REAL cube, for the claims that are about real currents.
+
+    Skips rather than passing vacuously when the Copernicus cube is absent: it
+    needs an account, and a checkout without one is a normal state that should
+    not read as a failure.
+    """
+    import pathlib
+
+    from starlette.testclient import TestClient
+
+    from app.config import get_settings
+    from app.store import clear_caches
+
+    root = pathlib.Path(__file__).resolve().parents[3] / "data" / "cube"
+    if not (root / "glorys12_cur_bob.zarr").is_dir():
+        pytest.skip(
+            "no Copernicus currents cube; needs COPERNICUS_USERNAME and "
+            "COPERNICUS_PASSWORD in .env, then tools/fetch_sample.py"
+        )
+
+    monkeypatch.setenv("SAGAR_CUBE", str(root))
+    monkeypatch.setenv("OFFLINE", "1")
+    get_settings.cache_clear()
+    clear_caches()
+
+    from app.main import app
+
+    with TestClient(app) as c:
+        yield c
+
+    get_settings.cache_clear()
+    clear_caches()

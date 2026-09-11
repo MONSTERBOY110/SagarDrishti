@@ -27,6 +27,7 @@ import HazardPanel from "@/components/HazardPanel";
 import AskPanel from "@/components/AskPanel";
 import ScorecardPanel from "@/components/ScorecardPanel";
 import StoryPlayer from "@/components/StoryPlayer";
+import SagarNodePanel from "@/components/SagarNodePanel";
 import StationLegend from "@/components/StationLegend";
 import StationSheet from "@/components/StationSheet";
 import TimeRule from "@/components/TimeRule";
@@ -38,10 +39,13 @@ import {
   type FieldColumn,
   type ProfileDetail,
   type IsosurfaceMesh,
+  type CurrentField,
   type ProfileGlyph,
+  type SagarNodeStation,
   type WarningAlert,
 } from "@/lib/api";
 import { describeMesh } from "@/lib/isosurface";
+import { CURRENT_SOURCE, describeCurrents } from "@/lib/currents";
 import { defaultIsovalue, useScene } from "@/lib/scene";
 
 // Cesium is browser-only and large; it must never enter the server bundle.
@@ -52,7 +56,7 @@ export default function Page() {
   const [dataset, setDataset] = useState<DatasetInfo | null>(null);
   const [columns, setColumns] = useState<Record<string, FieldColumn>>({});
   const [profiles, setProfiles] = useState<ProfileGlyph[]>([]);
-  const [fps, setFps] = useState({ fps: 0, p1: 0 });
+  const [fps, setFps] = useState({ fps: 0, p1: 0, moving: false });
   const [detail, setDetail] = useState<ProfileDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +69,18 @@ export default function Page() {
      about what is being warned about, which on this layer is not a cosmetic
      inconsistency. */
   const [warnings, setWarnings] = useState<WarningAlert[]>([]);
+  /* Depth-resolved currents (PS F1), a SECOND dataset (Copernicus, not
+     INCOIS). Kept apart from `columns` because it is fetched per depth rather
+     than per timestep: the arrows live on one level and the depth cursor moves
+     constantly, so caching a whole column here would fetch 40 levels to draw
+     one. */
+  const [currents, setCurrents] = useState<CurrentField | null>(null);
+  const [currentsError, setCurrentsError] = useState<string | null>(null);
+  /* The tabletop rig (PS F6), lifted out of its panel for the same reason the
+     warnings are: the globe has to draw exactly the station the panel lists,
+     and two pollers could disagree about whether the threshold has tripped.
+     Null is the normal state and means no mark and no panel. */
+  const [sagarnode, setSagarnode] = useState<SagarNodeStation | null>(null);
 
   /* --- load the cast ------------------------------------------------------- */
   useEffect(() => {
@@ -170,6 +186,53 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset, scene.isosurfaceOn, scene.isovalue, scene.variable, scene.time]);
 
+  /* --- the current arrows, fetched only while their layer is on ------------
+     Per (time, depth) rather than per column: at 1/12 degree one level is
+     43,621 cells, so fetching all 40 to draw one would move 42 MB to show a
+     few hundred arrows. The server decimates before it answers, so what
+     arrives is already a few tens of kilobytes. */
+  useEffect(() => {
+    if (!dataset || !scene.currentsOn || !scene.time) {
+      setCurrents(null);
+      return;
+    }
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const field = await api.currents(
+          CURRENT_SOURCE,
+          dataset.bbox.join(","),
+          scene.time,
+          scene.focusDepth,
+        );
+        if (!cancelled) {
+          setCurrents(field);
+          setCurrentsError(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setCurrents(null);
+          // Kept apart from `error`, like the isosurface's: a missing
+          // Copernicus cube must not blank a scene whose slices and floats are
+          // all still valid. It is a second dataset and it can be absent.
+          //
+          // The SENTENCE, not the exception. The commonest way to land here is
+          // moving the depth cursor to 2000 m, where the INCOIS field has a
+          // level and GLORYS does not, and the server answers that with a
+          // plain explanation. Printing "Error: 400 ..." in front of it turned
+          // a good message into what looks like a crash.
+          setCurrentsError(String(e).replace(/^Error:\s*\d{3}\s*/, ""));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataset, scene.currentsOn, scene.time, scene.focusDepth]);
+
   const column = columns[`${scene.variable}@${scene.time}`] ?? null;
   const depths = column?.depths ?? dataset?.depths ?? [];
   /* What the panels PRINT for the unit. The cube declares salinity as CF's
@@ -198,16 +261,39 @@ export default function Page() {
     return [Math.floor(lo), Math.ceil(hi)];
   }, [column]);
 
-  /* Station counts per instrument class. The legend reads them visually; the
-     accessible summary has to say them in words, and both must come from the
-     same place so they cannot disagree. */
+  /* Per instrument class, TWO counts, and the difference between them is not
+     pedantry.
+
+     A mark on the globe is one PROFILE: one cast, at one position, at one
+     time. A drifting float that reported three times is three marks in three
+     places, and three BGC floats produced the nine BGC marks in this box.
+     Counting the marks and calling the total "floats" would have this page
+     claim nine biogeochemical floats in the Bay of Bengal where there are
+     three, which is precisely the kind of overstatement an INCOIS reviewer is
+     equipped to catch.
+
+     Both numbers are computed once, here, so the legend, the spoken summary
+     and the profile panel cannot disagree about them. */
   const stationKinds = useMemo(() => {
-    const counts: Record<string, number> = {};
+    const counts: Record<string, { profiles: number; platforms: number }> = {};
+    const seen: Record<string, Set<string>> = {};
     for (const profile of profiles) {
-      counts[profile.platform_kind] = (counts[profile.platform_kind] ?? 0) + 1;
+      const kind = profile.platform_kind;
+      seen[kind] ??= new Set();
+      seen[kind].add(profile.wmo);
+      counts[kind] = {
+        profiles: (counts[kind]?.profiles ?? 0) + 1,
+        platforms: seen[kind].size,
+      };
     }
     return counts;
   }, [profiles]);
+
+  /** Distinct instruments behind those marks, across every class. */
+  const platformCount = useMemo(
+    () => new Set(profiles.map((p) => p.wmo)).size,
+    [profiles],
+  );
 
   /* Follow that suggestion only until the forecaster sets the range by hand.
      Overwriting an edited limit on the next timestep would change the colours
@@ -245,7 +331,10 @@ export default function Page() {
     };
   }, [scene.selection]);
 
-  const onFps = useCallback((s: { fps: number; p1: number }) => setFps(s), []);
+  const onFps = useCallback(
+    (s: { fps: number; p1: number; moving: boolean }) => setFps(s),
+    [],
+  );
   const onPick = useCallback((id: string | null) => useScene.setState({ selection: id }), []);
   const onReady = useCallback(() => undefined, []);
 
@@ -259,6 +348,8 @@ export default function Page() {
           isosurface={isosurface}
           profiles={profiles}
           warnings={warnings}
+          currents={currents}
+          sagarnode={sagarnode}
           selection={scene.selection}
           focusDepth={scene.focusDepth}
           exaggeration={scene.exaggeration}
@@ -295,6 +386,11 @@ export default function Page() {
           dataRange={dataRange}
           isosurfaceOn={scene.isosurfaceOn}
           isovalue={scene.isovalue}
+          currentsOn={scene.currentsOn}
+          currentSummary={currentsError ?? describeCurrents(currents)}
+          onToggleCurrents={() =>
+            useScene.setState({ currentsOn: !useScene.getState().currentsOn })
+          }
           units={unitsLabel}
           isoSummary={isoError ?? (isosurface ? describeMesh(isosurface) : null)}
           onToggleIsosurface={scene.toggleIsosurface}
@@ -349,6 +445,7 @@ export default function Page() {
           reverse={scene.reverse}
           focusDepth={scene.focusDepth}
           stationCount={profiles.length}
+          platformCount={platformCount}
           loading={loadingDetail}
           onFocusDepth={scene.setFocusDepth}
           onClose={() => scene.select(null)}
@@ -368,17 +465,26 @@ export default function Page() {
         exaggeration={scene.exaggeration}
         stationCount={profiles.length}
         stationKinds={stationKinds}
+        platformCount={platformCount}
         selectedWmo={detail?.wmo ?? null}
         selectedKind={detail?.platform_kind ?? null}
         vmin={scene.vmin}
         vmax={scene.vmax}
         warnings={warnings}
+        sagarnode={sagarnode}
       />
 
       {/* --- the open band beside the sheet: what the marks are, and what is
               being warned about over this water (PS F13) ------------------ */}
       <div className="panel-mid">
-        <StationLegend profiles={profiles} />
+        <StationLegend
+          profiles={profiles}
+          platformCount={platformCount}
+          sagarnode={sagarnode !== null}
+        />
+        {/* The live rig, above the warnings and below the legend. Absent
+            entirely when nothing is plugged in, which is most of the time. */}
+        <SagarNodePanel onStation={setSagarnode} />
         <HazardPanel
           at={column?.time ?? scene.time}
           bbox={dataset ? dataset.bbox.join(",") : null}
@@ -395,6 +501,7 @@ export default function Page() {
         focusDepth={scene.focusDepth}
         fps={fps.fps}
         p1={fps.p1}
+        fpsMoving={fps.moving}
       />
 
       {/* --- the two surfaces that narrate rather than control ---------------

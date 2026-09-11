@@ -581,6 +581,57 @@ sources:
     cf_overrides: {}   # Copernicus is CF-clean; kept explicit to prove the contrast
 
   # ---------------------------------------------------------------------------
+  # SagarNode, the tabletop sensor station (TRD M9, PRD F6).
+  #
+  # A real ESP32 in a real tank on the demo table. The PS asks for an
+  # extensible design that can take "future integration of additional
+  # sensors", and this is that clause answered with hardware a judge can put a
+  # hand in rather than with a paragraph.
+  #
+  # THE POSITION IS DECLARED HERE, NOT SENT BY THE BOARD, and that is a
+  # deliberate refusal rather than a simplification. A device that could tell
+  # the server where it is could put a bucket in the middle of the Bay of
+  # Bengal, and on a globe carrying twenty-five real ocean casts that is
+  # exactly the confusion worth preventing. Change these coordinates to the
+  # hall the demo is in; the board never gets a say.
+  #
+  # `kind: mqtt` is what TRD M9 specifies. The transport actually implemented
+  # is the HTTP POST fallback the same section calls for, because campus WiFi
+  # commonly blocks 8883 and a demo that depends on an open broker port is a
+  # demo with a single point of failure it does not need. The MQTT bridge is
+  # not built; the kind is left as declared so the registry entry does not
+  # have to change when it is.
+  #
+  # WORDING (CLAUDE.md): the TDS probe is a conductivity-derived salinity
+  # PROXY, never a salinity sensor. A test greps for the wrong phrase.
+  # ---------------------------------------------------------------------------
+  - id: sagarnode_demo
+    title: "SagarNode demonstration station (tabletop sensor rig)"
+    kind: mqtt
+    enabled: true
+    # No endpoint: the board posts INTO us, at /ingest/sagarnode. The local
+    # directory is where the readings land.
+    url: data/cube
+    path_template: sagarnode.jsonl
+    citation: >-
+      SagarNode, a tabletop demonstration sensor station built for this
+      project. NOT an oceanographic observation and not comparable to one: an
+      ESP32 with a DS18B20 immersion probe, a conductivity-derived salinity
+      proxy and an optical turbidity probe, in a tank on the demo table.
+    platforms: ["sagarnode-01"]
+    variables:
+      - name: temp_c
+        canonical: sea_water_temperature
+        label: Water temperature
+        units: "degC"
+      - name: tds_ppm
+        label: Conductivity-derived salinity proxy
+        units: "ppm"
+      - name: turbidity_ntu
+        label: Turbidity
+        units: "NTU"
+
+  # ---------------------------------------------------------------------------
   # The OFFLINE=1 target. Written by tools/preprocess.py, read by the API.
   # The API reads ONLY from here, so the offline path is the default code path
   # (TRD M6) rather than a special case bolted on later.

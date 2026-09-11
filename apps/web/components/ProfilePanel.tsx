@@ -89,7 +89,10 @@ interface Props {
   vmax: number;
   reverse: boolean;
   focusDepth: number;
+  /** Marks on the globe: one per CAST, not one per instrument. */
   stationCount: number;
+  /** Distinct instruments behind those casts. */
+  platformCount: number;
   loading: boolean;
   onFocusDepth: (d: number) => void;
   onClose: () => void;
@@ -387,7 +390,12 @@ export default function ProfilePanel(p: Props) {
               className="num"
               style={{ margin: "0.125rem 0 0", fontSize: "0.6875rem", color: "var(--ink-soft)" }}
             >
-              {p.stationCount} station{p.stationCount === 1 ? "" : "s"} on the globe
+              {/* CASTS and the instruments that took them, not one number
+                  called "stations". A float drifts and reports repeatedly, so
+                  the two differ, and printing only the larger overstates how
+                  much of the Indian Ocean observing system is in this box. */}
+              {p.stationCount} cast{p.stationCount === 1 ? "" : "s"} from{" "}
+              {p.platformCount} instrument{p.platformCount === 1 ? "" : "s"}
             </p>
           )}
         </div>

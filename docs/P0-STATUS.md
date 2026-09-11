@@ -24,12 +24,12 @@ forever, only that the PS's sentence is satisfied and proven.
 
 | # | Requirement | Verdict | The gap, if any |
 |---|---|---|---|
-| F1 | 3D volumetric rendering | **Partly met** | All three named TECHNIQUES are built. Depth-resolved currents are now INGESTED and served, on 40 levels at 1/12 degree, after the Copernicus account arrived on 2026-09-09; what is still owed is drawing them as vectors rather than as scalar fields. Chlorophyll is registered and deliberately disabled: the INCOIS series ends in 2020 and cannot share a 2026 scrubber. |
+| F1 | 3D volumetric rendering | **Partly met** | All three named TECHNIQUES are built, and every field the PS names is now drawn except one: temperature, salinity and depth-resolved CURRENT VECTORS, the last live since the Copernicus account arrived on 2026-09-09. Chlorophyll is registered and deliberately disabled: the INCOIS series ends in 2020 and cannot share a 2026 scrubber. |
 | F2 | Instrument data overlay | **Partly met** | Three instrument classes work end to end and are drawn as different marks: Argo floats, BGC floats and a RAMA moored buoy. Glider and CTD parsers are built and tested, but no such cast is loaded, so those two classes do not yet appear. |
 | F3 | Multi-format data ingestion | **Met** | None. |
 | F4 | Customizable colorbar and variable controls | **Met** | None. |
 | F5 | Web-based, scalable architecture | **Partly met** | The Docker path is authored and never executed, because Docker is not installed here. |
-| F6 | Extensible design | **Met** | Both extension points have a running example: the D26 derived product, served through WMS and WCS, and a `mooring` source reader on real RAMA buoy data. |
+| F6 | Extensible design | **Met** | Both extension points have a running example: the D26 derived product, served through WMS and WCS, and a `mooring` source reader on real RAMA buoy data. The PS's "additional sensors" clause also has a live device path: SagarNode posts to `/ingest/sagarnode` and appears on the globe, with `curl` as a sufficient device. |
 | F7 | Open standards (OGC WMS/WCS, CF) | **Met** | None. Stored variables and plugin-derived products are both served. |
 
 Five of seven have no gap. Two have a named gap: one blocked on the team lead
@@ -40,11 +40,12 @@ is at the bottom of this file.
 ## Test and check counts behind these verdicts
 
 ```
-services/api      398 tests   (argo 20, cap 47, cf 20, colormap 10, field 29,
-                               isosurface 27, offline 3, ogc 58, plugins 69,
-                               scorecard 24, storyboards 25, text profiles 66)
+services/api      441 tests   (argo 20, cap 47, cf 20, colormap 10, currents 16,
+                               field 29, isosurface 27, offline 3, ogc 58,
+                               plugins 69, sagarnode 27, scorecard 24,
+                               storyboards 25, text profiles 66)
 services/agent     68 tests   (guard 13, planner 53, scene-key drift 2)
-e2e                 8 tests   production build, real browser, off-origin guard
+e2e                10 tests   production build, real browser, off-origin guard
 ```
 
 The two Python suites are run separately, and must be: both declare a `tests`
@@ -243,13 +244,47 @@ the reanalysis carries them: INCOIS's own analysis is the PS-preferred source
 and the one the scorecard verifies, and two answers to one question with
 nothing to choose between them is worse than one.
 
-**What is still owed on this clause: the vectors.** The currents are served
-through `/field` and, for free, through WMS and WCS. They are not yet DRAWN as
-arrows or particles, and they should not be drawn as volumetric slices: 1/12
-degree over the demo box is 241 x 181 = 43,561 cells per level against the
-INCOIS analysis's 336, so a slice stack of them would neither fit the frame
-budget in TRD section 5 nor be readable as a current field. A decimated vector
-overlay is the next piece of work.
+**And they are now drawn.** `GET /currents/{source}` serves a decimated vector
+field and the globe draws it as arrows at the depth cursor.
+
+```
+curl ".../currents/glorys12_cur?bbox=80,5,95,25&time=2026-07-30&depth=100"
+
+asked     5 m -> served     5.08 m |  396 arrows, 171 refused of 567 blocks | fastest 1.27 m/s
+asked   100 m -> served    92.33 m |  359 arrows, 208 refused of 567 blocks | fastest 0.63 m/s
+asked  1000 m -> served  1062.44 m |  329 arrows, 238 refused of 567 blocks | fastest 0.26 m/s
+```
+
+The field weakens with depth and more blocks are refused as the seafloor
+rises, both of which are the ocean rather than the code.
+
+**Three decisions in that reduction, each of which could have gone the other
+way.** 43,621 cells per level is not a picture, so the field is reduced, and
+how it is reduced is the whole design of `app/currents.py`:
+
+- **Blocks are AVERAGED, not sampled.** Taking every Nth cell is cheaper and it
+  aliases; on a velocity field aliasing invents eddies that look exactly like
+  the real ones.
+- **A block less than half water is REFUSED**, not averaged from the two wet
+  cells that remain, which is precisely the shelf a forecaster reads. Refused
+  blocks are counted and served, so a sparse arrow field is distinguishable
+  from a broken one.
+- **A cell missing either component contributes nothing.** A velocity needs
+  both; averaging u where v is absent points an arrow at nothing measured.
+
+The reduction is disclosed on the response and printed on the sheet: the
+stride, the cells behind each arrow, and the blocks dropped.
+
+**Two things the interface refuses to blur.** The sheet names the depth
+ACTUALLY served, because GLORYS's 40 levels do not line up with the INCOIS 24
+and the arrows sit a few metres from the slice beside them. And the control
+says in words that the arrows are Copernicus while the colours are INCOIS, so
+nobody leaves thinking one dataset supplied both.
+
+Arrow LENGTH carries speed, not colour. Hue on this surface belongs to the
+measurement and the colorbar has already spent it on the scalar field; a second
+colour scale would put a fast arrow in competition with warm water and make
+neither readable.
 
 **Chlorophyll: the source exists, is registered, and is deliberately OFF.**
 INCOIS publish ocean colour on the same open ERDDAP the model field comes from,
@@ -670,6 +705,82 @@ render as "23009.0" into a citation, and that the reader's output passes the
 framework's own D1 to D5 contract through `open_source` rather than by direct
 call.
 
+### And the clause with a wire in it: SagarNode
+
+The PS words are "future integration of ADDITIONAL SENSORS". The plugin
+registry answers that for a file format. SagarNode answers it for a device: a
+sensor nobody had heard of when the cube was built posts to `POST
+/ingest/sagarnode` and appears on the globe beside twenty-five real ocean
+casts, with no change to the data model and no redeploy.
+
+**Both halves are built and the server half needs no hardware.** `curl` is a
+sufficient device, which is how the whole beat is tested:
+
+```
+POST /ingest/sagarnode  {"station_id":"sagarnode-01","temp_c":27.4,
+                         "tds_ppm":310,"turbidity_ntu":4.2}
+  -> {"stored":true,"count":1,"alert":null}
+
+POST /ingest/sagarnode  {..., "temp_c":-127}
+  -> 400 temp_c is -127.0, outside the -5.0 to 100.0 a probe in a tank can
+     produce. That is what a disconnected pin or a mis-wired divider reads
+     like, so it is refused rather than drawn.
+
+twenty quiet readings, then one at 34.2
+  -> alert "Rapid warming in the demonstration tank", status Exercise
+```
+
+`-127` is exactly what a DS18B20 library reports when it cannot find the
+device, so a refusal naming the probe and its range is the entire debugging
+loop for a headless board.
+
+**A bucket must never pass for the ocean, and four things stop it.** Its mark
+on the globe is a HOLLOW circle, not the filled one the moorings use, and it
+lives in its own entity layer so the instrument count never includes it. Its
+panel prints the station's own note verbatim. Its threshold trip carries CAP
+status `Exercise`, so every guard written for the rehearsal bulletins applies
+to it unchanged, and the panel stamps itself exactly as HazardWatch does. And
+the spoken scene summary names it as a demonstration before it says anything
+else about it.
+
+**What it will not claim.** The conductivity probe is a *conductivity-derived
+salinity proxy*, never a salinity sensor, and the label the API serves says so
+in full. It and the turbidity probe run on their vendors' nominal curves
+against no standard solution, so the panel prints both as indications rather
+than measurements; only the factory-calibrated DS18B20 is quoted. The board
+sends no timestamp at all, because an ESP32 has no battery-backed clock and
+PRD F11 promises the demo runs with the network off, so the API stamps arrival
+and records `ts_source: "server"` rather than letting a receipt time be
+mistaken for an observation time.
+
+27 unit tests, plus an end-to-end test that empties the log, asserts that no
+panel and no mark exist with nothing plugged in, then drives the whole beat
+through the API and asserts the drill stamp. The firmware
+(`firmware/sagarnode/sagarnode.ino`) is written and marked, in the file and in
+its README, as never having run on a board: the parts are on the team lead's
+list.
+
+**Three departures from TRD M9, each on purpose.**
+
+*A poll, not a WebSocket.* M9 specifies a socket push to the client. The
+document is two kilobytes and the board reports at 1 Hz, so a poll costs
+nothing measurable and keeps the data plane a plain request-response service
+with no connection to re-establish on stage. It also backs off to one request
+every three seconds when nothing is plugged in, which is most of the time.
+
+*Its own mark, not the "virtual mooring" glyph M9 names.* Reusing the mooring
+circle would have drawn a bucket as the same class of object as the RAMA buoy
+on the 90 E line. The rig gets a hollow circle and its own entity layer
+instead, so no count, legend total or spoken summary on the page includes it
+among the instruments.
+
+*MQTT is not built.* M9 makes it the primary transport with HTTP POST as the
+fallback. Only the fallback exists, and that is an ordering rather than an
+omission: the fallback is the one that works on a network nobody controls, and
+a demo that depends on an open broker port has a single point of failure it
+does not need. The registry entry is already `kind: mqtt`, so nothing has to
+change when the bridge is written.
+
 ## F7. Open standards
 
 > "open standards (OGC WMS/WCS, CF Conventions)"
@@ -1004,6 +1115,44 @@ obtained. Those are written up in `storyboards/README.md` rather than narrated
 over data we do not have; the Argo explainer survives inside the instruments
 tour.
 
+## The frame rate was never the problem, and the probe was
+
+Worth its own section because I was one step from optimising a scene that is
+not slow, and because the number a judge reads off the screen was wrong by a
+factor of three.
+
+ROADMAP carried an open item from Phase 1: "p1 frame time (23 FPS), the
+1-in-100 frame still stutters". Re-measured on 2026-09-10 against a production
+build on the **Intel UHD**, which is the weaker of this laptop's two chips and
+the target TRD section 5 names:
+
+```
+every layer on: 6 drawn slices, 25 cast marks, 3 CAP hazard shapes,
+                337 current arrows, a 780-triangle isosurface, 389 entities
+
+  while the camera is moving   72 FPS median, p1 57
+  while the scene is still     27 renders per second
+```
+
+**Adding work more than doubled the rate**, which is the tell. Cesium's render
+loop is driven by `requestAnimationFrame`, and a browser throttles that on a
+window it believes is inactive. So the old probe, which timed the gaps between
+renders, was reporting the browser's refresh decision as though it were our
+frame cost. There was never a 23 FPS problem; there was a probe measuring the
+wrong thing while the scene was sitting still.
+
+**Two fixes, both about honesty rather than speed.** The probe now samples only
+while the camera is actually moving, and the readout appends "idle" when it is
+showing a held measurement. And "not measured yet" is no longer reported as
+"below the floor": with no sample, `fps` was 0, both threshold comparisons were
+true, and the readout ruled itself in the reserved caution ink before anybody
+had touched the scene. Those are different statements and the second one is an
+accusation.
+
+The honest headline is therefore better than the one we had: **the scene beats
+TRD's 60 FPS goal on the weaker GPU with every layer switched on**, and no FPS
+number goes on a slide without saying it was measured while moving.
+
 ## The browser suite could not run on CI, and now can
 
 Found while wiring HazardWatch into the build, and worth its own section
@@ -1061,8 +1210,9 @@ order they matter to a screening reviewer.
 Done since this file was first written: F2's BGC clause and its mooring class,
 F6's derived-products-through-OGC gap AND its source-reader half, F1's
 isosurface clause, F9's verification certificate, F13's HazardWatch layer,
-F12's guided tours, F8's agent plane, F1's depth-resolved currents, and the six
-silent defects above.
+F12's guided tours, F8's agent plane, F1's depth-resolved currents, F6's live
+sensor station (SagarNode, server and client both), and the six silent defects
+above.
 
 **F2's remaining clause needs data, not code.** A glider or CTD cast would
 finish it, the parser and the marks are already there, and no such dataset is

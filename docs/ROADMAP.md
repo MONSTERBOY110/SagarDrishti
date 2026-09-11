@@ -55,8 +55,8 @@ Goal: kill the two technical risks before the internal round. **Both are dead.**
 | Item | Why it matters | Status |
 |---|---|---|
 | **Internal-hackathon date** | Decides whether Phase 2 compresses | Still unconfirmed by SPOC. Planning against the worst case (Sep 12). |
-| ~~**Copernicus Marine credentials**~~ | ~~GLORYS12 is the only source with **depth-resolved currents**~~ | **DONE 9 Sep.** Ingested and serving: `glorys12_cur`, 40 levels to 1942 m at 1/12 deg. Logging in also revealed the configured dataset was the reanalysis, which ends 2026-06-23, before every date in the cube; switched to the analysis-and-forecast product. Drawing them as vectors is the remaining work |
-| **p1 frame time (23 FPS)** | Median is fine; the 1-in-100 frame still stutters, and 60 FPS target is not met | Re-measure on a production build and the discrete RTX 3050 before any FPS number goes on a slide |
+| ~~**Copernicus Marine credentials**~~ | ~~GLORYS12 is the only source with **depth-resolved currents**~~ | **DONE 9 Sep.** Ingested and serving: `glorys12_cur`, 40 levels to 1942 m at 1/12 deg. Logging in also revealed the configured dataset was the reanalysis, which ends 2026-06-23, before every date in the cube; switched to the analysis-and-forecast product. Drawn as arrows at the depth cursor since 10 Sep: 43,621 native cells block-averaged to a few hundred, coastal blocks refused rather than guessed |
+| ~~**p1 frame time (23 FPS)**~~ | ~~the 1-in-100 frame still stutters~~ | **Re-measured 10 Sep and the worry was a measurement artefact.** Production build, Intel UHD (the WEAKER chip, per TRD section 5), every layer on: **72 FPS median, p1 57**. That beats the 60 target, not just the 30 floor. The old figure came from a probe timing the gaps between renders, which on a still scene is the BROWSER throttling its animation callback on a window it thinks is inactive, not our cost: 27 renders per second while still, 72 while being orbited. The probe now measures only while the camera is moving and the readout says "idle" otherwise |
 | **`docker compose up` unverified** | PS requirement F5 is a screening claim | Docker not installed on the build machine (`adr/0004`); compose files authored, marked unexecuted |
 | **1° / 10-day source resolution** | Coarse for a hero shot | Honest framing on stage; GLORYS12 at 1/12° is the visual upgrade |
 | **Fonts are latin-subset only** | PRD requires Hindi, Telugu and Tamil, and both vendored faces carry latin glyphs only, so Devanagari, Telugu and Tamil text would fall back to a system font | Add Noto Sans Devanagari/Telugu/Tamil subsets in Phase 2 alongside the voice layer, when there is finally multilingual text to set. Flagged by the design documenter 2026-09-07. |
@@ -77,7 +77,11 @@ profile panel no longer has to apologise for the absence of a skill number.
 With HazardWatch now in as well, the two halves of the PS's own framing are
 both answered: the ocean is drawn, and the danger in it is named. That was the
 largest remaining gap against a portal whose theme is Disaster Management.
-- [ ] F1-F4 minimum: globe + one variable volumetric + depth/time controls + colorbar editor + float click-through
+- [x] F1-F4 minimum: globe + one variable volumetric + depth/time controls +
+      colorbar editor + float click-through. All four, and past the minimum:
+      three variables, three rendering techniques, depth-resolved currents
+      from a second agency, and three instrument classes. Verdicts and
+      measurements in `docs/P0-STATUS.md`.
 - [x] **First agent trick (scripted)** - DONE 9 Sep, and larger than a trick.
       Samudra Sahayak is a separate service on :8010 with 8 tools over the
       public API, a tool trace served with every answer, and a
@@ -85,7 +89,18 @@ largest remaining gap against a portal whose theme is Disaster Management.
       produced. Deterministic planner, `planner: "rules"` printed everywhere,
       no LLM: PRD section 10 sanctions that and the shape is the one a model
       slots into. 68 tests.
-- [ ] **SagarNode live**: tank → ESP32 → MQTT/HTTP → glyph on globe + trend chart; warm-water pour trips a CAP-shaped alert (TRD M9)
+- [x] **SagarNode live** - DONE 10 Sep, everything except the tank. HTTP path
+      end to end: `POST /ingest/sagarnode` with per-probe range refusals that
+      name the fault, a hollow station mark in its own layer on the globe, a
+      panel with the three readings and a temperature trend, and a warm-water
+      pour that trips a CAP-shaped alert marked `Exercise`. `curl` is a
+      sufficient device, so the whole beat is demoable and tested with no
+      hardware: 27 unit tests plus an end-to-end test that empties the log and
+      asserts the panel and the mark are ABSENT before it posts anything.
+      MQTT is deliberately not built (the HTTP fallback is the one that works
+      on a network nobody controls). The sketch is written and marked as never
+      having run on a board. **Blocked on the lead: buy the parts**
+      (`docs/SAGARNODE-BOM.md`).
 - [x] **HazardWatch v0** - DONE 9 Sep, and larger than v0. Real CAP v1.2 from
       NDMA SACHET, India's national alert backbone (99 live alerts on the feed
       when it was ingested), plus the three ocean hazards the PS names, authored
@@ -93,7 +108,15 @@ largest remaining gap against a portal whose theme is Disaster Management.
       with the ledger of what was withheld and why, and the layer shares the
       field's time axis. Agent narration of a live warning is the part still
       owed, and it belongs with the agent plane rather than here.
-- [ ] 3-minute internal pitch: problem (INCOIS's own words) → live demo incl. hardware beat → win-evidence (competition math) → team roles
+- [x] **3-minute internal pitch** - DRAFTED 10 Sep in
+      [`docs/PITCH-INTERNAL.md`](PITCH-INTERNAL.md): problem in INCOIS's own
+      words, a four-beat demo, the tank, the competition math, and a line each
+      for six people. Every figure in it was read off the running service and
+      is re-derivable from `docs/P0-STATUS.md`. It also carries the five
+      questions to expect with answers, the cut order if the clock runs out,
+      and the five things nobody may say on stage.
+      **Still owed by the team: five rehearsals with a timer**, which is the
+      half a document cannot do.
 
 ## Phase 3 - Idea submission (Sep 16 → 20)
 - [ ] 6-slide PDF per SUBMISSION-GUIDE.md; architecture diagram from TRD §1

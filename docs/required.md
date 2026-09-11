@@ -39,10 +39,25 @@ you out of them:**
 around it.** A rig that shows up on the 15th is a risk, not a feature: it needs
 a day of wiring and a rehearsal.
 
-**What I will have ready for it:** the ingest endpoint, the live "virtual
-mooring" mark on the globe and the trend chart. The mooring instrument class
-already works end to end, on a real RAMA buoy, so SagarNode plugs into a path
-that is already proven rather than a new one.
+**What is already ready for it, as of 10 September: everything except the
+tank.** The ingest endpoint, the mark on the globe, the panel with the three
+readings and a temperature trend, and the warm-water alert are built and
+tested. The firmware sketch is written too, and marked in the file as never
+having run on a board, so the day the parts arrive is an hour of testing
+rather than an evening of writing.
+
+You can see the whole thing today without buying anything, because the server
+does not care what posts to it. With `./tasks.ps1 api` running:
+
+```
+curl -X POST http://127.0.0.1:8000/ingest/sagarnode -H "Content-Type: application/json" ^
+  -d "{\"station_id\":\"sagarnode-01\",\"temp_c\":27.4,\"tds_ppm\":310,\"turbidity_ntu\":4.2}"
+```
+
+Post that twenty times and the panel appears beside the globe. Post one more
+at 34.2 and it stamps itself as a drill and says the tank warmed 7 degrees
+above its own recent average. That is the beat the rig performs on the table,
+and the only thing the hardware adds is that a judge can cause it by hand.
 
 ### 2. Confirm the demo logistics with the SPOC
 
@@ -93,9 +108,10 @@ as exposed even though nothing bad has happened. And it never enters the
 repository: it lives only in `.env`, which git is configured to ignore, and I
 checked that it does.
 
-**One thing still to build on top of it:** the currents are ingested and served
-through the API and the OGC endpoints, but not yet drawn as arrows on the
-globe. That is my next piece of work, not yours.
+**Done since:** the arrows are on the globe. Switch CURRENTS on in the left
+panel and move the depth cursor: at the surface the fastest flow is about
+1.3 metres per second, at a kilometre down it is a fifth of that. Nothing more
+is needed from you for this one.
 
 ### 5. Docker Desktop, or tell me to drop it
 

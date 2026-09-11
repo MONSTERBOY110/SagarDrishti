@@ -1,3 +1,6 @@
+import { rmSync } from "node:fs";
+import { join } from "node:path";
+
 import { expect, test, type ConsoleMessage, type Page, type Request } from "@playwright/test";
 
 /** The demo path, asserted end to end (TRD section 9).
@@ -19,6 +22,11 @@ import { expect, test, type ConsoleMessage, type Page, type Request } from "@pla
  */
 
 const PROBE = "/?probe=1";
+/** The data plane this suite boots (playwright.config.ts). Named here because
+ *  one test posts to it directly: SagarNode's whole claim is that a device
+ *  nobody had heard of can post to /ingest and appear on the globe, and the
+ *  cheapest honest device to be is an HTTP client. */
+const API = "http://127.0.0.1:8100";
 
 interface Watchers {
   consoleErrors: string[];
@@ -234,8 +242,19 @@ test.describe("SagarDrishti demo path", () => {
        What IS worth asserting is that the readout exists and reports real
        numbers, because a silent or absent readout is how a performance
        regression hides. */
-    await page.mouse.move(960, 12);
-    await page.waitForTimeout(6_000);
+    // ORBIT, not just a mouse move. The probe samples only while the camera
+    // is actually moving, because Cesium's loop is driven by
+    // requestAnimationFrame and a browser throttles that on a window it thinks
+    // is inactive: a still scene was reporting the browser's refresh decision
+    // as though it were our frame cost, three times slower than the truth.
+    // Moving the pointer over the page does not move the camera, so it would
+    // now leave the readout saying "move the scene to measure".
+    await page.evaluate(async () => {
+      const cam = (window as unknown as { __sagarScene?: any }).__sagarScene.viewer.camera;
+      const spin = setInterval(() => cam.rotateRight(0.004), 16);
+      await new Promise((r) => setTimeout(r, 6000));
+      clearInterval(spin);
+    });
     const render = await page.locator(".scalebar__render").innerText();
     const median = Number(render.match(/render\s+(\d+)/)?.[1] ?? NaN);
     const p1 = Number(render.match(/p1\s+(\d+)/)?.[1] ?? NaN);
@@ -342,6 +361,27 @@ test.describe("SagarDrishti demo path", () => {
     });
     expect(Object.keys(classes).sort()).toEqual(["gdac_bgc", "gdac_geo", "mooring"]);
     expect(classes.mooring).toBeGreaterThan(0);
+
+    /* A MARK IS A CAST, NOT AN INSTRUMENT, and the page must not confuse the
+       two. A float drifts and reports repeatedly, so the nine BGC marks in
+       this box were made by three BGC floats and the three mooring marks by
+       one buoy. Saying "nine BGC floats" would be a claim about the Indian
+       Ocean observing system that is off by a factor of three, made to the
+       people who run it. The legend and the spoken summary both said it until
+       2026-09-10, which is why this is asserted rather than trusted. */
+    const reconciled = await page.evaluate(() => ({
+      legend: document.querySelector(".legend")?.textContent ?? "",
+      spoken: document.querySelector('.sr-only[role="status"]')?.textContent ?? "",
+    }));
+    expect(reconciled.legend, "the legend counts casts, and says so").toMatch(/Casts/);
+    expect(reconciled.legend, "and reconciles them to the instruments").toMatch(
+      /from\s*\d+\s*instruments/,
+    );
+    expect(reconciled.spoken, "the spoken summary counts casts").toMatch(/instrument casts/);
+    expect(
+      reconciled.spoken,
+      "and names the number of INSTRUMENTS per class, not the number of marks",
+    ).toMatch(/\d+ biogeochemical Argo floats, \d+ casts between them/);
 
     // Find a BGC mark by the platform kind the entity carries, not by position.
     const mark = await page.evaluate(() => {
@@ -460,7 +500,13 @@ test.describe("SagarDrishti demo path", () => {
     const before = await probe();
     expect(before.triangles, "the layer must start off").toBe(0);
 
-    const toggle = page.getByRole("button", { name: /^(On|Off)$/ });
+    // Scoped to its own block. The sheet grew a second On/Off control when
+    // the current-vector layer landed, and a bare name match then resolved to
+    // two buttons and failed as a strict-mode violation.
+    const toggle = page
+      .locator('[aria-label="Station sheet"] .block')
+      .filter({ hasText: "Isosurface" })
+      .getByRole("button", { name: /^(On|Off)$/ });
     await toggle.click();
     await page.waitForFunction(
       () =>
@@ -817,6 +863,239 @@ test.describe("SagarDrishti demo path", () => {
 
     expect(w.offOrigin, "PRD F11: the agent must be on our own origin").toEqual([]);
     expect(w.consoleErrors, "no console error").toEqual([]);
+  });
+
+  test("currents draw at depth, from a second dataset that says so", async ({ page }) => {
+    // The last clause of PS requirement F1 to get code behind it. INCOIS's
+    // free ERDDAP publishes SURFACE currents only, so these are Copernicus
+    // GLORYS, live since the team lead's account arrived on 2026-09-09.
+    //
+    // Two things are being defended. That the arrows are REAL and reduced
+    // honestly, and that a viewer is never left thinking one dataset supplied
+    // both the colours and the arrows when two did.
+    const w = watch(page);
+    await page.goto(PROBE, { waitUntil: "networkidle" });
+    await sceneReady(page);
+
+    const sheet = page.locator('[aria-label="Station sheet"]');
+    const block = sheet.locator(".block").filter({ hasText: "Currents" });
+
+    // Off by default: a second agency's data should not appear unasked, and
+    // it is a second request the opening scene does not need.
+    await expect(block.getByRole("button")).toHaveText("Off");
+    const before = await page.evaluate(
+      () => (window as unknown as { __sagarScene?: any }).__sagarScene.arrowCount(),
+    );
+    expect(before).toBe(0);
+
+    // --- on ------------------------------------------------------------------
+    await block.getByRole("button").click();
+    await page.waitForFunction(
+      () => (window as unknown as { __sagarScene?: any }).__sagarScene.arrowCount() > 0,
+      undefined,
+      { timeout: 40_000 },
+    );
+    const drawn = await page.evaluate(
+      () => (window as unknown as { __sagarScene?: any }).__sagarScene.arrowCount(),
+    );
+    // A readable field, not three arrows and not forty thousand.
+    expect(drawn).toBeGreaterThan(50);
+    expect(drawn).toBeLessThanOrEqual(600);
+
+    // --- and the sheet says what was actually drawn --------------------------
+    // The DEPTH SERVED, which is not the depth of the slice beside it: GLORYS
+    // has its own 40 levels and none of them is exactly where the cursor is.
+    await expect(block).toContainText(/\d+ arrows at [\d.]+ m/);
+    // The reduction, disclosed. A thinned field must never be presented as the
+    // grid the model actually ran on.
+    await expect(block).toContainText(/mean of up to \d+ cells/);
+    // And the coastal refusals, so a sparse field is distinguishable from a
+    // broken one.
+    await expect(block).toContainText(/refused for being more land than water/);
+    // Named as a different dataset, in the control itself.
+    await expect(block).toContainText(/Copernicus GLORYS, not the INCOIS analysis/);
+
+    // --- moving the depth cursor moves the arrows ----------------------------
+    // They belong to a level, not to the scene. Currents at 2000 m are a
+    // different field from currents at 100 m, and the count changes because
+    // the seafloor rises and more blocks become land.
+    const summaryBefore = await block.innerText();
+    // A MID-depth level, not the deepest. The deepest is 2000 m, where the
+    // INCOIS field has a level and GLORYS does not, and that case is asserted
+    // separately below because it is a real edge rather than a failure.
+    await page.locator('[role="option"]').nth(14).click();
+    await expect(block).not.toHaveText(summaryBefore, { timeout: 40_000 });
+    await expect(block).toContainText(/\d+ arrows at [\d.]+ m/);
+
+    // --- the two cubes do not share a depth axis, and it says so ------------
+    // The INCOIS rack reaches 2000 m; GLORYS stops at 1941.89. A viewer who
+    // simply moves the cursor to the bottom gets a sentence, not a stack
+    // trace, and not an arrow drawn at the wrong depth.
+    await page.locator('[role="option"]').last().click();
+    await expect(block).toContainText(/has no currents at 2000 m/, { timeout: 40_000 });
+    await expect(block).toContainText(/different axis/);
+    await expect(block).not.toContainText("Error:");
+    await page.waitForFunction(
+      () => (window as unknown as { __sagarScene?: any }).__sagarScene.arrowCount() === 0,
+      undefined,
+      { timeout: 20_000 },
+    );
+    // Back to a level that has data, so the teardown below is meaningful.
+    await page.locator('[role="option"]').nth(6).click();
+    await page.waitForFunction(
+      () => (window as unknown as { __sagarScene?: any }).__sagarScene.arrowCount() > 0,
+      undefined,
+      { timeout: 40_000 },
+    );
+
+    // --- off again -----------------------------------------------------------
+    await block.getByRole("button").click();
+    await page.waitForFunction(
+      () => (window as unknown as { __sagarScene?: any }).__sagarScene.arrowCount() === 0,
+      undefined,
+      { timeout: 20_000 },
+    );
+
+    expect(w.offOrigin, "PRD F11: currents must come from our own origin").toEqual([]);
+  });
+
+  test("the sensor station appears only when one is plugged in", async ({ page, request }) => {
+    /* PS requirement F6, TRD M9: "extensible design ... future integration of
+       additional sensors". This test drives the whole clause with no hardware,
+       which is the point: the server does not care what posts to it.
+
+       THE FIRST HALF IS THE IMPORTANT HALF. No rig is the normal state, on the
+       judges' laptop and on CI and on this machine most of the time, and a
+       globe that draws a station mark with nothing behind it is making the one
+       claim on this surface that costs nothing to make and everything to be
+       caught making. So the log is emptied and the absence is asserted before
+       anything is posted.
+
+       Emptying it is safe and is not a special test affordance: the readings
+       file is runtime state written by a device, gitignored, rebuilt by
+       whatever is plugged in, and firmware/sagarnode/README.md already says it
+       is safe to delete between demos. */
+    const log = join(__dirname, "..", "data", "cube", "sagarnode.jsonl");
+    rmSync(log, { force: true });
+
+    const w = watch(page);
+    await page.goto(PROBE, { waitUntil: "networkidle" });
+    await sceneReady(page);
+
+    // --- 1. nothing plugged in, nothing drawn, nothing claimed --------------
+    // The route answers an EMPTY station rather than a 404, because a 404
+    // would read as a broken endpoint rather than as an idle feature.
+    const empty = await (await request.get(`${API}/sagarnode`)).json();
+    expect(empty.count, "the log was just emptied").toBe(0);
+    await expect(page.locator(".node")).toHaveCount(0);
+    const bare = await page.evaluate(() => {
+      const s = (window as unknown as { __sagarScene?: any }).__sagarScene;
+      return { nodes: s.sagarnodeCount(), floats: s.floatCount() };
+    });
+    expect(bare.nodes, "no rig means no mark on the globe").toBe(0);
+    expect(bare.floats, "the real instruments are unaffected").toBeGreaterThan(0);
+    // And the legend does not advertise a class that is not there.
+    await expect(page.locator(".legend")).not.toContainText("Demonstration rig");
+
+    // --- 2. a wiring fault is refused BY NAME -------------------------------
+    // -127 is what a DS18B20 library reports when it cannot find the device,
+    // and the refusal is the entire debugging loop for a headless board: the
+    // sentence names the probe and the range it should be in.
+    const broken = await request.post(`${API}/ingest/sagarnode`, {
+      data: { station_id: "sagarnode-01", temp_c: -127, tds_ppm: 310, turbidity_ntu: 4.2 },
+    });
+    expect(broken.status()).toBe(400);
+    expect((await broken.json()).detail).toMatch(/temp_c is -127\.0, outside the -5\.0 to 100\.0/);
+
+    // --- 3. twenty quiet readings, and still no alarm -----------------------
+    // A threshold that trips on the tank simply existing is a threshold nobody
+    // would leave switched on.
+    for (let i = 0; i < 20; i++) {
+      const r = await request.post(`${API}/ingest/sagarnode`, {
+        data: {
+          station_id: "sagarnode-01",
+          temp_c: 27 + ((i % 5) - 2) * 0.05,
+          tds_ppm: 308 + (i % 3),
+          turbidity_ntu: 4.2,
+        },
+      });
+      expect(r.status(), "a plausible reading must be accepted").toBe(200);
+    }
+    const quiet = await (await request.get(`${API}/sagarnode`)).json();
+    expect(quiet.count).toBe(20);
+    expect(quiet.alert, "a settled tank must not trip anything").toBeNull();
+
+    await page.reload({ waitUntil: "networkidle" });
+    await sceneReady(page);
+
+    const panel = page.locator(".node");
+    await expect(panel).toBeVisible({ timeout: 30_000 });
+    // The label the SERVER serves, not one invented here. CLAUDE.md: it is a
+    // conductivity-derived salinity PROXY, and an INCOIS oceanographer is
+    // exactly the person who would notice the difference.
+    await expect(panel).toContainText("Conductivity-derived salinity proxy");
+    await expect(panel).not.toContainText(/salinity sensor/i);
+    // Quiet: no drill stamp yet.
+    await expect(panel.locator(".node__drill")).toHaveCount(0);
+    // And the mark is on the globe now, in its own layer, NOT counted among
+    // the profiling instruments.
+    const withRig = await page.evaluate(() => {
+      const s = (window as unknown as { __sagarScene?: any }).__sagarScene;
+      return { nodes: s.sagarnodeCount(), tripped: s.sagarnodeTripped(), floats: s.floatCount() };
+    });
+    expect(withRig.nodes).toBe(1);
+    expect(withRig.tripped).toBe(false);
+    // The count of profiling instruments is UNCHANGED. That is the assertion
+    // the separate layer exists for: fold the rig into the float layer and a
+    // bucket becomes one of the Argo floats in every total on the page.
+    expect(withRig.floats, "a bucket is not an Argo float").toBe(bare.floats);
+    await expect(page.locator(".legend")).toContainText("Demonstration rig");
+
+    // --- 4. the jug of warm water -------------------------------------------
+    const warm = await request.post(`${API}/ingest/sagarnode`, {
+      data: { station_id: "sagarnode-01", temp_c: 34.2, tds_ppm: 312, turbidity_ntu: 9.5 },
+    });
+    expect(warm.status()).toBe(200);
+    expect((await warm.json()).alert).toMatch(/Rapid warming/);
+
+    await page.reload({ waitUntil: "networkidle" });
+    await sceneReady(page);
+    await expect(panel).toBeVisible({ timeout: 30_000 });
+
+    // The reading itself, on screen.
+    await expect(panel).toContainText("34.2");
+    // A drill, stamped as one. The rig's alert carries CAP status Exercise for
+    // exactly the reason HazardWatch's rehearsals do, and this is the same
+    // stamp: a bucket in a college hall must never read as a coastal hazard.
+    await expect(panel.locator(".node__drill")).toHaveText(/exercise/i);
+    await expect(panel.locator(".node__headline")).toContainText("DEMONSTRATION RIG");
+    // The threshold is a jump against the tank's OWN recent spread, not a
+    // fixed temperature, so the sentence has to carry the baseline it beat.
+    await expect(panel.locator(".node__headline")).toContainText(/recent average of 27/);
+
+    await page.waitForFunction(
+      () => (window as unknown as { __sagarScene?: any }).__sagarScene.sagarnodeTripped() === true,
+      undefined,
+      { timeout: 20_000 },
+    );
+
+    // --- 5. and the spoken scene says all of that ---------------------------
+    // Without the readings themselves: this region is aria-live and the rig is
+    // polled twice a second, so a number in it would make a screen reader
+    // recite the tank forever.
+    const spoken = await page.evaluate(
+      () => document.querySelector('.sr-only[role="status"]')?.textContent ?? "",
+    );
+    expect(spoken).toContain("demonstration sensor station");
+    expect(spoken).toContain("not an ocean observation");
+    expect(spoken).toMatch(/drill/i);
+    expect(spoken).not.toMatch(/34\.2/);
+
+    expect(w.offOrigin, "PRD F11: the rig must post to our own origin").toEqual([]);
+    expect(w.consoleErrors, "no console error").toEqual([]);
+
+    // Left empty, so the next run starts from the state CI starts from.
+    rmSync(log, { force: true });
   });
 
   test("a narrow window is honest rather than broken", async ({ page }) => {

@@ -18,7 +18,7 @@
  * drags it, and an assertive region would interrupt on every step.
  */
 
-import type { WarningAlert } from "@/lib/api";
+import type { SagarNodeStation, WarningAlert } from "@/lib/api";
 
 interface Props {
   datasetTitle: string | null;
@@ -30,9 +30,13 @@ interface Props {
   levels: number;
   time: string;
   exaggeration: number;
+  /** Marks on the globe: one per CAST, not one per instrument. */
   stationCount: number;
-  /** Station count per instrument class, so the spoken summary can name them. */
-  stationKinds: Record<string, number>;
+  /** Casts and distinct instruments per class, so the spoken summary can name
+   *  them without turning nine casts by three floats into nine floats. */
+  stationKinds: Record<string, { profiles: number; platforms: number }>;
+  /** Distinct instruments behind all of those casts. */
+  platformCount: number;
   selectedWmo: string | null;
   selectedKind: string | null;
   vmin: number;
@@ -41,6 +45,8 @@ interface Props {
    *  a canvas and therefore invisible to a screen reader, which for a warning
    *  is the least acceptable place in this product to leave silent. */
   warnings: WarningAlert[];
+  /** The tabletop rig (PS F6), or null when none is plugged in. */
+  sagarnode: SagarNodeStation | null;
 }
 
 /** Spoken names for the instrument classes. The visual legend tells them apart
@@ -55,12 +61,26 @@ const KIND_WORDS: Record<string, [string, string]> = {
   adcp: ["ADCP", "ADCPs"],
 };
 
-function describeStations(kinds: Record<string, number>): string {
+/**
+ * The instrument classes, spoken.
+ *
+ * Counted by INSTRUMENT, not by mark. A mark is one cast, a float drifts and
+ * casts repeatedly, so the nine BGC marks in this box were taken by three
+ * BGC floats. Saying "nine biogeochemical floats" would be a claim about the
+ * Indian Ocean observing system that is off by a factor of three, and it is
+ * the kind of claim the listener most likely to be checking is best equipped
+ * to check.
+ */
+function describeStations(
+  kinds: Record<string, { profiles: number; platforms: number }>,
+): string {
   const parts = Object.entries(kinds)
-    .filter(([, n]) => n > 0)
-    .map(([kind, n]) => {
+    .filter(([, c]) => c.platforms > 0)
+    .map(([kind, c]) => {
       const words = KIND_WORDS[kind] ?? [kind, kind];
-      return `${n} ${n === 1 ? words[0] : words[1]}`;
+      const n = c.platforms;
+      const each = c.profiles === n ? "" : `, ${c.profiles} casts between them`;
+      return `${n} ${n === 1 ? words[0] : words[1]}${each}`;
     });
   if (parts.length <= 1) return parts[0] ?? "none";
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
@@ -94,6 +114,26 @@ function describeWarnings(alerts: WarningAlert[]): string {
     .join("");
 }
 
+/**
+ * The tabletop rig, spoken.
+ *
+ * DELIBERATELY WITHOUT ITS NUMBERS. This region is aria-live, the rig is
+ * polled twice a second, and the water temperature moves in the last decimal
+ * continuously: putting the reading in this sentence would make a screen
+ * reader recite the tank forever and bury everything else the scene has to
+ * say. What is said is what is stable and what matters, which is that the rig
+ * is there, that it is a demonstration and not an observation, and whether it
+ * has tripped. The readings themselves are in the panel, which is a table.
+ */
+function describeSagarnode(node: SagarNodeStation | null): string {
+  if (!node) return "";
+  const what =
+    " A tabletop demonstration sensor station is also reporting, marked with a" +
+    " broken circle. It is a rig on the demo table, not an ocean observation.";
+  if (!node.alert) return what;
+  return `${what} It has tripped its own warming threshold, as a rehearsal: this is a drill and concerns nobody at sea.`;
+}
+
 export default function SceneSummary(p: Props) {
   if (!p.datasetTitle) {
     return (
@@ -119,15 +159,17 @@ export default function SceneSummary(p: Props) {
         p.units ? ` ${p.units}` : ""
       }; cells with no data are left uncoloured. ${
         p.stationCount === 0
-          ? "No instrument stations are in view."
-          : `${p.stationCount} instrument station${
-              p.stationCount === 1 ? "" : "s"
-            } are marked on the globe: ${describeStations(p.stationKinds)}.`
+          ? "No instrument casts are in view."
+          : `${p.stationCount} instrument cast${
+              p.stationCount === 1 ? " is" : "s are"
+            } marked on the globe, taken by ${p.platformCount} instrument${
+              p.platformCount === 1 ? "" : "s"
+            }: ${describeStations(p.stationKinds)}.`
       }${
         p.selectedWmo
           ? ` ${platformNoun(p.selectedKind)} ${p.selectedWmo} is selected, and its measured profile is shown beside the scene.`
           : " Select a station to read its measured profile against the model."
-      }${describeWarnings(p.warnings)}`}
+      }${describeSagarnode(p.sagarnode)}${describeWarnings(p.warnings)}`}
     </p>
   );
 }

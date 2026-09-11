@@ -25,6 +25,10 @@ outstanding.
 [`docs/SAGARNODE-BOM.md`](docs/SAGARNODE-BOM.md) ·
 [decisions](docs/adr/)
 
+**Presenting it:** [`docs/PITCH-INTERNAL.md`](docs/PITCH-INTERNAL.md) is the
+three-minute internal-round script, timed, with the questions to expect and
+the things nobody may say on stage.
+
 ## Repo layout (TRD §8)
 
 ```
@@ -33,7 +37,7 @@ services/api/        FastAPI data plane: REST + OGC WMS/WCS + plugin registry
 services/agent/      Samudra Sahayak agent plane (Phase 2) - detachable by design
 packages/scene/      SceneState schema shared by UI, deep links and the agent
 data/sources.yaml    dataset registry - THE extensibility surface (PS F3/F6)
-firmware/sagarnode/  ESP32 live-sensor station (Phase 2; parts list in docs/)
+firmware/sagarnode/  ESP32 live-sensor station - sketch written, never flashed
 tools/               fetch_sample · preprocess · build_offline_cube · validate_rmse
 storyboards/         JSON guided tours (Phase 4)
 ```
@@ -85,7 +89,7 @@ while it runs answers 404 until it is restarted.
 
 ## API surface
 
-All twelve routes are served by `services/api`, and OpenAPI is at `/docs`.
+All thirteen routes are served by `services/api`, and OpenAPI is at `/docs`.
 
 | Route | What it is for |
 |---|---|
@@ -97,6 +101,7 @@ All twelve routes are served by `services/api`, and OpenAPI is at `/docs`.
 | `GET /isosurface/{source}/{var}` | **Isosurface extraction (F1).** The surface where a field takes a given value, as a triangle mesh with its extraction method and refusal counts. Marching cubes on the native grid, no resampling |
 | `GET /scorecard/{source}/{var}` | **Class-4-style verification (F9).** Per-depth-bin bias and RMSE of the model against the in-situ profiles, interpolated to each cast's own position and depth, with every unpaired level counted and the reason it was refused. Carries the caveat that the analysis assimilates these same profiles, so this is analysis fit and not forecast skill |
 | `GET /warnings` | **HazardWatch (F13).** Active CAP v1.2 warnings at an instant, as polygons and circles, from India's national CAP backbone (NDMA SACHET) plus ocean-hazard rehearsal bulletins. Refuses to serve a cancelled, superseded, expired or not-yet-effective alert, and refuses a drill unless asked; every refusal is counted |
+| `GET /currents/{source}` | **Current vectors at depth (F1).** A block-averaged, drawable velocity field: 43,621 native cells become a few hundred arrows. Says the stride it used, the cells behind each arrow, the depth it actually served, and the coastal blocks it refused for being more land than water |
 | `GET /storyboards` | **Guided tours (F12).** JSON-scripted tours: a scene patch, a line of narration and the evidence it rests on, per step. Every numeral in a narration line must be backed by the patch or the evidence, and the loader refuses a tour where it is not |
 | `GET /wms` | **OGC WMS 1.3.0.** GetCapabilities and GetMap, for stored variables AND plugin-derived products. `CRS:84` and `EPSG:4326`, time and elevation dimensions, six palettes, TRANSPARENT and BGCOLOR per spec |
 | `GET /wcs` | **OGC WCS 1.0.0.** GetCapabilities, DescribeCoverage and GetCoverage, serving CF-1.8 NetCDF. Refuses to resample rather than inventing cells |
@@ -146,9 +151,9 @@ The plugin interface is documented in [`docs/PLUGINS.md`](docs/PLUGINS.md).
 ## Tests
 
 ```bash
-./tasks.ps1 test     # 398 data-plane tests
+./tasks.ps1 test     # 414 data-plane tests
 ./tasks.ps1 agent    # then: python -m pytest services/agent/tests  (68 tests)
-./tasks.ps1 e2e      # 8 browser tests against a production build
+./tasks.ps1 e2e      # 9 browser tests against a production build
 ```
 
 Both run with no network. `data/raw/` and `data/cube/` are gitignored, so CI

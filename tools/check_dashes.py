@@ -6,9 +6,18 @@ writes another paragraph. Prose is added to this repo constantly, most of it by
 an agent that has to be told the same thing every session. A guard in CI tells
 it once.
 
-Scope: files tracked by git, minus the exemptions below. Untracked build output,
-site-packages and downloaded data are irrelevant, and asking git for the file
-list is what keeps this honest with no skip-list to maintain.
+Scope: every file git would consider part of the repository, tracked or not,
+minus the exemptions below. Build output, site-packages and downloaded data are
+excluded by .gitignore rather than by a skip-list here, which is what keeps this
+honest with nothing to maintain.
+
+NOT ONLY TRACKED FILES, and the difference is the whole point. This asked git
+for `ls-files` alone until 2026-09-10, so a file that had been WRITTEN but not
+yet committed was invisible to the guard. That is exactly backwards: new prose
+is where a dash comes from, and on this project nothing is committed until the
+team lead commits it, so at any moment a session's entire output sat outside
+the check. It passed clean for a whole session over five new files it had never
+opened.
 
     python tools/check_dashes.py            # check, exit 1 on any hit
     python tools/check_dashes.py --list     # one line per hit, no exit code
@@ -53,17 +62,27 @@ SKIP_EXT = {
 }
 
 
-def tracked_files(root: pathlib.Path) -> list[str]:
+def repo_files(root: pathlib.Path) -> list[str]:
+    """Every file git considers part of the repo: committed AND newly written.
+
+    `--cached` is the tracked set. `--others --exclude-standard` adds the
+    untracked files that are not gitignored, which is where a brand new
+    document lives right up until somebody commits it. `-z` because a path
+    with a space in it would otherwise split into two paths that do not exist.
+    """
     out = subprocess.run(
-        ["git", "-C", str(root), "ls-files"],
+        ["git", "-C", str(root), "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         capture_output=True, text=True, check=True,
     )
-    return [line for line in out.stdout.splitlines() if line]
+    # A set: a file can be listed by both --cached and --others in edge cases
+    # (an assume-unchanged entry, say), and reporting one hit twice would make
+    # the count wrong.
+    return sorted({line for line in out.stdout.split("\0") if line})
 
 
 def scan(root: pathlib.Path) -> list[tuple[str, int, str, str]]:
     hits: list[tuple[str, int, str, str]] = []
-    for rel in tracked_files(root):
+    for rel in repo_files(root):
         if rel in EXEMPT:
             continue
         path = root / rel
@@ -100,7 +119,10 @@ def main() -> int:
         print(f"{rel}:{line}: {kind}: {context}")
 
     if not hits:
-        print(f"clean: no em or en dash in any tracked file ({len(EXEMPT)} exempt, see EXEMPT)")
+        print(
+            f"clean: no em or en dash in {len(repo_files(root))} repo files, "
+            f"committed and uncommitted ({len(EXEMPT)} exempt, see EXEMPT)"
+        )
         return 0
 
     print(f"\n{len(hits)} em/en dash(es) found in {len({h[0] for h in hits})} file(s).")

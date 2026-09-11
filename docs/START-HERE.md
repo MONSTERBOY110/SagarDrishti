@@ -36,16 +36,16 @@ server and from the international Argo archive, cleans them up, and serves them
 to the web page. Government science files are messy in specific ways (a missing
 value stored as -9999, temperature labelled "degs" instead of Celsius, a depth
 axis that does not say whether depth counts upward or downward). All of that is
-handled and covered by **466 automated tests**, so it stays handled. Eight more
+handled and covered by **482 automated tests**, so it stays handled. Nine more
 tests drive a real browser through the whole demo and fail the build if
 anything reaches the internet.
 
 **The 3D scene.** The Bay of Bengal as a stack of 24 coloured layers, one per
 depth, from 5 m down to 2000 m. You can see the warm surface, the sharp
 temperature drop between 50 and 200 m (the thermocline, which is what feeds
-cyclones), and the cold deep water. It runs at **44 frames per second** on the
-weaker of this laptop's two graphics chips, which is the number that matters
-because it is the harder case.
+cyclones), and the cold deep water. It runs at **72 frames per second** on the
+weaker of this laptop's two graphics chips, with every layer switched on, which
+is the number that matters because it is the harder case.
 
 **The float click-through.** 22 real instruments are on the globe. Click one and
 you get its actual temperature profile, 524 measurements in the case of float
@@ -184,9 +184,60 @@ enabled and quietly unable to produce a single usable field. We switched to the
 forecast product and added a test that fails the build if anyone puts the old
 one back.
 
-The currents are ingested and served, including through the two international
-standards endpoints. They are not yet drawn as arrows on the globe; that is my
-next job.
+**And they are drawn now.** Switch CURRENTS on in the left panel and a field
+of arrows appears across the Bay of Bengal at whatever depth the cursor is on.
+Move the cursor and the arrows change: at the surface the fastest is about
+1.3 metres per second, at a kilometre down it is a fifth of that. The
+structure is real, and you can see a circulation pattern in it.
+
+Two details worth knowing because they are the honest bits, and a judge who
+notices them will think better of us for having said them first.
+
+The panel tells you the depth the arrows are ACTUALLY at, which is not quite
+the depth of the coloured slice beside them. The two datasets have different
+level spacings and we do not stretch one onto the other to make them look
+tidier.
+
+And the arrows thin out near the coast, on purpose. Each arrow is the average
+of up to 81 model cells, and where a block is more land than water we draw
+nothing rather than an arrow made from the two wet corners. The panel prints
+how many blocks it dropped, so a sparse patch reads as "we would not guess"
+rather than as a bug.
+
+**SagarNode, the rig on the table.** This is the one a judge can put a hand in,
+and the whole of it works today without a single component bought.
+
+The problem statement asks for a design that takes "future integration of
+additional sensors". Most teams answer that with a paragraph. Ours answers it
+with a wire: a device nobody had heard of when the data was loaded posts to
+`/ingest/sagarnode` and appears on the globe beside twenty-five real ocean
+casts, with no change to anything.
+
+**You can see it right now.** With `./tasks.ps1 api` running, post a reading
+with `curl` (the exact command is in `docs/required.md`). Twenty of them and a
+SAGARNODE panel appears beside the globe with the three readings and a
+temperature trend, and a mark appears on the water. One more at 34 degrees and
+it stamps itself EXERCISE and says the tank warmed 7 degrees above its own
+recent average. That is exactly what pouring a jug of warm water in will do.
+
+**Three things about it that are deliberate, and worth saying if asked.**
+
+It is drawn as a HOLLOW circle, not the filled one the real moorings use, and
+it is never counted among the instruments. A bucket on a table must not be
+able to pass for an ocean observation on a globe full of real ones.
+
+Its alert is marked with CAP status `Exercise`, the same word the rehearsal
+tsunami bulletin carries, so every guard we wrote for drills applies to it
+without being written twice.
+
+And we do not overstate what it measures. The conductivity probe is a
+*conductivity-derived salinity proxy*, never a salinity sensor, which is the
+distinction an INCOIS oceanographer would notice first. It and the turbidity
+probe are uncalibrated, so the panel prints both as indications rather than
+measurements; only the temperature probe is factory calibrated and quotable.
+
+The firmware is written and marked in the file as never having run on a board.
+The parts are still the one thing blocked on you.
 
 **Samudra Sahayak, the assistant.** Bottom of the screen there is a box marked
 SAMUDRA SAHAYAK. Type a question, or click one of the four suggestions, and it
@@ -313,9 +364,13 @@ them is a P0 requirement that is missing:
 - The **talking assistant** (Samudra Sahayak) that flies the camera on voice
   command. Phase 2. The scene was built so the assistant can only move it
   through the same controls you use, which is what keeps it honest.
-- The **sensor rig**, which is waiting on the parts. (The standards endpoints,
-  the accuracy scorecard, the cyclone warning layer and the guided tours all
-  used to be on this list and are now built, see above.)
+- The **sensor rig's hardware**, which is waiting on the parts. Everything
+  around it is built: the endpoint, the mark on the globe, the panel, the
+  trend and the alert, all demoable with `curl` today. What the parts add is
+  a judge causing it by hand. (The standards endpoints, the accuracy
+  scorecard, the cyclone warning layer, the guided tours and the sensor
+  station's software all used to be on this list and are now built, see
+  above.)
 - **Depth-resolved currents** and a **chlorophyll layer**, both waiting on
   items in your list above.
 
@@ -325,8 +380,13 @@ them is a P0 requirement that is missing:
   analysis product, so it is defensible, but it looks coarse. The finer data
   (1/12 degree) is item 2 in your list above.
 - **Deep currents are missing entirely** until that account exists.
-- The occasional frame still stutters (1 frame in 100 drops to about 27 per
-  second). Fine, not yet excellent.
+- (Was: "the occasional frame stutters". **Re-measured on 10 September and it
+  does not.** On a production build, on the weaker of this laptop's two
+  graphics chips, with every layer switched on, it runs at 72 frames per
+  second and the worst frame in a hundred is 57. That is better than the
+  target we set ourselves. The old worry came from measuring the frame rate
+  while the picture was sitting still, which measures the browser's power
+  saving rather than our speed.)
 - The Docker deployment path is written but unproven.
 - Nobody from INCOIS has been contacted yet. Past winners did this and said so on
   stage. Worth doing in October.

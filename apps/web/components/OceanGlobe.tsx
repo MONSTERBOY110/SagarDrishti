@@ -29,11 +29,22 @@ import {
   MAX_DRAWN_SLICES_WITH_ISOSURFACE,
   sliceVisibility,
 } from "@/lib/scene";
-import type { FieldColumn, ProfileGlyph, WarningAlert } from "@/lib/api";
+import type {
+  CurrentField,
+  FieldColumn,
+  ProfileGlyph,
+  SagarNodeStation,
+  WarningAlert,
+} from "@/lib/api";
 
 export interface FpsSample {
   fps: number;
   p1: number;
+  /** Was the camera moving while this was measured? A still scene has no
+   *  frame rate worth quoting: the browser throttles rAF on a window it
+   *  thinks is inactive, so an idle reading is its refresh choice rather
+   *  than our cost. The readout says which it is looking at. */
+  moving: boolean;
 }
 
 interface Props {
@@ -43,6 +54,15 @@ interface Props {
   profiles: ProfileGlyph[];
   /** Active CAP warnings at the scene time (PS F13, HazardWatch). */
   warnings: WarningAlert[];
+  /** Decimated current vectors at the depth cursor, or null when the layer is
+   *  off (PS F1). Already reduced by the server; the client draws what it is
+   *  given and never thins further. */
+  currents: CurrentField | null;
+  /** The tabletop sensor station (PS F6), or null when nothing is plugged in,
+   *  which is the normal state. Null draws no mark: a rig glyph on the globe
+   *  with no rig behind it would be the one claim on this surface that costs
+   *  nothing to make and everything to be caught making. */
+  sagarnode: SagarNodeStation | null;
   selection: string | null;
   focusDepth: number;
   exaggeration: number;
@@ -101,6 +121,12 @@ export default function OceanGlobe(props: Props) {
     /** HazardWatch polygons and circles. Their own list, so a change to the
      *  warning layer does not rebuild the 24-slice stack beside it. */
     hazards: any[];
+    /** Current-vector arrows. Their own list for the same reason, and they
+     *  rebuild on every depth change, which the slices do not. */
+    arrows: any[];
+    /** The tabletop rig's mark. At most one, and usually none, but a list so
+     *  the teardown reads the same as every other layer's. */
+    nodes: any[];
     /** The isosurface primitive and the polyline drawing the rim of its holes.
      *  These live in `scene.primitives`, NOT in `viewer.entities`, which is why
      *  the teardown below had to learn about them: the existing cleanup removed
@@ -227,22 +253,58 @@ export default function OceanGlobe(props: Props) {
       viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
       cesiumRef.current = {
-        viewer, Cesium, slices: [], floats: [], hazards: [],
+        viewer, Cesium, slices: [], floats: [], hazards: [], arrows: [], nodes: [],
         isosurface: null, isoRim: null, isoMesh: null,
       };
 
       /* --- FPS probe -------------------------------------------------------
          Frame durations, not a simple counter: the p1 (99th-percentile frame)
          is what a judge actually perceives as a stutter, and an average hides
-         it completely. */
+         it completely.
+
+         MEASURED ONLY WHILE THE CAMERA IS MOVING, and that correction matters
+         more than it sounds. Cesium's render loop is driven by
+         requestAnimationFrame, and a browser throttles rAF on a window it
+         thinks is inactive. So on a still scene this probe was reporting the
+         BROWSER'S CHOICE OF REFRESH RATE as though it were our frame cost.
+
+         Measured on the target device (Intel UHD, production build, every
+         layer on) the difference is not small: 27 renders per second while
+         still, 72 while being orbited. The higher number is the true one, and
+         the lower one was about to send me optimising a scene that is not
+         slow. A readout that under-reports by a factor of three in front of a
+         judge is worse than no readout.
+
+         So: frames count towards the sample only when the camera has moved
+         recently, and when it has not the last moving measurement is held and
+         the readout says it is idle. That is the honest answer to "how fast
+         is this", because a still picture has no frame rate worth quoting. */
       const frames: number[] = [];
       let last = performance.now();
       let reported = 0;
+      let movingUntil = 0;
+      let lastCam = scene.camera.positionWC.clone();
+
       const onPostRender = () => {
         const now = performance.now();
-        frames.push(now - last);
+        const gap = now - last;
         last = now;
-        if (frames.length > 180) frames.shift();
+
+        // A tenth of a metre of camera movement is far below anything a person
+        // can see and far above floating-point noise.
+        const cam = scene.camera.positionWC;
+        if (Cesium.Cartesian3.distance(cam, lastCam) > 0.1) {
+          lastCam = Cesium.Cartesian3.clone(cam, lastCam);
+          // Half a second of grace, so the sample survives the gap between one
+          // drag and the next rather than resetting on every pause.
+          movingUntil = now + 500;
+        }
+        const moving = now < movingUntil;
+        if (moving) {
+          frames.push(gap);
+          if (frames.length > 180) frames.shift();
+        }
+
         if (now - reported > 400 && frames.length > 20) {
           reported = now;
           const sorted = [...frames].sort((a, b) => a - b);
@@ -251,7 +313,13 @@ export default function OceanGlobe(props: Props) {
           latest.current.onFps({
             fps: median > 0 ? 1000 / median : 0,
             p1: worst > 0 ? 1000 / worst : 0,
+            moving,
           });
+        } else if (now - reported > 400 && frames.length <= 20) {
+          // Nothing measured yet: say so rather than printing a zero that
+          // reads as a dead scene.
+          reported = now;
+          latest.current.onFps({ fps: 0, p1: 0, moving: false });
         }
       };
       scene.postRender.addEventListener(onPostRender);
@@ -283,7 +351,15 @@ export default function OceanGlobe(props: Props) {
           /** What the hazard layer actually drew, read from the entities
            *  rather than from the prop: a hook keyed on a prop can claim a
            *  warning is on screen before the effect that draws it has run. */
+          arrowCount: () => cesiumRef.current?.arrows.length ?? 0,
           hazardCount: () => cesiumRef.current?.hazards.length ?? 0,
+          /** 0 when no rig is plugged in, which is the state CI runs in, so a
+           *  test can assert the globe invents no station. */
+          sagarnodeCount: () => cesiumRef.current?.nodes.length ?? 0,
+          sagarnodeTripped: () =>
+            (cesiumRef.current?.nodes ?? []).some(
+              (e: any) => e.properties?.tripped?.getValue?.() === true,
+            ),
           hazardSeverities: () =>
             (cesiumRef.current?.hazards ?? []).map((e: any) =>
               e.properties?.severity?.getValue?.(),
@@ -618,6 +694,57 @@ export default function OceanGlobe(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, props.profiles, props.selection]);
 
+  /* --- the tabletop rig (PS requirement F6, TRD M9) -----------------------
+     A SEPARATE LAYER from the float glyphs above, and the separation is the
+     honest part. Everything in that layer is a profile: a cast down a water
+     column, served by /profiles, clickable into a depth chart. SagarNode is a
+     time series at one point on a table, served by /sagarnode, and it has no
+     profile to open. Folding it into the float layer would have been fewer
+     lines and would have made a bucket look like an Argo float in every
+     count, every legend total and every spoken summary on this page.
+
+     It rebuilds on the whole station object rather than on a reading, which
+     is once every poll while a rig is live. One billboard, so that is cheap;
+     and the mark has to change the moment the threshold trips, which is the
+     one beat of this demo that has to land. */
+  useEffect(() => {
+    const c = cesiumRef.current;
+    if (!ready || !c) return;
+    const { viewer, Cesium } = c;
+
+    for (const e of c.nodes) viewer.entities.remove(e);
+    c.nodes = [];
+
+    const node = props.sagarnode;
+    // No rig, or a rig that has never reported. Nothing is drawn in either
+    // case: a mark on the globe is a claim that something is measuring there.
+    if (node && node.count > 0) {
+      const tripped = node.alert !== null;
+      c.nodes.push(
+        viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(node.station.lon, node.station.lat, 0),
+          billboard: {
+            image: stationMark(false, "sagarnode", tripped),
+            width: tripped ? 24 : 16,
+            height: tripped ? 24 : 16,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+          properties: {
+            // Deliberately NO profileId. The pick handler reads that key to
+            // open a profile panel, and this station has no profile; a click
+            // on it therefore behaves exactly like a click on open water.
+            stationId: node.station.id,
+            sagarnode: true,
+            tripped,
+          },
+        }),
+      );
+    }
+
+    viewer.scene.requestRender();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, props.sagarnode]);
+
   /* --- HazardWatch: CAP warning areas (PS requirement F13) ----------------
      Drawn as entities on the ellipsoid rather than at depth. A CAP area is a
      statement about a stretch of coast and sea SURFACE, not about a water
@@ -750,6 +877,99 @@ export default function OceanGlobe(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, props.warnings]);
 
+  /* --- current vectors at the depth cursor (PS requirement F1) ------------
+     The last clause of F1 to get code behind it. INCOIS publish surface
+     currents only, so these are Copernicus GLORYS, live since the team lead's
+     account arrived, and the server has already block-averaged 43,621 native
+     cells into a few hundred arrows.
+
+     DRAWN AT THE SAME HEIGHT AS THE FOCUSED SLICE, so the arrows read as
+     belonging to that layer of water rather than floating over the stack. That
+     is why this effect depends on exaggeration and focusDepth: both move the
+     plane the arrows live on.
+
+     LENGTH CARRIES SPEED, NOT COLOUR. Hue on this surface belongs to the
+     measurement and the colorbar has already spent it on the scalar field; a
+     second colour scale would put a "fast" arrow in competition with warm
+     water and make neither readable. Length is also the encoding a current
+     chart has always used, and it is the one a reader does not need a legend
+     for. */
+  useEffect(() => {
+    const c = cesiumRef.current;
+    if (!ready || !c) return;
+    const { viewer, Cesium } = c;
+
+    for (const e of c.arrows) viewer.entities.remove(e);
+    c.arrows = [];
+
+    const field = props.currents;
+    if (!field || field.arrows.length === 0) {
+      viewer.scene.requestRender();
+      return;
+    }
+
+    // Scaled against the FASTEST arrow in this field rather than a fixed
+    // metres-per-second, so the picture stays legible at 1000 m where the
+    // whole field is a fifth of the surface speed. The legend states the
+    // scale, so the reader is never left to infer it.
+    const fastest = Math.max(...field.arrows.map((a) => a.speed), 1e-6);
+    // About two thirds of a degree for the longest arrow: long enough to read
+    // direction at a glance, short enough that neighbours do not overlap at
+    // the stride the server chose.
+    const MAX_DEGREES = 0.65;
+    const INK = Cesium.Color.fromCssColorString("#cfd8dc");
+    // Behind the slices above them, an arrow is drawn DIMMER rather than not
+    // at all. The first version left them occluded, which is geometrically
+    // honest and useless: the arrows sit at the focus depth, so at 100 m there
+    // are six translucent slices in front of every one of them and the layer
+    // read as empty. The station marks solved the same problem with
+    // disableDepthTestDistance; a polyline cannot take that, so this is the
+    // polyline equivalent, and dimming rather than matching keeps the depth
+    // cue instead of throwing it away.
+    const BEHIND = INK.withAlpha(0.4);
+
+    // The plane of the focused slice. Arrows sitting at sea level while the
+    // water they describe is drawn 20 km below would be a different claim.
+    const height = -props.focusDepth * props.exaggeration;
+
+    for (const a of field.arrows) {
+      const scale = (a.speed / fastest) * MAX_DEGREES;
+      if (!Number.isFinite(scale) || scale <= 0) continue;
+      // Unit direction, then scaled. cos(lat) corrects the longitude degree,
+      // which is shorter than a latitude degree everywhere but the equator;
+      // without it every arrow in the Bay of Bengal points slightly too far
+      // east.
+      const norm = Math.hypot(a.u, a.v) || 1;
+      const dLat = (a.v / norm) * scale;
+      const dLon = ((a.u / norm) * scale) / Math.cos((a.lat * Math.PI) / 180);
+
+      c.arrows.push(
+        viewer.entities.add({
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+              a.lon, a.lat, height,
+              a.lon + dLon, a.lat + dLat, height,
+            ]),
+            // Wide enough to read over a bright slab. At 6 the arrows were
+            // hairlines against a 29 degree surface layer and the field looked
+            // empty from the default camera.
+            width: 11,
+            // Cesium's own arrow material: the head is drawn at the end of the
+            // line, so direction reads without a second entity per arrow.
+            material: new Cesium.PolylineArrowMaterialProperty(
+              INK.withAlpha(0.7 + 0.3 * (a.speed / fastest)),
+            ),
+            depthFailMaterial: new Cesium.PolylineArrowMaterialProperty(BEHIND),
+          },
+          properties: { speed: a.speed, u: a.u, v: a.v, n: a.n },
+        }),
+      );
+    }
+
+    viewer.scene.requestRender();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, props.currents, props.focusDepth, props.exaggeration]);
+
   return (
     <>
       <div ref={hostRef} style={{ position: "absolute", inset: 0 }} />
@@ -788,8 +1008,14 @@ export default function OceanGlobe(props: Props) {
  *  are told apart by outline alone at 15 px, and stay told apart in a
  *  photograph of a projector screen.
  *
- *  Selection is likewise an added registration box, not a colour change. */
-export function stationMark(selected: boolean, kind = "gdac_geo"): HTMLCanvasElement {
+ *  Selection is likewise an added registration box, not a colour change, and
+ *  `alarm` follows the same rule: a tripped threshold adds a ring around the
+ *  mark and leaves the mark itself alone. */
+export function stationMark(
+  selected: boolean,
+  kind = "gdac_geo",
+  alarm = false,
+): HTMLCanvasElement {
   const s = 44;
   const canvas = document.createElement("canvas");
   canvas.width = s;
@@ -836,6 +1062,25 @@ export function stationMark(selected: boolean, kind = "gdac_geo"): HTMLCanvasEle
       // thing that matters about it on a map.
       ctx.arc(0, 0, 9.5, 0, Math.PI * 2);
       break;
+    case "sagarnode":
+      // The same circle as a mooring, HOLLOW. SagarNode is a bucket on the
+      // demo table, drawn on a globe that otherwise carries twenty-five real
+      // ocean casts and a RAMA buoy India helps run, so the one thing its
+      // mark has to say before anybody reads the legend is "this is not an
+      // ocean observation". A station that is not filled in says it.
+      //
+      // The first attempt broke the rim with a dash instead, on the grounds
+      // that dash already means "rehearsal" everywhere else here. It did not
+      // survive contact with 15 px: a dashed outline leaves the SILHOUETTE a
+      // solid disc, and what it actually produced was a mooring with a ragged
+      // edge, which reads as a rendering fault rather than as a distinction.
+      // Inverting the fill changes the silhouette, so it reads at any size,
+      // and it borrows the same convention a hollow symbol carries on a
+      // scientific plot.
+      ctx.fillStyle = ABYSS;
+      ctx.strokeStyle = "#c4b89a";
+      ctx.arc(0, 0, 9.5, 0, Math.PI * 2);
+      break;
     default:
       // Square: a core Argo float, temperature and salinity.
       ctx.rect(-8, -8, 16, 16);
@@ -843,6 +1088,10 @@ export function stationMark(selected: boolean, kind = "gdac_geo"): HTMLCanvasEle
   ctx.fill();
   ctx.stroke();
 
+  // The centre tick, in whatever the outline was drawn in. That is deliberate
+  // rather than incidental: on the hollow mark the fill is the dark of the
+  // abyss, so an ink tick would be invisible and the manila one is the only
+  // one that reads.
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(0, -4.5);
@@ -850,5 +1099,25 @@ export function stationMark(selected: boolean, kind = "gdac_geo"): HTMLCanvasEle
   ctx.moveTo(-4.5, 0);
   ctx.lineTo(4.5, 0);
   ctx.stroke();
+
+  /* A THRESHOLD TRIP, stamped around the mark rather than coloured into it.
+   *
+   * Screen space, not ground distance: a ring drawn on the ellipsoid would be
+   * a pinhead from orbit and a continent from close in, and this one has to
+   * be the same size at every camera range.
+   *
+   * The reserved caution ink, in its on-water value, and dashed. Both are
+   * deliberate. Hue on this surface belongs to the measurement and caution is
+   * its one exception; dashed, because the rig's alert carries CAP status
+   * Exercise and a drill is drawn dashed everywhere else in this product. */
+  if (alarm) {
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = "#e8735a";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 17, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
   return canvas;
 }

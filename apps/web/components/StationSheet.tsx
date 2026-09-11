@@ -46,6 +46,12 @@ interface Props {
    *  assumed, and its own value control appears only when it is on. */
   isosurfaceOn: boolean;
   isovalue: number;
+  /** The current-vector layer (PS F1). A SECOND dataset, so switching it on is
+   *  a deliberate act rather than something that happens to the viewer. */
+  currentsOn: boolean;
+  /** One line about what was actually drawn, or why nothing was. */
+  currentSummary: string | null;
+  onToggleCurrents: () => void;
   units: string;
   /** One line about what was actually extracted, including what it refused. */
   isoSummary: string | null;
@@ -272,6 +278,63 @@ export default function StationSheet(p: Props) {
             aria-label="Vertical exaggeration"
             onChange={(e) => p.onExaggeration(Number(e.target.value))}
           />
+        </div>
+
+        {/* --- current vectors (PS requirement F1) --------------------------
+            A SECOND DATASET, and the control says so. The slices are INCOIS's
+            own analysis; the arrows are Copernicus GLORYS, on a different grid
+            with its own 40 levels, because INCOIS's free server publishes
+            surface currents only and this is the one clause of F1 no INCOIS
+            source can answer.
+
+            Off by default for the same reason the isosurface is, plus one of
+            its own: switching on a different agency's data should be a
+            deliberate act rather than something that happens to a viewer who
+            never asked. The summary line underneath names the depth actually
+            served, which is not the depth of the slice beside it. */}
+        <div className="block">
+          <div className="label label--split">
+            <span>Currents</span>
+            <button
+              type="button"
+              className="tick stamp"
+              aria-pressed={p.currentsOn}
+              onClick={p.onToggleCurrents}
+              title={
+                p.currentsOn
+                  ? "Stop drawing the current arrows"
+                  : "Draw depth-resolved currents from Copernicus GLORYS at the cursor depth"
+              }
+            >
+              {p.currentsOn ? "On" : "Off"}
+            </button>
+          </div>
+          {p.currentsOn && p.currentSummary && (
+            <p
+              className="num"
+              style={{
+                margin: "0.375rem 0 0",
+                fontSize: "0.625rem",
+                lineHeight: 1.45,
+                color: "var(--ink-soft)",
+              }}
+            >
+              {p.currentSummary}
+            </p>
+          )}
+          {p.currentsOn && (
+            <p
+              style={{
+                margin: "0.25rem 0 0",
+                fontSize: "0.625rem",
+                lineHeight: 1.4,
+                color: "var(--ink-faint)",
+              }}
+            >
+              Arrow length is speed, scaled to the fastest arrow on this level.
+              Copernicus GLORYS, not the INCOIS analysis the colours come from.
+            </p>
+          )}
         </div>
 
         {/* --- the isosurface layer (PS requirement F1) ---------------------

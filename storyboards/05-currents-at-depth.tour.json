@@ -1,0 +1,64 @@
+{
+  "id": "currents-at-depth",
+  "title": "Which way the water is going",
+  "subtitle": "The one field INCOIS could not give us",
+  "audience": "judge",
+  "source_id": "glorys12_cur",
+  "steps": [
+    {
+      "narration": "Everything so far has been how warm and how salty the water is. This is which way it is moving, and it is the one field we could not get from INCOIS at all.",
+      "hold": 9,
+      "patch": {
+        "variable": "TEMP",
+        "time": "2026-07-30T00:00:00Z",
+        "focusDepth": 5,
+        "isosurfaceOn": false,
+        "selection": null,
+        "currentsOn": false
+      },
+      "evidence": [
+        "INCOIS ERDDAP publishes surface geostrophic currents only, so nothing subsurface comes from their server"
+      ]
+    },
+    {
+      "narration": "Their free server publishes surface currents only. Depth-resolved flow needs Copernicus, which needs an account, which is why this layer arrived last. Switch it on and here is the surface.",
+      "hold": 10,
+      "patch": { "currentsOn": true, "focusDepth": 5 },
+      "evidence": [
+        "Copernicus Marine, cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m, cited in the panel beside the arrows"
+      ]
+    },
+    {
+      "narration": "Every arrow is the average of up to eighty-one model cells. The raw grid is a twelfth of a degree, which over this box is forty-three thousand cells, and forty-three thousand arrows is not a picture. The panel says how much was averaged.",
+      "hold": 12,
+      "patch": { "currentsOn": true },
+      "evidence": [
+        "43,621 native cells at 1/12 degree reduce to a few hundred arrows at stride 9; the sheet prints the block size and the count"
+      ]
+    },
+    {
+      "narration": "Notice the arrows thin out near the coast. Where a block is more land than water we draw nothing rather than an arrow made from the two wet corners, and the panel counts how many we dropped. The shelf is exactly where that guess would matter most.",
+      "hold": 12,
+      "patch": { "currentsOn": true },
+      "evidence": [
+        "a block less than 50 per cent water is refused; the sheet prints the refused count beside the arrow count"
+      ]
+    },
+    {
+      "narration": "Now take the cursor down. At the surface the fastest flow here is about one and a quarter metres per second. At a kilometre it is a fifth of that, and the pattern is a different one: the deep ocean is not just a slower version of the top.",
+      "hold": 13,
+      "patch": { "currentsOn": true, "focusDepth": 1000 },
+      "evidence": [
+        "fastest arrow 1.27 m/s at 5.08 m and 0.26 m/s at 1062 m, on 2026-07-30, printed by the currents endpoint"
+      ]
+    },
+    {
+      "narration": "One last thing, and it is the honest one. The arrows and the colours are two different agencies on two different grids, so the panel names the depth the arrows are really at, which is not quite the depth of the coloured layer behind them. We do not stretch one onto the other to make them line up.",
+      "hold": 13,
+      "patch": { "currentsOn": true, "focusDepth": 100 },
+      "evidence": [
+        "the depth cursor at 100 m serves arrows at 92.33 m, the nearest Copernicus level, and the sheet says so"
+      ]
+    }
+  ]
+}

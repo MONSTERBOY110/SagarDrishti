@@ -16,10 +16,11 @@ from datetime import datetime, timezone
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from . import cap, cf, ogc, plugins, scorecard, storyboards, store
+from . import cap, cf, currents, ogc, plugins, sagarnode, scorecard, storyboards, store
 from . import isosurface as isosurface_mod
 from .config import get_settings
 from .registry import load_registry
@@ -57,6 +58,12 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 # an OGC failure must return a ServiceExceptionReport, and a declared Query()
 # would answer 422 JSON before the handler ever ran.
 app.include_router(ogc.router)
+
+#: Where the demonstration rig sits. Declared here rather than accepted from
+#: the device, for the reason spelled out on the /sagarnode route. Change these
+#: to the hall the demo is actually in.
+SAGARNODE_LAT = 22.5726
+SAGARNODE_LON = 88.3639
 
 
 def _nan_to_none(arr: np.ndarray) -> list:
@@ -932,4 +939,250 @@ def storyboard_index() -> dict:
         # What a step is allowed to patch, so a client can check the contract
         # it is being asked to honour instead of guessing.
         "patchable": sorted(storyboards.PATCHABLE),
+    }
+
+
+#: The two components of a velocity, by the names Copernicus and CF use. A
+#: dataset carrying both is drawable as arrows; one carrying neither is not.
+_VECTOR_PAIR = ("uo", "vo")
+
+
+@app.get("/currents/{source_id}", tags=["data"])
+def currents_endpoint(
+    source_id: str,
+    bbox: str = Query(..., description="west,south,east,north in degrees"),
+    time: str = Query(..., description="ISO-8601 timestamp; snapped to the nearest step"),
+    depth: float = Query(..., description="metres, positive down; snapped to a real level"),
+    budget: int = Query(
+        currents.DEFAULT_BUDGET,
+        ge=16,
+        le=4000,
+        description="most arrows to return; the stride is chosen to fit",
+    ),
+) -> dict:
+    """Depth-resolved current vectors, reduced to something drawable (F1).
+
+    The PS names current vectors among the fields F1 must render, and INCOIS's
+    free ERDDAP publishes SURFACE geostrophic currents only, so this is the one
+    clause of F1 that no INCOIS source can answer. The data is Copernicus
+    GLORYS, live since the team lead's account arrived on 2026-09-09.
+
+    WHY THIS IS NOT JUST `/field` TWICE. At 1/12 degree the demo box is 43,561
+    cells per level. Drawn one arrow per cell that is a grey rectangle, and the
+    JSON alone would blow the frame budget in TRD section 5. So the field is
+    block-AVERAGED here (app/currents.py) and the reduction is disclosed: the
+    stride, the cells behind each arrow, and the blocks refused for being
+    mostly land. Both components are still available raw through `/field` for
+    anyone who wants the grid the model actually ran on.
+
+    The DEPTH IS SNAPPED and the response says where to. GLORYS has its own 40
+    levels and none of them is exactly 100 m; answering "100" would be a small
+    lie that costs nothing to avoid.
+    """
+    reg = load_registry()
+    if not reg.has(source_id):
+        raise HTTPException(404, f"unknown dataset {source_id!r}; see GET /catalog")
+    spec = reg.get(source_id)
+    if not spec.enabled:
+        raise HTTPException(404, f"dataset {source_id!r} is disabled: {spec.disabled_reason}")
+
+    try:
+        ds, ref = store.open_cube(source_id)
+    except KeyError:
+        raise HTTPException(
+            404,
+            f"dataset {source_id!r} is registered but not materialized locally. "
+            f"Run tools/fetch_sample.py and tools/preprocess.py.",
+        ) from None
+
+    missing = [v for v in _VECTOR_PAIR if v not in ds.data_vars]
+    if missing:
+        # Name the dataset that DOES carry them. A reader who asked the wrong
+        # source for currents should not have to go and look.
+        elsewhere = sorted(
+            s.id for s in reg.enabled()
+            if {v.name for v in s.variables} >= set(_VECTOR_PAIR)
+        )
+        raise HTTPException(
+            404,
+            f"{source_id!r} has no current vectors: it is missing "
+            f"{', '.join(missing)} of {', '.join(_VECTOR_PAIR)}. "
+            + (
+                f"Currents are in {', '.join(elsewhere)}."
+                if elsewhere
+                else "No registered dataset carries them."
+            ),
+        )
+
+    # The two cubes do not share a depth axis and the deepest levels do not
+    # line up: the INCOIS analysis reaches 2000 m and GLORYS stops at 1941.89.
+    # So the bottom of the depth rack has no currents at all, and a caller who
+    # simply moved the cursor there deserves a sentence rather than a float
+    # dump. Refused rather than clamped, for the same reason nothing else here
+    # clamps: an arrow drawn at 1942 m and labelled 2000 m is a small lie, and
+    # this whole layer is about not telling those.
+    levels = np.asarray(ds["depth"].values, dtype="float64")
+    if levels.size and (depth < levels.min() or depth > levels.max()):
+        raise HTTPException(
+            400,
+            f"{source_id!r} has no currents at {depth:g} m. Its levels run "
+            f"{levels.min():.1f} to {levels.max():.1f} m, which is a different "
+            f"axis from the field on screen, so the deepest slice of that "
+            f"field has no current data beneath it.",
+        )
+
+    try:
+        box = store.parse_bbox(bbox)
+        u_slab = store.select_field(ds, "uo", bbox=box, time=time, depth=depth)
+        v_slab = store.select_field(ds, "vo", bbox=box, time=time, depth=depth)
+    except store.SubsetError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+    lats = np.asarray(u_slab.lats, dtype="float64")
+    lons = np.asarray(u_slab.lons, dtype="float64")
+    stride = currents.stride_for(lats.size, lons.size, budget=budget)
+    grid = currents.decimate(u_slab.values, v_slab.values, lats, lons, stride=stride)
+
+    return {
+        "source_id": source_id,
+        "variables": list(_VECTOR_PAIR),
+        "units": u_slab.units,
+        "time": u_slab.time,
+        # What was ASKED FOR and what was SERVED, both. GLORYS has its own
+        # levels and the difference is information, not noise.
+        "requested_depth": depth,
+        "depth": u_slab.depth,
+        "bbox": [box[0], box[1], box[2], box[3]],
+        "stride": grid.stride,
+        "budget": budget,
+        "source_cells": grid.source_cells,
+        "blocks": grid.blocks,
+        "count": len(grid.arrows),
+        # Blocks dropped for being mostly land. A sparse arrow field has to be
+        # distinguishable from a broken one.
+        "refused": grid.refused,
+        "note": grid.note,
+        "citation": ref.provenance.get("citation") or spec.citation,
+        "retrieved_at": ref.provenance.get("retrieved_at"),
+        "arrows": grid.arrows,
+    }
+
+
+class SagarNodeReading(BaseModel):
+    """One telemetry frame from the tabletop rig (TRD M9's JSON contract).
+
+    Loose on types on purpose: the board is the thing being debugged, and a
+    422 from pydantic with a validation-error tree is far less useful on a
+    demo table than a sentence from app/sagarnode.py saying which probe reads
+    out of range and what range it should be in.
+    """
+
+    station_id: str = ""
+    ts: str = ""
+    temp_c: float | str | None = None
+    tds_ppm: float | str | None = None
+    turbidity_ntu: float | str | None = None
+
+
+def _sagarnode_spec():
+    reg = load_registry()
+    return reg.get("sagarnode_demo") if reg.has("sagarnode_demo") else None
+
+
+@app.post("/ingest/sagarnode", tags=["data"])
+def ingest_sagarnode(body: SagarNodeReading) -> dict:
+    """Accept one reading from the sensor station, or refuse it by name.
+
+    PS requirement F6 is "extensible design ... future integration of
+    additional sensors", and this route is that clause with a wire in it: a
+    device nobody had heard of when the cube was built posts here and appears
+    on the globe, with no change to the data model and no redeploy.
+
+    IT REFUSES A WIRING FAULT. An ESP32 analog pin with nothing on it floats,
+    and a floating pin reads as a plausible number. Every value is checked
+    against what a probe in a tank can physically mean and an implausible one
+    is rejected with the range in the message, because the person reading that
+    message is standing over the board with a multimeter.
+    """
+    spec = _sagarnode_spec()
+    if spec is None or not spec.enabled:
+        raise HTTPException(404, "no sagarnode_demo station is registered")
+
+    reading = body.model_dump()
+    ok, why = sagarnode.validate(reading)
+    if not ok:
+        raise HTTPException(400, why)
+
+    # Stamped with when WE received it, alongside the board's own timestamp.
+    # Both, because a board whose clock is wrong is a thing that happens and
+    # the difference is how you find out.
+    now = datetime.now(timezone.utc).isoformat()
+    reading["received_at"] = now
+    if not reading.get("ts"):
+        # No clock on the board, which is the NORMAL case in an air-gapped
+        # hall: an ESP32 learns the time from NTP and PRD F11 promises the
+        # demo runs with the network off. Stamped here and SAID, so a receipt
+        # time is never later mistaken for an observation time.
+        reading["ts"] = now
+        reading["ts_source"] = "server"
+    else:
+        reading["ts_source"] = "device"
+
+    path = get_settings().sagarnode_log
+    sagarnode.append(path, reading)
+
+    history = sagarnode.load(path)
+    alert = sagarnode.threshold_alert(history)
+    return {
+        "stored": True,
+        "count": len(history),
+        # Echoed so the board can log whether it tripped anything, which is
+        # the only feedback a headless device gets.
+        "alert": alert["event"] if alert else None,
+    }
+
+
+@app.get("/sagarnode", tags=["data"])
+def sagarnode_station() -> dict:
+    """The station, its recent readings, and whether it has tripped anything.
+
+    Serves an EMPTY station rather than a 404 when nothing is plugged in,
+    because no rig is the normal state: on the judges' laptop, on CI, and on
+    this machine most of the time. A 404 would read as a broken route.
+    """
+    spec = _sagarnode_spec()
+    if spec is None:
+        raise HTTPException(404, "no sagarnode_demo station is registered")
+
+    readings = sagarnode.load(get_settings().sagarnode_log)
+    alert = sagarnode.threshold_alert(readings)
+
+    return {
+        "station": {
+            "id": (spec.platforms[0] if spec.platforms else "sagarnode-01"),
+            "title": spec.title,
+            # Position from the REGISTRY, never from the device. A board that
+            # could say where it is could put a bucket in the Bay of Bengal,
+            # on a globe carrying twenty-five real ocean casts.
+            "lat": SAGARNODE_LAT,
+            "lon": SAGARNODE_LON,
+            "note": (
+                "A demonstration rig on the table, not an oceanographic "
+                "observation. Its position is configured in data/sources.yaml "
+                "rather than reported by the device."
+            ),
+        },
+        "parameters": {
+            "temp_c": {"label": sagarnode.TEMP_LABEL, "units": "degC"},
+            "tds_ppm": {"label": sagarnode.TDS_LABEL, "units": "ppm"},
+            "turbidity_ntu": {"label": sagarnode.TURBIDITY_LABEL, "units": "NTU"},
+        },
+        "count": len(readings),
+        "latest": readings[-1] if readings else None,
+        "readings": readings,
+        # CAP-shaped, and always Exercise. A bucket in a college hall is not a
+        # coastal hazard, and marking it as CAP's own word for a drill means
+        # every guard written for the rehearsal bulletins applies unchanged.
+        "alert": alert,
+        "citation": spec.citation,
     }
