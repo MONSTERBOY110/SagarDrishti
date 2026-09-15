@@ -472,6 +472,89 @@ def fetch_currents(around: date) -> Path | None:
     return dest
 
 
+def fetch_insitu_casts() -> list[Path]:
+    """Gliders and CTD casts from the Copernicus in-situ TAC (PS F2).
+
+    THE ARCHIVE THE PROBLEM STATEMENT NAMES. SIH26067's own "Dataset Link"
+    field lists four sources, and the third is the Ifremer EGO glider FTP. Its
+    published index, glider_prof_index.txt, is 248 MB of whitespace: a broken
+    build on the publisher's side, checked at four offsets. The same holdings
+    are in the Copernicus in-situ TAC, whose index is not broken, so that is
+    what this reads.
+
+    THE HISTORY PART, NOT THE LATEST PART. This is the whole reason gliders
+    were once written off as unobtainable here. `cmems_obs-ins_...mynrt_na_irr`
+    has two parts: `latest`, a rolling thirty-day window, and `history`, the
+    archive. Searching `latest` for a glider in the Bay of Bengal returns
+    nothing, correctly, and that is not the same fact as there being no glider.
+    `history` indexes 89,115 files; five gliders and twenty-four CTD
+    collections intersect the demo box.
+
+    Additive, like BGC, the moorings and the currents: a failure here must not
+    fail a run that already has a working demo.
+    """
+    reg = load_registry_from(REPO / "data" / "sources.yaml")
+    specs = [reg.get(i) for i in ("cmems_glider_bob", "cmems_ctd_bob")]
+    specs = [s for s in specs if s is not None and s.enabled]
+    if not specs:
+        print("\nCasts: no in-situ TAC source enabled, skipping")
+        return []
+
+    env = _dotenv()
+    user = env.get("COPERNICUS_USERNAME") or os.environ.get("COPERNICUS_USERNAME")
+    password = env.get("COPERNICUS_PASSWORD") or os.environ.get("COPERNICUS_PASSWORD")
+    if not user or not password:
+        print(
+            "\nCasts: no Copernicus credentials. Put COPERNICUS_USERNAME and "
+            "COPERNICUS_PASSWORD in .env. Everything else still works."
+        )
+        return []
+
+    try:
+        import copernicusmarine as cm
+    except ImportError:
+        print("\nCasts: the copernicusmarine client is not installed.")
+        return []
+
+    dest = RAW / "insitu"
+    dest.mkdir(parents=True, exist_ok=True)
+    existing = sorted(dest.glob("*.nc"))
+    if existing:
+        print(f"\nCasts: {len(existing)} file(s) already present")
+        return existing
+
+    # Named rather than discovered, and that is a decision. The box holds five
+    # glider files, but three of them are multi-deployment aggregates whose
+    # bounding box crosses the Indian Ocean without the glider ever having been
+    # in it, and the fourth, GL_PR_GL_SLU29, is the SAME physical glider as
+    # ru29 republished by a second data centre with a blank WMO field. Taking
+    # every file the index offers would put one glider on the globe twice and
+    # three others in water they never flew.
+    wanted = ("GL_PR_GL_2801900", "GL_PR_CT_JFCL")
+    print("\nCasts: Copernicus in-situ TAC, history part")
+    print(f"  user {user[:2]}{'*' * max(0, len(user) - 2)}, {len(wanted)} platform(s)")
+
+    try:
+        cm.login(username=user, password=password, force_overwrite=True)
+        cm.get(
+            dataset_id="cmems_obs-ins_glo_phybgcwav_mynrt_na_irr",
+            dataset_part="history",
+            regex=r"(" + "|".join(wanted) + r")\.nc$",
+            output_directory=dest,
+            no_directories=True,
+            overwrite=True,
+            disable_progress_bar=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"    !! {type(exc).__name__}: {str(exc)[:200]}")
+        return []
+
+    got = sorted(dest.glob("*.nc"))
+    for f in got:
+        print(f"    -> {f.relative_to(REPO)}  ({f.stat().st_size / 1e6:.1f} MB)")
+    return got
+
+
 def fetch_warnings(limit: int) -> list[Path]:
     """CAP v1.2 alerts from NDMA SACHET, India's national CAP backbone (F13).
 
@@ -564,6 +647,7 @@ def main() -> int:
     ap.add_argument("--no-moorings", action="store_true", help="skip the RAMA moorings")
     ap.add_argument("--no-warnings", action="store_true", help="skip the CAP alert feed")
     ap.add_argument("--no-currents", action="store_true", help="skip the Copernicus currents")
+    ap.add_argument("--no-casts", action="store_true", help="skip the glider and CTD casts")
     ap.add_argument("--cap-alerts", type=int, default=30, help="newest CAP alerts to fetch")
     args = ap.parse_args()
 
@@ -613,6 +697,11 @@ def main() -> int:
     if not args.no_currents:
         currents = fetch_currents(around)
 
+    # The glider and the CTD casts, additive for the same reason as the rest.
+    casts: list[Path] = []
+    if not args.no_casts:
+        casts = fetch_insitu_casts()
+
     print("\nsummary")
     print(f"  model file : {'ok' if model else 'FAILED'}")
     print(f"  argo files : {len(argo)}")
@@ -623,6 +712,8 @@ def main() -> int:
     print(f"  cap alerts : {len(warnings)}"
           f"{'  (feed unreachable or quiet; rehearsal bulletins still apply)' if not warnings else ''}")
     print(f"  currents   : {'ok' if currents else 'skipped (no Copernicus credentials)'}")
+    print(f"  casts      : {len(casts)}"
+          f"{'  (skipped; needs Copernicus credentials)' if not casts else '  (glider + CTD)'}")
     if not model or not argo:
         print("\nIncomplete. Nothing downstream will work until both succeed.")
         return 1

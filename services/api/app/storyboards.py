@@ -73,6 +73,32 @@ PATCHABLE = frozenset(
 MIN_HOLD = 4.0
 MAX_HOLD = 20.0
 
+#: Scene keys that are toggles. A tour writing 1 or "true" here would leave a
+#: control reading as neither on nor off.
+_BOOLEAN_KEYS = frozenset(
+    {"reverse", "colorbarLocked", "playing", "isosurfaceOn", "rehearsal", "currentsOn"}
+)
+
+#: Scene keys with a domain the client will NOT clamp, and what that domain is.
+#:
+#: The scene applies a patch verbatim, by design: a tour must be able to do
+#: exactly what a person can do and nothing more. The cost of that is that a
+#: value in the wrong unit is not corrected, it is rendered. `opacity` is the
+#: one that bites, because the store holds a FRACTION and the sheet prints
+#: `opacity * 100`, so a tour written with the percentage the slider shows puts
+#: "7200%" on screen. That happened while writing the submission tour and
+#: nothing caught it; this is what catches it now.
+#:
+#: Keys with no fixed domain are deliberately absent: `isovalue`, `vmin` and
+#: `vmax` are in the units of whichever variable is selected, so 26 is sensible
+#: for temperature and absurd for salinity, and a range here could only be
+#: wrong.
+_RANGES: dict[str, tuple[float, float, str]] = {
+    "opacity": (0.1, 1.0, "as a fraction, not a percentage"),
+    "exaggeration": (1.0, 200.0, "times vertical"),
+    "focusDepth": (0.0, 11000.0, "metres below the surface"),
+}
+
 #: Numerals that carry no claim and would only add noise to the guard: a date
 #: inside a patched timestamp, an ordinal in "the tenth of July", a spelled
 #: number. Digits are what the rule is about.
@@ -164,6 +190,26 @@ def validate_tour(raw: dict, *, where: str = "") -> Tour:
                 f"nothing at all, silently, on stage. Known keys: "
                 f"{', '.join(sorted(PATCHABLE))}"
             )
+
+        for key, value in patch.items():
+            if key in _BOOLEAN_KEYS and not isinstance(value, bool):
+                raise TourError(
+                    f"{at}: patch sets {key}={value!r}, which is not true or false. "
+                    "The client would apply it verbatim and the control would "
+                    "read as neither on nor off."
+                )
+            if key in _RANGES:
+                lo, hi, unit = _RANGES[key]
+                if not isinstance(value, (int, float)) or isinstance(value, bool):
+                    raise TourError(f"{at}: patch sets {key}={value!r}, which is not a number")
+                if not lo <= float(value) <= hi:
+                    raise TourError(
+                        f"{at}: patch sets {key}={value}, outside {lo} to {hi} {unit}. "
+                        "The scene applies a patch verbatim, so an out-of-range value "
+                        "is not clamped, it is DISPLAYED: opacity 72 rather than 0.72 "
+                        "renders as '7200%' on the sheet, in front of a judge, and "
+                        "nothing else on screen looks wrong enough to notice."
+                    )
 
         evidence = step.get("evidence", [])
         if not isinstance(evidence, list) or any(not isinstance(e, str) for e in evidence):

@@ -27,6 +27,8 @@ const LABELS: Record<string, string> = {
   gdac_geo: "Argo float",
   gdac_bgc: "BGC float",
   file: "Ship or glider cast",
+  glider: "Glider",
+  ctd: "CTD cast",
   mooring: "Mooring",
   hf_radar: "HF radar",
   adcp: "ADCP",
@@ -34,7 +36,9 @@ const LABELS: Record<string, string> = {
 };
 
 /** Reading order: the classes we expect most of, first. */
-const ORDER: PlatformKind[] = ["gdac_geo", "gdac_bgc", "file", "mooring", "hf_radar", "adcp"];
+const ORDER: PlatformKind[] = [
+  "gdac_geo", "gdac_bgc", "glider", "ctd", "file", "mooring", "hf_radar", "adcp",
+];
 
 function Swatch({ kind }: { kind: string }) {
   const ref = useRef<HTMLSpanElement>(null);

@@ -138,6 +138,40 @@ def test_a_patch_key_the_scene_does_not_have_is_refused_by_name():
     assert "focusDepth" in str(e.value)
 
 
+def test_opacity_as_a_percentage_is_refused_because_the_scene_would_show_it():
+    """The bug this guard was written for, caught in the act.
+
+    The store holds opacity as a FRACTION and the sheet prints `opacity * 100`,
+    so a tour author copying the 72 the slider shows puts "7200%" on the sheet.
+    The scene applies a patch verbatim on purpose, so nothing clamps it and
+    nothing else on screen looks wrong enough to notice. It reached a recorded
+    walkthrough before anybody saw it.
+    """
+    bad = tour(steps=[step(patch={"opacity": 72})])
+    with pytest.raises(storyboards.TourError) as e:
+        storyboards.validate_tour(bad)
+    assert "opacity" in str(e.value)
+    assert "7200%" in str(e.value), "the refusal should show the author what they would have seen"
+
+    ok = tour(steps=[step(patch={"opacity": 0.72})])
+    storyboards.validate_tour(ok)
+
+
+def test_an_out_of_range_exaggeration_or_depth_is_refused():
+    for key, value in (("exaggeration", 20000), ("focusDepth", -5)):
+        with pytest.raises(storyboards.TourError) as e:
+            storyboards.validate_tour(tour(steps=[step(patch={key: value})]))
+        assert key in str(e.value)
+
+
+def test_a_toggle_patched_with_a_number_is_refused():
+    """`isosurfaceOn: 1` would leave the control reading as neither on nor off."""
+    with pytest.raises(storyboards.TourError) as e:
+        storyboards.validate_tour(tour(steps=[step(patch={"isosurfaceOn": 1})]))
+    assert "isosurfaceOn" in str(e.value)
+    storyboards.validate_tour(tour(steps=[step(patch={"isosurfaceOn": True})]))
+
+
 def test_every_live_scene_key_is_patchable():
     """A tour has to be able to reach every control a presenter would reach.
 
@@ -257,6 +291,64 @@ def test_the_shipped_tours_cover_the_features_they_are_meant_to():
     tours, _ = storyboards.load_tours(TOURS)
     ids = {t.id for t in tours}
     assert {"water-column", "cyclone-fuel", "instruments-and-skill", "hazardwatch"} <= ids
+
+
+def test_the_submission_tour_drives_every_p0_claim_in_one_run():
+    """`the-whole-story` is what the portal demo video is recorded from.
+
+    A video is recorded once and then submitted, so the run behind it has to be
+    reproducible rather than performed: this tour exists so that recording is a
+    replay, not a live demo that can wander. That makes it a deliverable, and a
+    deliverable gets a test.
+
+    What is pinned is COVERAGE, not wording. If a future edit drops the
+    isosurface step or stops selecting a float, the video would silently stop
+    demonstrating a requirement the PS names, and the only place that would
+    show up is in front of a reviewer.
+    """
+    tours, _ = storyboards.load_tours(TOURS)
+    tour = next((t for t in tours if t.id == "the-whole-story"), None)
+    assert tour is not None, "the submission walkthrough is part of the deliverable"
+
+    patched: dict[str, set] = {}
+    for step in tour.steps:
+        for key, value in step.get("patch", {}).items():
+            patched.setdefault(key, set()).add(
+                value if isinstance(value, (str, int, float, bool, type(None))) else str(value)
+            )
+
+    # F1: all three named techniques, and the depth axis actually travelled
+    assert True in patched.get("isosurfaceOn", set()), "no isosurface step"
+    assert True in patched.get("currentsOn", set()), "no current-vector step"
+    assert len(patched.get("focusDepth", set())) >= 3, "the depth cursor barely moves"
+    # F2 and F9: an instrument is opened, which is what puts the skill card in view
+    assert any(isinstance(v, str) for v in patched.get("selection", set())), \
+        "no instrument is ever opened"
+    # F2: the GLIDER is opened, not just the floats. The PS names four
+    # instrument classes and the glider is the one this project nearly reported
+    # as unobtainable; a tour that quietly stops opening it would take the
+    # strongest answer to "where are the gliders" out of the submission video
+    # without anyone noticing until a reviewer asked.
+    glider_dives = [v for v in patched.get("selection", set())
+                    if isinstance(v, str) and v.startswith("2801900_")]
+    assert glider_dives, "the submission video never opens the glider"
+    # F6: the plugin-derived field is shown, not just described
+    assert "SIG0" in patched.get("variable", set()), "the derived density field is never shown"
+    # F13: the drill layer is REVEALED rather than being on from the start
+    rehearsal = [s.get("patch", {}).get("rehearsal") for s in tour.steps
+                 if "rehearsal" in s.get("patch", {})]
+    assert rehearsal[0] is False and True in rehearsal[1:], (
+        "the hazard layer must appear on cue: starting with it already on wastes "
+        "the one moment the Disaster Management theme is named out loud"
+    )
+
+
+def test_the_submission_tour_fits_a_portal_video():
+    """Long enough to say it, short enough that nobody stops watching."""
+    tours, _ = storyboards.load_tours(TOURS)
+    tour = next(t for t in tours if t.id == "the-whole-story")
+    seconds = sum(float(s["hold"]) for s in tour.steps)
+    assert 90 <= seconds <= 200, f"{seconds:.0f}s is outside the usable range for a submission video"
 
 
 def test_no_shipped_tour_outstays_a_demo_slot():

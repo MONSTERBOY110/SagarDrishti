@@ -76,6 +76,18 @@ def _nan_to_none(arr: np.ndarray) -> list:
     return [None if not np.isfinite(v) else round(float(v), 4) for v in flat]
 
 
+def _instrument_class(spec) -> str:
+    """What the globe should draw, which is not always how the file is parsed.
+
+    `kind` answers "which reader opens this". For most sources that is also the
+    instrument, but `insitu_tac` is one reader serving two: a glider flying a
+    sawtooth through the water column, and a shipboard CTD lowered on a wire.
+    Letting a parsing detail collapse them into one mark would be the globe
+    making a claim about the ocean that came from the file format.
+    """
+    return getattr(spec, "instrument_class", None) or spec.kind
+
+
 def _profile_source(platform_id: str, recorded_source_id: str | None = None):
     """The registry source a profile row actually came from.
 
@@ -295,6 +307,7 @@ def profiles(
     # service was objecting to.
     observed_first = df["time"].min().normalize()
     observed_last = df["time"].max().normalize()
+    observed_days = df["time"].dt.normalize().drop_duplicates().reset_index(drop=True)
 
     if bbox:
         try:
@@ -325,14 +338,25 @@ def profiles(
         # (store.nearest_time); the profile endpoint did not, and the two must
         # agree or a client can hold a field and a float set from different
         # eras and be told nothing.
+        # Measured against the NEAREST observation, not against the span's two
+        # ends. The table stopped being one cluster when the archive glider and
+        # CTD casts arrived: it now holds 1990 to 1991, 2018, and July 2026,
+        # and a span test calls 1999 "in range" on the strength of two
+        # observation sets that are nine and nineteen years away from it. That
+        # is the exact failure this refusal exists to prevent, arriving through
+        # the front door.
         slack = pd.Timedelta(days=10)
-        if day < observed_first - slack or day > observed_last + slack:
+        gap = (observed_days - day).abs().min()
+        if gap > slack:
+            nearest = observed_days[(observed_days - day).abs().idxmin()]
             raise HTTPException(
                 400,
-                f"time {day.date()} is outside the range these profiles cover "
-                f"({observed_first.date()} to {observed_last.date()}). An empty "
+                f"time {day.date()} is {gap.days} days from the nearest "
+                f"observation these profiles hold ({nearest.date()}). An empty "
                 f"list here would read as 'no floats in this box' rather than "
-                f"'no observations from that date'.",
+                f"'no observations from that date'. The table covers "
+                f"{observed_first.date()} to {observed_last.date()}, but not "
+                f"continuously.",
             )
         df = df[df["time"].dt.normalize() == day]
 
@@ -377,7 +401,11 @@ def profiles(
                 # The instrument class, so the globe can draw a BGC float, a
                 # core float and a ship cast as different marks instead of
                 # 22 identical squares.
-                "platform_kind": source_of(r).kind,
+                "platform_kind": _instrument_class(source_of(r)),
+                # Whether this observation sits inside the model cube's own
+                # time window. An archive cast is drawn differently rather
+                # than being left to pass for a current one.
+                "epoch": getattr(source_of(r), "epoch", "contemporaneous"),
                 "parameters": served.get(r.profile_id, []),
             }
             for r in summary.itertuples()
@@ -446,7 +474,12 @@ def profile_detail(profile_id: str) -> dict:
         "lat": round(float(first["lat"]), 5),
         "lon": round(float(first["lon"]), 5),
         "source_id": spec.id,
-        "platform_kind": spec.kind,
+        "platform_kind": _instrument_class(spec),
+        "epoch": getattr(spec, "epoch", "contemporaneous"),
+        # Printed in the profile panel under an archive instrument, so the
+        # reason a 2018 glider is on a 2026 scene is read from the instrument
+        # itself rather than inferred.
+        "epoch_note": getattr(spec, "epoch_note", None),
         "citation": spec.citation,
         "qc_policy": (
             f"QC flags {spec.qc.accept_flags} only (Wong et al. 2020)"

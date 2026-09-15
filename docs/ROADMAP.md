@@ -13,6 +13,49 @@ Dates anchored to: idea deadline **20 Sep 2026** · Grand Finale **~8-12 Dec 202
 > built each Phase 1 spike to be independently demoable. That turned out to be
 > unnecessary insurance, which is the right way for it to turn out.
 
+## 2026-09-15, the idea-counter re-check, and what it turned up
+
+The counter check was a scheduled chore and it returned three things worth more
+than the count.
+
+**The count.** SIH26067 stands at **4 of 500** ideas submitted, deadline
+30 September 2026. The escalation trigger in CLAUDE.md is roughly 150, so the
+backup problem statement stays on the shelf.
+
+**The theme was contested, and is now settled.** Two third-party mirrors of the
+SIH problem statement list disagree: `NoBugNinja/Smart-India-Hackathon-SIH-2026`
+gives the theme as Smart Automation, `sih2026-ps-viewer.vercel.app` gives
+Disaster Management. sih.gov.in itself, read live, says **Disaster Management**,
+and so does INCOIS's own attachment for the neighbouring PS. Our docs were
+right. The deck prints the theme on slide 1, so this mattered.
+
+**The exact title was wrong in the deck**, and is now verbatim from the source:
+"Develop a web-based interactive 3D visualization platform that integrates
+numerical ocean model outputs and in-situ observations."
+
+**And the Dataset Link field named an archive we had never read.** This is the
+one that changed the product. INCOIS amended SIH26067 with four dataset links,
+and the third is the Ifremer EGO glider FTP. Following it reopened F2, which
+this project had investigated to exhaustion and written up as unachievable. The
+full account is in `docs/P0-STATUS.md` under F2; in short:
+
+- The EGO index file is 248 MB of whitespace, a broken build upstream.
+- The same holdings are in the Copernicus in-situ TAC, whose `history` part we
+  had never queried, having searched only the rolling thirty-day `latest` part.
+  The absence of a glider in the last thirty days is not the absence of a
+  glider, and that inference is what cost three weeks.
+- Glider ru29 (Rutgers, WMO 2801900), 109 dives inside the box, August to
+  October 2018. Fifteen shipboard CTD casts, SHINYO MARU, 1990 to 1991.
+- Both predate the model cube, so the registry grew an `epoch` marker, the
+  globe rings archive marks, the panel prints the reason, and the verification
+  refuses all 13,622 of their levels and counts the refusal.
+
+All four instrument classes the PS names are now live. The profile table went
+from 25 casts and 16,390 levels to **149 casts and 30,012 levels**, and F2 moved
+from "partly met" to met.
+
+Tests: 485 data plane, 71 agent, 11 browser, **567** total, all green.
+
 ## Phase 0 - Team & repo - ✅ DONE Sep 7 (repo D:\Projects\SagarDrishti, docs moved, PRIOR-ART.md added; mentor onboarded)
 - [x] Repo created; doc pack in `docs/`; prior-art & literature review done (docs/PRIOR-ART.md)
 - [ ] Brief the team with HANDOFF.md + PRD.md; confirm 6-member roster (≥1 female) + 2 mentors; register per SPOC instructions
@@ -129,6 +172,42 @@ largest remaining gap against a portal whose theme is Disaster Management.
       and the five things nobody may say on stage.
       **Still owed by the team: five rehearsals with a timer**, which is the
       half a document cannot do.
+
+### Sep 15: the portal submission run
+
+The college moved the internal round to 22 Sep and the mentor cleared us to
+submit on the official SIH portal, so the work turned toward the submission
+video and toward closing whatever could still be closed.
+
+- [x] **The submission walkthrough tour.**
+      `storyboards/00-the-whole-story.tour.json`: 12 steps, 150 seconds, every
+      P0 requirement in the order a reviewer meets them. The video is recorded
+      by replaying it rather than by performing a demo, so a retake is
+      identical. Two tests pin it: one that it still drives every claim
+      (isosurface, currents, an opened instrument, the derived density field,
+      and the hazard layer appearing ON CUE rather than being on from the
+      start), and one that it still fits a portal video. Recording procedure in
+      [`docs/VIDEO-RECORDING.md`](VIDEO-RECORDING.md).
+- [x] **A scene-patch range guard, written because the tour tripped over it.**
+      The scene applies a tour patch verbatim by design, so a value in the
+      wrong unit is not clamped, it is rendered: `opacity: 72` (the percentage
+      the slider shows) instead of `0.72` (the fraction the store holds) put
+      **"LAYER OPACITY 7200%"** on the sheet, and nothing else on screen looked
+      wrong enough to notice. It reached a recorded walkthrough. `validate_tour`
+      now range-checks opacity, exaggeration and focusDepth and type-checks
+      every toggle, with three tests including one that reproduces the 7200%.
+- [x] **F2 investigated to exhaustion rather than left as an excuse.** See
+      `docs/P0-STATUS.md`. GTSPP's July 2026 Indian Ocean archive holds 5,247
+      casts, 211 inside our box, and every one is a moored buoy. Copernicus's
+      near-real-time glider feed runs 2026-08-15 to 2026-09-15, which starts
+      eleven days after our cube's window closes, and on 1 September it carried
+      42 gliders worldwide of which exactly one was in the Indian Ocean, in the
+      Mozambique Channel. **There is no Bay of Bengal glider to draw.** The
+      clause stays open and the answer is now evidence rather than an apology.
+      Deliberately NOT done: ingesting the 211 buoy casts, which would raise the
+      instrument count without answering the class the PS names.
+- [x] Deliverables refreshed against the new count (567 tests): the six-slide
+      idea deck and the four-page mentor brief both rebuilt and re-exported.
 
 ## Phase 3 - Idea submission (Sep 16 → 20)
 - [ ] 6-slide PDF per SUBMISSION-GUIDE.md; architecture diagram from TRD §1.

@@ -156,6 +156,14 @@ def profiles_from_reader(spec, model_times) -> pd.DataFrame:
 
     ds = plugin_api.open_source(spec)
 
+    # A reader that returns ragged CASTS takes the other path. A mooring's
+    # profiles are all at one point, so they are subsampled to the model steps
+    # to stop 36 marks stacking on one pixel; a glider's are metres apart and
+    # tens of kilometres from each other, so the same rule would throw away the
+    # track that makes it a glider.
+    if str(ds.attrs.get("layout", "")) == "casts":
+        return profiles_from_casts(ds, spec)
+
     accept = list(spec.qc.accept_flags)
     rows: list[pd.DataFrame] = []
     wanted = pd.to_datetime(list(model_times)) if model_times is not None else None
@@ -212,6 +220,92 @@ def profiles_from_reader(spec, model_times) -> pd.DataFrame:
                     }
                 )
             )
+
+    if not rows:
+        return pd.DataFrame()
+    out = pd.concat(rows, ignore_index=True)
+    out.attrs["n_profiles_available"] = n_available
+    out.attrs["n_profiles_kept"] = n_kept
+    return out
+
+
+def profiles_from_casts(ds, spec) -> pd.DataFrame:
+    """A ragged (profile, level) cast Dataset -> the standard profile frame.
+
+    EVERY CAST IS KEPT. The mooring branch above subsamples to the model's
+    timesteps and says why: a mooring reports daily from one fixed position, so
+    a month of it is 36 marks on one pixel and an arbitrary pick when a judge
+    clicks. A glider is the opposite case. Its 109 in-box dives are at 109
+    different positions strung out over ten weeks of flying, and the line they
+    draw across the sea IS the thing a glider shows that no other instrument
+    can. Subsampling it would be applying a rule to a case its reason does not
+    reach.
+
+    Salinity travels with the temperature here, because this format flags the
+    two independently and a cast with a rejected salinity can still have a
+    perfectly good temperature at the same level.
+    """
+    # The registry says what instrument this is; the reader worked it out from
+    # the file's own `source` attribute. If they disagree, one of them is
+    # wrong about what is in the water and the globe would draw the wrong mark
+    # either way, so this fails the ingest rather than picking a winner.
+    declared = getattr(spec, "instrument_class", None)
+    detected = str(ds.attrs.get("platform_kind", "") or "")
+    if declared and detected and declared != detected:
+        raise ValueError(
+            f"{spec.id}: sources.yaml declares instrument_class {declared!r} "
+            f"but the file's own source attribute reads as {detected!r}. One "
+            f"of the two is describing a different instrument"
+        )
+
+    accept = list(spec.qc.accept_flags)
+    depth = np.asarray(ds["depth"].values, dtype="float64")
+    pres = np.asarray(ds["pres"].values, dtype="float64")
+    temp = np.asarray(ds["TEMP"].values, dtype="float64")
+    temp_qc = np.asarray(ds["TEMP_QC"].values, dtype="float64")
+    have_psal = "PSAL" in ds
+    psal = np.asarray(ds["PSAL"].values, dtype="float64") if have_psal else None
+    psal_qc = np.asarray(ds["PSAL_QC"].values, dtype="float64") if have_psal else None
+
+    times = pd.to_datetime(ds["time"].values)
+    lats = np.asarray(ds["lat"].values, dtype="float64")
+    lons = np.asarray(ds["lon"].values, dtype="float64")
+    wmo = str(ds.attrs.get("wmo_platform_code", "") or ds.attrs.get("station", ""))
+
+    rows: list[pd.DataFrame] = []
+    n_available = len(times)
+    n_kept = 0
+    for i in range(n_available):
+        keep = (
+            np.isfinite(depth[i])
+            & np.isfinite(temp[i])
+            & np.isin(temp_qc[i].astype("int16"), accept)
+        )
+        if not keep.any():
+            continue
+        n_kept += 1
+        stamp = pd.Timestamp(times[i])
+        frame = {
+            "profile_id": f"{wmo}_{stamp.strftime('%Y%m%dT%H%M%S')}",
+            "wmo": wmo,
+            "time": stamp,
+            "lat": float(lats[i]),
+            "lon": float(lons[i]),
+            # Unlike a mooring, this instrument DID measure a pressure, so the
+            # column is carried rather than left absent.
+            "pres": pres[i][keep],
+            "depth": depth[i][keep],
+            "temp": temp[i][keep],
+            "temp_qc": temp_qc[i][keep].astype("int16"),
+        }
+        if have_psal:
+            # A salinity that failed QC is dropped at its own level, leaving the
+            # temperature there intact. Masking the whole level on either flag
+            # would discard good temperature because salinity was bad.
+            good_psal = np.isin(psal_qc[i].astype("int16"), accept)
+            frame["psal"] = np.where(good_psal[keep], psal[i][keep], np.nan)
+            frame["psal_qc"] = psal_qc[i][keep]
+        rows.append(pd.DataFrame(frame))
 
     if not rows:
         return pd.DataFrame()
@@ -331,11 +425,37 @@ def process_argo(
     if window is not None and not df.empty:
         start, end = window
         before = df["profile_id"].nunique()
-        current = df["time"].between(start, end)
+
+        # A source declared `epoch: archive` is exempt, and the exemption is
+        # narrow and deliberate. The rule above exists because an April 2025
+        # float mark sitting unlabelled among July 2026 ones states a
+        # co-location that does not exist -- SILENTLY, which is the part that
+        # makes it a defect. An archive source is not silent: it carries an
+        # epoch_note the registry refuses to let it omit, the client draws it
+        # as a different thing, and the scorecard's five-day rule refuses to
+        # pair it and counts the refusal.
+        #
+        # Without this exemption the PS's glider and CTD requirement (F2) is
+        # unanswerable in this basin, because the Bay of Bengal has no
+        # contemporaneous glider: on 2026-09-01 the entire near-real-time feed
+        # held one Indian Ocean glider, in the Mozambique Channel. The choice
+        # is between a real instrument with its date declared and no instrument
+        # at all, and it is NOT between either of those and a pretend current
+        # one.
+        archive_ids = {
+            s.id for s in load_registry_from(SOURCES).enabled()
+            if getattr(s, "epoch", "contemporaneous") == "archive"
+        }
+        exempt = df["source_id"].isin(archive_ids)
+        current = df["time"].between(start, end) | exempt
         dropped = before - df[current]["profile_id"].nunique()
+        n_archive = int(df[exempt]["profile_id"].nunique())
         print(f"  time window {start.date()} .. {end.date()} "
               f"(the model cube's own span, widened half a step): "
               f"{dropped} profile(s) dropped as not contemporaneous")
+        if n_archive:
+            print(f"  {n_archive} archive profile(s) kept and marked as such "
+                  f"from {sorted(archive_ids & set(df['source_id']))}")
         df = df[current].reset_index(drop=True)
 
     if df.empty:

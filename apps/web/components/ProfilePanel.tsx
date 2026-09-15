@@ -67,6 +67,10 @@ function platformNoun(kind: string): string {
       return "BGC float";
     case "file":
       return "Cast";
+    case "glider":
+      return "Glider";
+    case "ctd":
+      return "CTD cast";
     case "mooring":
       return "Mooring";
     case "hf_radar":
@@ -415,6 +419,31 @@ export default function ProfilePanel(p: Props) {
         </div>
       </header>
 
+      {/* AN ARCHIVE INSTRUMENT SAYS SO, HERE, WHERE ITS NUMBERS ARE READ.
+          This project already refuses to draw a 2020 chlorophyll field under a
+          2026 time scrubber, on the grounds that the interface would be making
+          a false statement silently. A 2018 glider mark beside 2026 float
+          marks is the same hazard, and this is the half of the answer the
+          globe cannot give: the ring around the mark says "not from now", and
+          this says what "now" was and why the instrument is here anyway. */}
+      {p.detail?.epoch === "archive" && p.detail.epoch_note && (
+        <p
+          style={{
+            margin: "0.5rem 0 0",
+            padding: "0.4375rem 0.5rem",
+            fontSize: "0.625rem",
+            lineHeight: 1.45,
+            color: "var(--ink-soft)",
+            borderLeft: "2px solid #8a7f68",
+            background: "rgba(138, 127, 104, 0.08)",
+          }}
+        >
+          <strong style={{ letterSpacing: "0.04em" }}>ARCHIVE OBSERVATION</strong>
+          {" · "}
+          {p.detail.epoch_note}
+        </p>
+      )}
+
       {p.detail ? (
         <>
           {/* The parameters THIS instrument served. A core float shows two and
@@ -550,10 +579,33 @@ export default function ProfilePanel(p: Props) {
                 }}
               >
                 Every mark is a real profile inside the Bay of Bengal box,
-                contemporaneous with the model field, filtered to QC flags 1
-                and 2. Square marks are Argo floats; a diamond is a float
-                carrying biogeochemical sensors, so it also reads oxygen,
-                chlorophyll, nitrate and pH.
+                filtered to QC flags 1 and 2. Square marks are Argo floats; a
+                diamond is a float carrying biogeochemical sensors, so it also
+                reads oxygen, chlorophyll, nitrate and pH; a dart is a glider,
+                the one instrument here that flies; a triangle is a cast
+                lowered from a ship; a circle is a fixed station.
+              </p>
+              {/* The sentence this paragraph USED to carry said every mark was
+                  contemporaneous with the model field. That was true when the
+                  box held only Argo floats and a mooring, and it stopped being
+                  true the moment the glider and the CTD casts arrived. A line
+                  of standing copy that quietly goes stale is the same defect
+                  as a mark that does not say what it is, so the epoch is
+                  stated here rather than left to the ring around the glyph. */}
+              <p
+                style={{
+                  margin: "0.5rem 0 0",
+                  fontSize: "0.75rem",
+                  lineHeight: 1.5,
+                  color: "var(--ink-soft)",
+                }}
+              >
+                A mark inside a plain ring is an ARCHIVE observation:
+                real, and taken years before the field beneath it. The glider
+                flew in 2018 and the ship casts were taken in 1990 and 1991,
+                because the Bay of Bengal has no glider in the water now. They
+                are drawn beside the model and never scored against it, and
+                clicking one says so.
               </p>
             </>
           )}

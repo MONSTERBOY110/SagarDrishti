@@ -443,11 +443,49 @@ def test_profiles_refuses_a_date_outside_the_observations(shipped_iso_client):
 
     assert r.status_code == 400, r.text
     detail = r.json()["detail"]
-    assert "outside the range" in detail
-    # It must say what the range actually is, or the caller guesses again.
+    # Measured against the NEAREST observation rather than the span's ends.
+    # Once the archive glider and CTD casts joined the table the holdings
+    # stopped being one cluster, and a span test would call 1999 "in range" on
+    # the strength of observations nine and nineteen years away from it.
+    assert "from the nearest observation" in detail
+    # It must say what the table actually holds, or the caller guesses again.
     assert "2026" in detail
     # And it must say why an empty list would have been the wrong answer.
     assert "no floats in this box" in detail
+
+
+def test_a_date_in_a_gap_between_two_eras_is_refused_not_answered_empty(
+    shipped_iso_client,
+):
+    """The failure a min-to-max range test cannot see.
+
+    The profile table holds three clusters: shipboard CTD casts from 1990 and
+    1991, a glider deployment in 2018, and the Argo floats of July 2026.
+    Between them are decades in which this box holds nothing. Asking for a date
+    inside one of those gaps is the same request as asking for 1999 from a
+    table that stops in 2026, and it has to get the same refusal rather than a
+    200 whose empty list reads as a statement about the ocean.
+    """
+    import datetime
+
+    everything = shipped_iso_client.get("/profiles").json()["profiles"]
+    days = sorted({p["time"][:10] for p in everything})
+    if len(days) < 2:
+        pytest.skip("only one observed day; there is no gap to ask about")
+
+    # The midpoint of the widest gap, which is as far from any observation as
+    # this table allows.
+    parsed = [datetime.date.fromisoformat(d) for d in days]
+    widest = max(zip(parsed, parsed[1:]), key=lambda pair: (pair[1] - pair[0]).days)
+    span = (widest[1] - widest[0]).days
+    if span <= 20:
+        pytest.skip("no gap wide enough to fall outside the ten-day slack")
+    middle = widest[0] + datetime.timedelta(days=span // 2)
+
+    r = shipped_iso_client.get("/profiles", params={"time": middle.isoformat()})
+
+    assert r.status_code == 400, r.text
+    assert "from the nearest observation" in r.json()["detail"]
 
 
 def test_profiles_still_returns_an_empty_list_for_a_quiet_day_in_range(shipped_iso_client):
@@ -526,5 +564,5 @@ def test_the_time_refusal_does_not_depend_on_the_bbox(shipped_iso_client):
         "/profiles", params={"time": "1999-01-01", "bbox": tiny_box}
     )
     assert out_of_range.status_code == 400
-    # The range quoted is the dataset's, not the tiny box's.
-    assert "2026-07-07" in out_of_range.json()["detail"]
+    # The dates quoted are the whole table's, not the tiny box's.
+    assert "2026-07-30" in out_of_range.json()["detail"]

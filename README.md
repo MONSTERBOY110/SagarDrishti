@@ -25,6 +25,12 @@ outstanding.
 [`docs/SAGARNODE-BOM.md`](docs/SAGARNODE-BOM.md) ·
 [decisions](docs/adr/)
 
+**Recording the portal video:**
+[`docs/VIDEO-RECORDING.md`](docs/VIDEO-RECORDING.md). The whole demo is a
+guided tour (`storyboards/00-the-whole-story.tour.json`, 12 steps, 150 s) that
+drives itself, so a take is a replay rather than a performance and a retake is
+identical.
+
 **Presenting it:** [`docs/MENTOR-BRIEF-14-SEP.md`](docs/MENTOR-BRIEF-14-SEP.md)
 is the full current-state briefing: every parameter, every dataset with its
 size, the research paper behind each method, and the numbers to quote with the
@@ -156,9 +162,9 @@ The plugin interface is documented in [`docs/PLUGINS.md`](docs/PLUGINS.md).
 ## Tests
 
 ```bash
-./tasks.ps1 test     # 414 data-plane tests
-./tasks.ps1 agent    # then: python -m pytest services/agent/tests  (68 tests)
-./tasks.ps1 e2e      # 9 browser tests against a production build
+./tasks.ps1 test     # 485 data-plane tests
+./tasks.ps1 agent    # then: python -m pytest services/agent/tests  (71 tests)
+./tasks.ps1 e2e      # 11 browser tests against a production build
 ```
 
 Both run with no network. `data/raw/` and `data/cube/` are gitignored, so CI
@@ -189,9 +195,16 @@ tracked file; CI runs it as its own job.
 ## Data sources
 
 Registered in [`data/sources.yaml`](data/sources.yaml), which is the
-extensibility surface PS requirements F3 and F6 are graded on: seven sources
-across six kinds, and adding a delimited-text layout or a BGC parameter is a
+extensibility surface PS requirements F3 and F6 are graded on: nine sources
+across seven kinds, and adding a delimited-text layout or a BGC parameter is a
 config entry rather than a code change.
+
+F6 names its own worked example, "future integration of additional sensors
+(e.g., CTDs, moorings, HF-radar, ADCP)", and two of those are now running
+through the plugin source-reader interface rather than through the core: a
+moored buoy, and then gliders and shipboard CTD casts. The second one needed
+one plugin file and two registry entries, which is the claim the requirement is
+actually testing.
 
 | Source | Kind | State |
 |---|---|---|
@@ -199,6 +212,8 @@ config entry rather than a code change.
 | `argo_gdac_indian` | gdac_geo | live, 13 core floats in the demo box |
 | `argo_bgc_indian` | gdac_bgc | live, 3 BGC floats: oxygen, chlorophyll, nitrate, pH |
 | `rama_mooring_bob` | mooring | live, read by a PLUGIN source reader. RAMA moored buoy 15n90e (WMO 23009) |
+| `cmems_glider_bob` | insitu_tac | live, read by a PLUGIN source reader. Glider ru29 (WMO 2801900), 109 dives off Sri Lanka, 2018. Marked `epoch: archive` |
+| `cmems_ctd_bob` | insitu_tac | live, same reader. 15 shipboard CTD casts, SHINYO MARU, Bay of Bengal, 1990 to 1991. Marked `epoch: archive` |
 | `incois_oceansat2_chl` | erddap_griddap | registered and disabled: the series ends 2020, so it cannot share a 2026 scrubber |
 | `ctd_text_ascii` | file | reader live and tested; awaiting a real cast file |
 | `odv_spreadsheet` | file | reader live and tested; awaiting a real export |

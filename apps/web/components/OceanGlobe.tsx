@@ -660,11 +660,11 @@ export default function OceanGlobe(props: Props) {
     // One canvas per (kind, selected) pair, built once per pass. Cheap, and it
     // keeps the mark for a given instrument class identical everywhere.
     const marks = new Map<string, HTMLCanvasElement>();
-    const markFor = (kind: string, selected: boolean) => {
-      const key = `${kind}:${selected}`;
+    const markFor = (kind: string, selected: boolean, archive: boolean) => {
+      const key = `${kind}:${selected}:${archive}`;
       let canvas = marks.get(key);
       if (!canvas) {
-        canvas = stationMark(selected, kind);
+        canvas = stationMark(selected, kind, false, archive);
         marks.set(key, canvas);
       }
       return canvas;
@@ -675,7 +675,7 @@ export default function OceanGlobe(props: Props) {
       const entity = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0),
         billboard: {
-          image: markFor(p.platform_kind, isPicked),
+          image: markFor(p.platform_kind, isPicked, p.epoch === "archive"),
           width: isPicked ? 22 : 15,
           height: isPicked ? 22 : 15,
           // A station mark stays clickable even when the camera is inside the
@@ -686,6 +686,10 @@ export default function OceanGlobe(props: Props) {
           profileId: p.profile_id,
           wmo: p.wmo,
           platformKind: p.platform_kind,
+          // Carried onto the entity so a test can assert what the RING says,
+          // not merely that a ring was drawn. A silently-dropped archive flag
+          // would leave a 2018 glider looking current and every count correct.
+          epoch: p.epoch,
         },
       });
       c.floats.push(entity);
@@ -1015,6 +1019,7 @@ export function stationMark(
   selected: boolean,
   kind = "gdac_geo",
   alarm = false,
+  archive = false,
 ): HTMLCanvasElement {
   const s = 44;
   const canvas = document.createElement("canvas");
@@ -1047,9 +1052,24 @@ export function stationMark(
       ctx.lineTo(-11, 0);
       ctx.closePath();
       break;
+    case "glider":
+      // A dart. A glider is the only instrument here that FLIES: it has wings,
+      // no propeller, and it converts buoyancy into forward motion, so it
+      // crosses the map instead of drifting with the water or staying put.
+      // The notch in the tail is what separates it from the plain triangle a
+      // ship cast gets, at the 15 px these are actually drawn at.
+      ctx.moveTo(0, -11);
+      ctx.lineTo(9.5, 9);
+      ctx.lineTo(0, 4.5);
+      ctx.lineTo(-9.5, 9);
+      ctx.closePath();
+      break;
+    case "ctd":
     case "file":
-      // Triangle: a cast from a ship or a glider, ingested from a text file.
-      // Not a free-drifting platform, so not a float shape.
+      // Triangle: a cast lowered from a ship on a wire. `file` shares it on
+      // purpose -- a CTD arriving as delimited text and one arriving as
+      // archive NetCDF are the same instrument coming through different
+      // doors, and the mark describes the instrument, not the door.
       ctx.moveTo(0, -10);
       ctx.lineTo(9.5, 7.5);
       ctx.lineTo(-9.5, 7.5);
@@ -1110,6 +1130,33 @@ export function stationMark(
    * deliberate. Hue on this surface belongs to the measurement and caution is
    * its one exception; dashed, because the rig's alert carries CAP status
    * Exercise and a drill is drawn dashed everywhere else in this product. */
+  /* AN ARCHIVE OBSERVATION, stamped the same way and for the same reason.
+   *
+   * This instrument is real and its measurements are real, but it was in the
+   * water years before the model field under it. The ring says so without
+   * touching the mark, so the glyph still reads as a glider and the reader
+   * still learns it is not from now. Dashed, because dashed already means
+   * "not the live thing" everywhere in this product; manila rather than the
+   * caution coral, because being archive is not a warning. */
+  if (archive) {
+    // SOLID, and pushed out to the edge of the box. The first version of this
+    // was dashed, on the grounds that dash means "not the live thing"
+    // everywhere else in this product. Rendered and looked at, it was
+    // invisible: these marks are drawn at 15 px from a 44 px canvas, so a
+    // radius-14 ring lands at under 5 px and a [3,3] dash around it becomes
+    // two or three loose pixels that read as speckle on the glyph.
+    //
+    // This is the SAME lesson the SagarNode mark records a few lines up, and
+    // it was learned twice. What survives 15 px is a change to the
+    // SILHOUETTE, not a texture inside it. A solid ring at the rim of the box
+    // adds an unmistakable halo while leaving the dart a dart.
+    ctx.strokeStyle = "#a89880";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 18.5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
   if (alarm) {
     ctx.setLineDash([5, 4]);
     ctx.strokeStyle = "#e8735a";

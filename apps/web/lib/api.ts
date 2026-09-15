@@ -52,7 +52,27 @@ export interface FieldColumn {
  * BGC float's chlorophyll must never be cited to the core Argo daily files,
  * which carry no chlorophyll at all.
  */
-export type PlatformKind = "gdac_geo" | "gdac_bgc" | "file" | "mooring" | "hf_radar" | "adcp";
+export type PlatformKind =
+  | "gdac_geo"
+  | "gdac_bgc"
+  | "file"
+  | "mooring"
+  | "glider"
+  | "ctd"
+  | "hf_radar"
+  | "adcp";
+
+/**
+ * Whether an observation sits inside the model cube's own time window.
+ *
+ * The Bay of Bengal has no contemporaneous glider: on 2026-09-01 the entire
+ * Copernicus near-real-time feed carried one Indian Ocean glider and it was in
+ * the Mozambique Channel. The real one this scene shows flew in 2018. Marking
+ * it is what makes showing it honest rather than misleading, so the mark is
+ * drawn differently, the panel prints the reason, and the verification refuses
+ * to pair it.
+ */
+export type Epoch = "contemporaneous" | "archive";
 
 export interface ProfileGlyph {
   profile_id: string;
@@ -64,6 +84,7 @@ export interface ProfileGlyph {
   max_depth: number;
   source_id: string;
   platform_kind: PlatformKind;
+  epoch: Epoch;
   /** Parameters this profile actually SERVES, not what its class can measure. */
   parameters: string[];
 }
@@ -91,6 +112,9 @@ export interface ProfileDetail {
   lon: number;
   source_id: string;
   platform_kind: PlatformKind;
+  epoch: Epoch;
+  /** Why this instrument is outside the model's window. Null when it is not. */
+  epoch_note: string | null;
   citation: string;
   qc_policy: string;
   adjusted_preferred: boolean;

@@ -1,5 +1,11 @@
 # The SIH 2026 idea submission deck
 
+> **Two other PDFs sit in this folder and neither goes to the portal.**
+> `SagarDrishti_Mentor_Brief.pdf` (4 pages) is the current briefing to hand a
+> mentor across a table. `SagarDrishti_Brief.pdf` is a SUPERSEDED draft of that
+> same document from 14 September and should be deleted; it is kept only
+> because deleting a file is the lead's call, not mine.
+
 **Upload `SagarDrishti_SIH2026_Idea.pdf` to the SIH portal.** The template's own
 instruction slide is explicit: *"You need to save the file in PDF and upload the
 same on portal. No PPT, Word Doc or any other format will be supported."*
@@ -68,10 +74,10 @@ re-check these against `docs/P0-STATUS.md` before exporting.
 |---|---|
 | Bias +0.026 degC, RMSE 0.602 degC, 11,718 pairs, 23 casts | `GET /scorecard/incois_vam_argo/TEMP?observed=temp` |
 | 2.07 degC worst band at 50 to 100 m | the same response, `by_depth` |
-| 543 tests (462 data plane + 71 agent + 10 browser) | `./tasks.ps1 test` and `./tasks.ps1 e2e` |
+| 567 tests (485 data plane + 71 agent + 11 browser) | `./tasks.ps1 test` and `./tasks.ps1 e2e` |
 | 51 fps at 1080p, integrated GPU | `docs/P0-STATUS.md` under F1 |
 | 10.5 M gridded values | the two Zarr stores in `data/cube/` |
-| 16,390 QC-passed levels, 25 casts, 17 instruments | `data/cube/profiles.parquet` |
+| 30,012 QC-passed levels, 149 casts, 19 instruments | `data/cube/profiles.parquet` |
 | 13 ocean parameters | `GET /catalog` plus the profile parameters |
 | 337 current arrows, 26 degC isosurface | the screenshots themselves, taken live |
 

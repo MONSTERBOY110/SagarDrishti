@@ -56,6 +56,8 @@ const KIND_WORDS: Record<string, [string, string]> = {
   gdac_geo: ["Argo float", "Argo floats"],
   gdac_bgc: ["biogeochemical Argo float", "biogeochemical Argo floats"],
   file: ["ship or glider cast", "ship or glider casts"],
+  glider: ["glider", "gliders"],
+  ctd: ["CTD cast", "CTD casts"],
   mooring: ["mooring", "moorings"],
   hf_radar: ["HF radar station", "HF radar stations"],
   adcp: ["ADCP", "ADCPs"],

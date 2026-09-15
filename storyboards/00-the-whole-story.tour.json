@@ -1,0 +1,162 @@
+{
+  "id": "the-whole-story",
+  "title": "The whole story, in two minutes",
+  "subtitle": "The submission walkthrough: every requirement, in the order a reviewer meets them",
+  "audience": "judge",
+  "source_id": "incois_vam_argo",
+  "steps": [
+    {
+      "narration": "This is the Bay of Bengal at the end of July, read from INCOIS's own public ERDDAP server. The colour is water temperature. What you are looking at is not a map of the surface: it is the whole water column, drawn as stacked depth levels in an ordinary browser, with nothing installed and the network switched off.",
+      "hold": 12,
+      "patch": {
+        "variable": "TEMP",
+        "time": "2026-07-30T00:00:00Z",
+        "focusDepth": 5,
+        "isosurfaceOn": false,
+        "currentsOn": false,
+        "selection": null,
+        "opacity": 0.72,
+        "rehearsal": false
+      },
+      "evidence": [
+        "INCOIS ERDDAP, incois_argo_10d_VAM, the Variational Analysis Method 10-day gridded Argo analysis",
+        "24 depth levels from 5 m to 2000 m, three analysis dates in July 2026, retrieved 2026-09-09"
+      ]
+    },
+    {
+      "narration": "Drag the depth cursor and you travel down the column. At the surface the water is about twenty nine degrees. Two kilometres down it is under three. That stratification is the thing a plan view cannot show you, and it is where almost all of the ocean actually is.",
+      "hold": 11,
+      "patch": {
+        "focusDepth": 2000
+      },
+      "evidence": [
+        "the bottle rack prints 29.03 degC at 5 m and 2.65 degC at 2000 m for this timestep",
+        "24 levels, non-uniform spacing: 5, 10, 20, 30, 50, 75, 100 and on down to 2000 m"
+      ]
+    },
+    {
+      "narration": "This sheet is every point in the bay where the water is exactly twenty six degrees. Below it the ocean is too cold to feed a tropical cyclone, so the depth of this surface is, in effect, how much fuel is in the tank. It is extracted from the grid itself, not drawn by hand.",
+      "hold": 12,
+      "patch": {
+        "focusDepth": 100,
+        "isosurfaceOn": true,
+        "isovalue": 26
+      },
+      "evidence": [
+        "the 26 degC isosurface, extracted by marching cubes on the native grid with no resampling",
+        "the sheet carries 780 triangles and the panel prints what it refused to draw"
+      ]
+    },
+    {
+      "narration": "These are the currents at the depth the cursor is on, and they come from a second agency, because INCOIS publishes surface currents only. Each arrow is the average of many model cells rather than one, and where a block is more land than water we draw nothing instead of guessing.",
+      "hold": 12,
+      "patch": {
+        "isosurfaceOn": false,
+        "currentsOn": true,
+        "focusDepth": 100
+      },
+      "evidence": [
+        "337 arrows at 92.3 m, each the mean of up to 81 cells of the Copernicus GLORYS one twelfth degree grid",
+        "203 coastal blocks refused for being more land than water, and the count is served with the field"
+      ]
+    },
+    {
+      "narration": "The small marks are not decoration. Every one is a real instrument that went down through this water. Squares are Argo floats. Diamonds are floats carrying biogeochemical sensors. The circle is a moored buoy on the ninety east line, part of an array India's Ministry of Earth Sciences helps run. The darts are a glider, and the triangles are casts lowered from a ship.",
+      "hold": 13,
+      "patch": {
+        "currentsOn": false,
+        "selection": null
+      },
+      "evidence": [
+        "149 casts from 19 instruments, counted in the station legend: 13 Argo floats, 9 biogeochemical casts, 109 glider dives, 15 ship casts and 3 mooring days",
+        "every cast is filtered to quality flags 1 and 2 only, following Wong et al. 2020"
+      ]
+    },
+    {
+      "narration": "That line of darts curving past Sri Lanka is one glider, flying. The problem statement asks for gliders by name, and we nearly wrote them off as impossible to get, because there is none in this bay today. This one flew in 2018. So it wears a ring, the panel prints the date and the reason, and the verification you are about to see refuses every level it measured rather than quietly scoring an eight year old dive against a July field.",
+      "hold": 14,
+      "patch": {
+        "currentsOn": false,
+        "selection": "2801900_20180819T012304"
+      },
+      "evidence": [
+        "glider ru29, WMO 2801900, 109 dives inside the box between 2018-08-12 and 2018-10-24, to 955 m, cited to the Copernicus in-situ archive that the problem statement's own dataset link names",
+        "the verification card counts 13,622 levels refused under no_model_time, which is every level this glider and the ship casts measured"
+      ]
+    },
+    {
+      "narration": "Click one and you get what it actually measured, plotted against the model at the same place and the same hour. This float also carries oxygen, chlorophyll, nitrate, pH and particle backscatter, so the biology is there alongside the physics.",
+      "hold": 13,
+      "patch": {
+        "selection": "2903831_20260728T141348"
+      },
+      "evidence": [
+        "biogeochemical float 2903831, cast of 2026-07-28, cited to the Argo GDAC synthetic profile files",
+        "the panel states that its model curve is the nearest grid cell and claims no skill figure from it"
+      ]
+    },
+    {
+      "narration": "And here is the part I would ask you to remember. Every ocean viewer in the world draws the model. This one also prints how wrong the model is, as a number, checked against the real instruments in the water, on the same screen as the field it is judging.",
+      "hold": 13,
+      "patch": {
+        "selection": "2903831_20260728T141348"
+      },
+      "evidence": [
+        "bias +0.026 degC and RMSE 0.602 degC over 11,718 matched model-observation pairs from 23 casts on 15 platforms",
+        "Class-4-style verification in observation space, the method of Ryan et al. 2015"
+      ]
+    },
+    {
+      "narration": "Underneath it, in red, is our own caveat. This analysis has already seen these floats, so the number bounds how closely it fits data it was given and is not forecast skill. We print the sentence that weakens our own claim, because a forecaster who cannot see that cannot use the tool.",
+      "hold": 14,
+      "patch": {
+        "selection": "2903831_20260728T141348"
+      },
+      "evidence": [
+        "the caveat is served by the API, printed on the card, and repeated in every agent answer that quotes the figure",
+        "4,672 levels that could not be paired are counted and served by reason, never silently dropped"
+      ]
+    },
+    {
+      "narration": "Switch the variable and this is density, which nobody measures. There is no density sensor on a float: it is computed from temperature, salinity and pressure through the international equation of state, by a plugin. That is the extensibility requirement working rather than being described.",
+      "hold": 12,
+      "patch": {
+        "variable": "SIG0",
+        "selection": null,
+        "isosurfaceOn": false
+      },
+      "evidence": [
+        "potential density anomaly sigma-0 computed by services/api/plugins/density_sigma0.py using TEOS-10",
+        "it runs 20.86 kg per cubic metre at 5 m to 27.76 at 2000 m, and reached the OGC endpoints with no OGC code changed"
+      ]
+    },
+    {
+      "narration": "The theme of this problem statement is disaster management. These are real bulletins in the format India's national alert backbone publishes, drawn over the water they concern rather than sitting in a text box. Everything marked exercise is a drill, and it says so in four independent ways.",
+      "hold": 13,
+      "patch": {
+        "variable": "TEMP",
+        "rehearsal": true,
+        "selection": null
+      },
+      "evidence": [
+        "CAP v1.2 parsed from NDMA SACHET, India's national alert backbone, which carried 99 live alerts when it was ingested",
+        "the tsunami and high wave bulletins here carry CAP status Exercise, and the server refuses a drill unless it is asked for"
+      ]
+    },
+    {
+      "narration": "All of it from INCOIS's own data, served through open standards so their existing tools can read it, and every panel printing the dataset and timestamp it came from. No install, no licence, and nothing on this screen needed the internet.",
+      "hold": 11,
+      "patch": {
+        "variable": "TEMP",
+        "focusDepth": 100,
+        "currentsOn": false,
+        "isosurfaceOn": false,
+        "selection": null
+      },
+      "evidence": [
+        "OGC WMS 1.3.0 and WCS 1.0.0 over CF-1.8 NetCDF, plus a REST surface the agent plane uses",
+        "a browser test fails the build if any request leaves the machine, so the air-gapped claim is checked and not asserted"
+      ]
+    }
+  ]
+}

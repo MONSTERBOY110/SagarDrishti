@@ -321,6 +321,115 @@ test.describe("SagarDrishti demo path", () => {
     expect(dashes, "no em dash or en dash may reach the screen").toEqual([]);
   });
 
+  test("a glider and a ship cast are on the globe, dated, and refused by the scorecard", async ({
+    page,
+    request,
+  }) => {
+    /* PRD F2 names four instrument classes to co-display: "Argo float, Glider
+       profile, CTD and BGC data". Three were live. The other two were written
+       up in docs/P0-STATUS.md as unobtainable, after GTSPP returned one moored
+       buoy inside the box and the Copernicus NEAR-REAL-TIME feed carried a
+       single Indian Ocean glider, in the Mozambique Channel.
+
+       That search had looked at the rolling thirty-day part of the in-situ
+       archive. The HISTORY part of the same dataset holds a Rutgers glider
+       that flew off southern Sri Lanka in 2018 and fifteen shipboard CTD casts
+       taken in the Bay of Bengal in 1990 and 1991.
+
+       Both are years older than the model field. This test exists because that
+       is the dangerous part: the value of showing them depends entirely on the
+       page never letting them pass for current observations. */
+    const w = watch(page);
+    await page.goto(PROBE, { waitUntil: "networkidle" });
+    await sceneReady(page);
+
+    const legend = page.locator(".legend");
+    await expect(legend).toContainText("Glider");
+    await expect(legend).toContainText("CTD cast");
+
+    // EVERY archive mark is flagged, and every current one is not. A single
+    // glider mark left unflagged is a 2018 observation sitting unremarked
+    // among 2026 ones, which is the whole failure this guards against.
+    const byEpoch = await page.evaluate(() => {
+      const s = (
+        window as unknown as { __sagarScene?: { viewer: { entities: { values: any[] } } } }
+      ).__sagarScene!;
+      const out: Record<string, Record<string, number>> = {};
+      for (const e of s.viewer.entities.values) {
+        const props = e.properties;
+        if (!props || !props.platformKind) continue;
+        const kind = props.platformKind.getValue();
+        const epoch = props.epoch?.getValue() ?? "missing";
+        out[kind] = out[kind] ?? {};
+        out[kind][epoch] = (out[kind][epoch] ?? 0) + 1;
+      }
+      return out;
+    });
+    expect(Object.keys(byEpoch.glider ?? {})).toEqual(["archive"]);
+    expect(Object.keys(byEpoch.ctd ?? {})).toEqual(["archive"]);
+    expect(Object.keys(byEpoch.gdac_geo ?? {})).toEqual(["contemporaneous"]);
+    expect(Object.keys(byEpoch.gdac_bgc ?? {})).toEqual(["contemporaneous"]);
+
+    // Open a glider dive.
+    const mark = await page.evaluate(() => {
+      const s = (
+        window as unknown as {
+          __sagarScene?: {
+            viewer: { entities: { values: any[] } };
+            floatWindowPos(i: number): { x: number; y: number; wmo: string } | null;
+          };
+        }
+      ).__sagarScene!;
+      let seen = -1;
+      for (const e of s.viewer.entities.values) {
+        const props = e.properties;
+        if (!props || !props.platformKind) continue;
+        seen += 1;
+        if (props.platformKind.getValue() !== "glider") continue;
+        const m = s.floatWindowPos(seen);
+        if (m && m.x > 4 && m.y > 4) return m;
+      }
+      return null;
+    });
+    expect(mark, "a glider dive must be on screen").not.toBeNull();
+
+    await page.mouse.click(mark!.x, mark!.y);
+    const panel = page.locator('[aria-label="Instrument profile"]');
+
+    // Named as a glider, not as a float and not as a generic cast.
+    await expect(panel.locator("h2")).toContainText("Glider", { timeout: 30_000 });
+
+    // THE DATE IS ON SCREEN. A 2018 profile that renders without saying 2018
+    // is worse than no profile at all.
+    await expect(panel).toContainText("2018");
+
+    // And the reason it is here anyway, in the instrument's own words.
+    await expect(panel).toContainText("ARCHIVE OBSERVATION");
+    await expect(panel).toContainText("never scored against it");
+
+    // Cited to the archive it actually came from.
+    await expect(panel).toContainText("in-situ");
+
+    /* THE SCORECARD REFUSES THEM, AND COUNTS THE REFUSAL.
+       This is the half a screenshot cannot show. The verification is computed
+       over the same profile table the globe draws from, so if the five-day
+       rule were not doing its job these 13,622 archive levels would be
+       silently averaged into the model error and make it look better or worse
+       for reasons that have nothing to do with the model. */
+    const card = await (
+      await request.get(
+        `${API}/scorecard/incois_vam_argo/TEMP?bbox=80,5,95,25&time=2026-07-30`,
+      )
+    ).json();
+    expect(card.refused.no_model_time).toBeGreaterThan(13_000);
+    // The casts that DID score are only the contemporaneous ones.
+    expect(card.n_profiles).toBeLessThan(30);
+    expect(card.overall.n).toBeGreaterThan(10_000);
+
+    expect(w.offOrigin, "PRD F11: an archive cast is still served locally").toEqual([]);
+    expect(w.consoleErrors, "no console error").toEqual([]);
+  });
+
   test("a BGC float is a different instrument, and says so", async ({ page }) => {
     /* PRD F2 asks for Argo floats, gliders, CTD and BGC as distinguishable
        marks. This asserts the half of that claim we can currently make with
@@ -359,7 +468,9 @@ test.describe("SagarDrishti demo path", () => {
       }
       return seen;
     });
-    expect(Object.keys(classes).sort()).toEqual(["gdac_bgc", "gdac_geo", "mooring"]);
+    expect(Object.keys(classes).sort()).toEqual([
+      "ctd", "gdac_bgc", "gdac_geo", "glider", "mooring",
+    ]);
     expect(classes.mooring).toBeGreaterThan(0);
 
     /* A MARK IS A CAST, NOT AN INSTRUMENT, and the page must not confuse the

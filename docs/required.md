@@ -124,19 +124,51 @@ F5, and a judge who works in IT may ask.
 and turn "authored" into "verified", **or** tell me to skip it and I will say
 plainly in the docs that it is unverified rather than leave it ambiguous.
 
-### 6. One glider or ship CTD file for the Indian Ocean
+### 6. One glider or ship CTD file for the Indian Ocean: NO LONGER BLOCKING
 
-**Any delimited text format:** CSV, tab separated, or an ODV export.
+**This is done, and you did not have to do anything.** Leaving the item here
+because it was the last P0 gap and because how it closed is worth two minutes
+of your time if a judge asks.
 
-**Why:** the problem statement names gliders and CTDs among the instruments we
-must display. The reader for them is built and is the most heavily tested module
-in the whole project, 66 tests. I have nothing to feed it. INCOIS do not publish
-such a file on their open server, and I have checked.
+On 15 September I found a real glider and real CTD casts, and both are now in
+the product. All four instrument classes the problem statement names are live:
+149 casts from 19 instruments, up from 25 casts from 17.
 
-**Where to look:** a mentor, a college contact at a marine institute, NIOT, NIO
-Goa, or any faculty member who has been on a research cruise. Even one cast from
-one station is enough. This is the last piece of a P0 requirement that is
-blocked on data rather than on code.
+**Where they came from, and why we did not have them before.** The problem
+statement's own "Dataset Link" field on sih.gov.in lists four archives, and I
+had never read that field. The third link is an Ifremer glider FTP. Its index
+file turned out to be 248 MB of whitespace, a broken build on their side, but
+the same data sits in the Copernicus archive we already have an account for.
+The reason three weeks of searching missed it: I had been querying that
+archive's live thirty-day window, and concluding that no glider had reported in
+thirty days meant no glider existed. The historical part of the same dataset
+indexes 89,115 files.
+
+**What is in the demo now:** glider ru29, a Rutgers robot that flew off
+southern Sri Lanka in 2018, 109 dives inside our box, down to 955 m. Plus
+fifteen CTD casts taken from the research vessel SHINYO MARU in the Bay of
+Bengal in 1990 and 1991.
+
+**The one thing to know before a judge asks: they are old.** 2018 and 1990
+against a July 2026 model. That is not hidden and it is not an accident:
+
+- there is no glider in the Bay of Bengal today, and I checked. On
+  1 September the entire live feed held one Indian Ocean glider and it was in
+  the Mozambique Channel, 4,000 km away;
+- so every one of those marks is drawn inside a ring, clicking one prints the
+  date and the reason, and the verification REFUSES all 13,622 of their
+  measurement levels rather than scoring an old dive against a new field, and
+  prints that refusal count on screen.
+
+**If a judge presses you:** the problem statement asks for gliders to be
+CO-DISPLAYED, not verified. The choice was a real glider with its date
+declared, or no glider at all. We took the first and made the system say so.
+
+**Still genuinely useful, if it ever appears:** a cast in delimited text, CSV or
+an ODV export, from a mentor, NIOT, NIO Goa, or anyone who has been on a
+research cruise. That reader is still built and still empty, and a file handed
+over on a USB stick is the form a cast from INCOIS would actually arrive in.
+It is no longer blocking anything.
 
 ---
 
@@ -144,11 +176,23 @@ blocked on data rather than on code.
 
 ### 7. Check the idea counter on 15 and 19 September
 
-**Where:** sih.gov.in/sih2026PS, find **SIH26067**.
+**15 September: DONE. SIH26067 stands at 4 of 500.** Nowhere near the ~150
+threshold, so the backup problem statement stays on the shelf. Submission
+deadline on the portal reads 30 September 2026.
 
-**What to look for:** the number of ideas submitted against it. If it goes above
-roughly 150, our odds drop enough that we should talk about the backup problem
-statement (SIH26176) before the 20 September PDF deadline.
+Three other things came out of that check, all now handled:
+
+- **The theme is Disaster Management**, confirmed on sih.gov.in itself. Two
+  third-party mirrors disagree with each other about this and one of them says
+  Smart Automation. Ours was right. It is printed on slide 1, so it mattered.
+- **The exact problem statement title was wrong in our deck** and is now
+  verbatim from the source: "Develop a web-based interactive 3D visualization
+  platform that integrates numerical ocean model outputs and in-situ
+  observations."
+- **The Dataset Link field** is what closed item 6 above.
+
+**Still to do on 19 September:** re-check the counter at sih.gov.in/sih2026PS.
+Same threshold, same escalation.
 
 ### 8. The idea PDF goes to the SPOC by 20 September
 

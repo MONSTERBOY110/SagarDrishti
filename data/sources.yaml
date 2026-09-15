@@ -415,6 +415,142 @@ sources:
       prefer_adjusted: false
 
   # ---------------------------------------------------------------------------
+  # A GLIDER, and the instrument class the PS names that this project could not
+  # find for three weeks (PS requirement F2).
+  #
+  # WHERE THIS CAME FROM. The problem statement's own "Dataset Link" field on
+  # sih.gov.in names four archives, and the third is
+  # ftp://ftp.ifremer.fr/ifremer/glider/v2/. Its index file is 248 MB of
+  # whitespace, a broken build on the publisher's side. The same holdings reach
+  # the Copernicus in-situ Thematic Assembly Centre, whose index is not broken,
+  # and that is what these two sources read.
+  #
+  # WHY IT WAS MISSED. An earlier search concluded that no glider was
+  # obtainable, and it was searching the in-situ TAC's LATEST part, a rolling
+  # thirty-day window. The HISTORY part of the same dataset carries 89,115
+  # files. Five gliders and twenty-four CTD collections intersect the demo box.
+  # The search was not wrong about the window; it was wrong about the archive.
+  #
+  # WHAT IT IS. ru29, a Rutgers Slocum glider (WMO 2801900), flying off
+  # southern Sri Lanka between 12 August and 24 October 2018. 944 half-dives,
+  # 472 of them descending, 109 of those inside the demo box, reaching 955 m,
+  # carrying temperature, salinity and conductivity. 13,278 levels pass QC.
+  #
+  # The same deployment is ALSO published as GL_PR_GL_SLU29.nc by the
+  # Australian Ocean Data Network, with a finer depth axis and a blank WMO
+  # field. It is the same physical glider, and ingesting both would report two
+  # gliders where the ocean held one. That is the identical overcount as
+  # calling 25 casts 25 instruments, which this project has already made once.
+  # The Rutgers copy is kept because it carries the WMO id a number has to be
+  # citable to.
+  #
+  # EPOCH. 2018, against a 2026 model cube, and `epoch: archive` is how the
+  # scene is told. This is the same objection that keeps incois_oceansat2_chl
+  # disabled below, and the honest answer differs in three ways: a profile
+  # carries its own timestamp where a field layer inherits the scrubber's; the
+  # scorecard's five-day rule refuses to pair these casts and COUNTS the
+  # refusal; and the client draws an archive instrument differently rather than
+  # letting it sit among the current ones unmarked. The alternative is not "a
+  # contemporaneous glider instead" -- the near-real-time feed carried exactly
+  # one Indian Ocean glider on 2026-09-01, at 12.83 S 45.38 E in the Mozambique
+  # Channel, 4,000 km outside the box. The alternative is no glider at all.
+  # ---------------------------------------------------------------------------
+  - id: cmems_glider_bob
+    title: "Glider ru29, Sri Lanka and the southern Bay of Bengal (2018)"
+    kind: insitu_tac
+    instrument_class: glider
+    enabled: true
+    epoch: archive
+    epoch_note: >-
+      Flown August to October 2018. The model cube covers July 2026, so these
+      dives are shown beside the field and are never scored against it: the
+      Class-4 colocation refuses any pairing more than five days apart and
+      counts every refusal. The Indian Ocean has no contemporaneous glider to
+      show; on 2026-09-01 the near-real-time feed carried one, in the
+      Mozambique Channel.
+    url: data/raw/insitu
+    path_template: "GL_PR_GL_*.nc"
+    citation: >-
+      Copernicus Marine in-situ Thematic Assembly Centre, global ocean in-situ
+      near-real-time and historical observations
+      (INSITU_GLO_PHYBGCWAV_DISCRETE_MYNRT_013_030, history part). Glider ru29
+      operated by Rutgers, The State University of New Jersey, Institute of
+      Marine and Coastal Sciences. Distributed under the EGO glider data
+      management convention.
+    platforms: []
+    variables:
+      - name: TEMP
+        canonical: sea_water_temperature
+        label: Temperature
+        units: "degC"
+      - name: PSAL
+        canonical: sea_water_practical_salinity
+        label: Salinity
+        units: "1e-3"
+    dims:
+      time: profile
+      depth: level
+    qc:
+      # The same policy as every other instrument here. The reader has already
+      # folded a rejected PRESSURE flag into each parameter's flag, because a
+      # good temperature at a depth the instrument could not determine is not
+      # an observation of anything.
+      accept_flags: [1, 2]
+      prefer_adjusted: false
+
+  # ---------------------------------------------------------------------------
+  # A SHIPBOARD CTD, the fourth instrument class the PS names, and the one its
+  # own extensibility requirement (F6) uses as its worked example: "future
+  # integration of additional sensors (e.g., CTDs, moorings, HF-radar, ADCP)".
+  #
+  # Moorings arrived through the plugin reader interface in September. CTDs
+  # arrive through the SAME interface with no change to the core, which is the
+  # claim F6 is actually graded on: it is now demonstrated twice, by two
+  # different instrument classes, rather than asserted once.
+  #
+  # WHAT IT IS. SHINYO MARU (platform JFCL), fifteen casts in the Bay of Bengal
+  # between February 1990 and February 1991, 8.5 N to 15.1 N and 85.9 E to
+  # 90.0 E, reaching 1091 m, temperature and salinity, 344 levels passing QC.
+  #
+  # `ctd_text_ascii` above is a DIFFERENT thing and both are wanted: that one
+  # reads a delimited-text cast a scientist hands you on a USB stick and is
+  # still waiting for a real file. This one is the archive holding, in NetCDF.
+  # ---------------------------------------------------------------------------
+  - id: cmems_ctd_bob
+    title: "CTD casts, SHINYO MARU, Bay of Bengal (1990 to 1991)"
+    kind: insitu_tac
+    instrument_class: ctd
+    enabled: true
+    epoch: archive
+    epoch_note: >-
+      Cast in 1990 and 1991. Shown for what a full-depth shipboard CTD profile
+      looks like beside a model column, and never scored against a 2026
+      analysis: the Class-4 colocation refuses the pairing and counts it.
+    url: data/raw/insitu
+    path_template: "GL_PR_CT_*.nc"
+    citation: >-
+      Copernicus Marine in-situ Thematic Assembly Centre, global ocean in-situ
+      near-real-time and historical observations
+      (INSITU_GLO_PHYBGCWAV_DISCRETE_MYNRT_013_030, history part). Research
+      vessel SHINYO MARU, platform code JFCL.
+    platforms: []
+    variables:
+      - name: TEMP
+        canonical: sea_water_temperature
+        label: Temperature
+        units: "degC"
+      - name: PSAL
+        canonical: sea_water_practical_salinity
+        label: Salinity
+        units: "1e-3"
+    dims:
+      time: profile
+      depth: level
+    qc:
+      accept_flags: [1, 2]
+      prefer_adjusted: false
+
+  # ---------------------------------------------------------------------------
   # INCOIS ocean colour. The PS names CHLOROPHYLL among the fields F1 asks for,
   # and this is INCOIS's own product for it, on the same open ERDDAP the model
   # field comes from. It is registered here, and DISABLED, and the three

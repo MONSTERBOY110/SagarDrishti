@@ -43,6 +43,12 @@ SourceKind = Literal[
     "mooring",
     "hf_radar",
     "adcp",
+    # Gliders and CTD casts from the Copernicus in-situ Thematic Assembly
+    # Centre, the archive the problem statement's own Dataset Link field names.
+    # A separate kind from `mooring` because the platform MOVES: every cast has
+    # its own position, so the reader returns ragged (profile, level) casts
+    # rather than a mooring's (time, depth) grid at one point.
+    "insitu_tac",
 ]
 
 
@@ -123,6 +129,46 @@ class SourceSpec(BaseModel):
     #: specific float can be pinned when a demo needs a known-good one.
     platforms: list[str] = Field(default_factory=list)
 
+    #: "contemporaneous" when this source's observations sit inside the model
+    #: cube's own time window, "archive" when they predate it.
+    #:
+    #: This field exists because `incois_oceansat2_chl` is registered and
+    #: DISABLED for exactly this reason, in its own words: "a scrubber reading
+    #: 2026-07-30 above a 2020 chlorophyll layer is a false statement made by
+    #: the interface itself, and it would be made silently... Nothing in the
+    #: scene today can express 'this layer has its own epoch'." That was true,
+    #: and it is the missing capability this marker supplies.
+    #:
+    #: An archive source is not a lesser source. The PS names gliders and CTDs
+    #: among the instrument classes to co-display, and the Bay of Bengal has no
+    #: contemporaneous glider to offer: the near-real-time feed carried one
+    #: Indian Ocean glider on 2026-09-01 and it was in the Mozambique Channel.
+    #: So the choice is between showing the real instrument with its real date
+    #: declared, and showing no glider at all. What is NOT acceptable is the
+    #: third option of showing it and letting the scene imply it is current,
+    #: which is what this marker prevents: the client draws an archive cast
+    #: differently and the scorecard's five-day rule refuses to pair it, with
+    #: the refusal counted and served rather than inferred.
+    epoch: Literal["contemporaneous", "archive"] = "contemporaneous"
+
+    #: Required when `epoch: archive`, and printed wherever the instrument is.
+    #: Free text, because the reason a source is out of epoch is never a code.
+    epoch_note: str | None = None
+
+    #: What kind of INSTRUMENT this is, when that differs from the kind of
+    #: SOURCE it is read from. `kind` answers "how is this parsed"; for most
+    #: sources the two coincide and this stays empty.
+    #:
+    #: They stop coinciding at `insitu_tac`, which is one archive and one
+    #: reader serving two different instruments: a glider flies a sawtooth
+    #: through the water and a shipboard CTD is lowered on a wire. Drawing both
+    #: as one mark because they arrive in the same file format would be letting
+    #: a parsing detail decide what the globe claims about the ocean.
+    #:
+    #: Cross-checked at ingest against the class the reader derives from the
+    #: file's own `source` attribute, so this cannot drift from the data.
+    instrument_class: str | None = None
+
     @field_validator("text")
     @classmethod
     def _text_block_is_a_valid_layout(cls, v):
@@ -139,6 +185,23 @@ class SourceSpec(BaseModel):
 
         TextFormatSpec.model_validate(v)
         return v
+
+    @model_validator(mode="after")
+    def _an_archive_source_says_why_it_is_one(self):
+        """An out-of-epoch source without a note is one nobody can explain.
+
+        The note is not decoration: it reaches the profile panel and the
+        instrument list, so a reviewer who clicks a 2018 glider on a 2026 scene
+        reads the reason from the instrument itself rather than inferring that
+        something is wrong.
+        """
+        if self.epoch == "archive" and not (self.epoch_note or "").strip():
+            raise ValueError(
+                f"source {self.id!r} is marked epoch: archive but carries no "
+                f"epoch_note. An observation shown outside the model's own "
+                f"time window has to say so where it is shown"
+            )
+        return self
 
     @field_validator("disabled_reason")
     @classmethod

@@ -1,7 +1,7 @@
 {
   "source_id": "argo_gdac_indian",
   "title": "Profile observations (all instrument classes)",
-  "citation": "Argo GDAC (Ifremer), geo/indian_ocean daily profile files. Argo float data collected and made freely available by the International Argo Program.; Argo GDAC (Ifremer), BGC synthetic profiles (Sprof). Argo float data collected and made freely available by the International Argo Program and the national programmes that contribute to it.; TAO/TRITON, RAMA and PIRATA moored buoy array, NOAA PMEL, served via the OSMC ERDDAP (dataset pmelTaoDyT). RAMA is supported by NOAA PMEL, India's Ministry of Earth Sciences and INCOIS, JAMSTEC, BMKG and CSIRO.",
+  "citation": "Argo GDAC (Ifremer), geo/indian_ocean daily profile files. Argo float data collected and made freely available by the International Argo Program.; Argo GDAC (Ifremer), BGC synthetic profiles (Sprof). Argo float data collected and made freely available by the International Argo Program and the national programmes that contribute to it.; TAO/TRITON, RAMA and PIRATA moored buoy array, NOAA PMEL, served via the OSMC ERDDAP (dataset pmelTaoDyT). RAMA is supported by NOAA PMEL, India's Ministry of Earth Sciences and INCOIS, JAMSTEC, BMKG and CSIRO.; Copernicus Marine in-situ Thematic Assembly Centre, global ocean in-situ near-real-time and historical observations (INSITU_GLO_PHYBGCWAV_DISCRETE_MYNRT_013_030, history part). Glider ru29 operated by Rutgers, The State University of New Jersey, Institute of Marine and Coastal Sciences. Distributed under the EGO glider data management convention.; Copernicus Marine in-situ Thematic Assembly Centre, global ocean in-situ near-real-time and historical observations (INSITU_GLO_PHYBGCWAV_DISCRETE_MYNRT_013_030, history part). Research vessel SHINYO MARU, platform code JFCL.",
   "variables": [
     "BBP700",
     "CHLA",
@@ -12,12 +12,12 @@
     "TEMP"
   ],
   "source_url": "https://data-argo.ifremer.fr/geo/indian_ocean",
-  "retrieved_at": "2026-09-09T16:59:59+00:00",
+  "retrieved_at": "2026-09-15T10:15:22+00:00",
   "produced_by": "SagarDrishti tools/preprocess.py",
   "host": "BHOOT",
-  "n_profiles": 25,
-  "n_levels": 16390,
-  "n_platforms": 17,
+  "n_profiles": 149,
+  "n_levels": 30012,
+  "n_platforms": 19,
   "bbox": [
     80.0,
     5.0,
@@ -25,7 +25,7 @@
     25.0
   ],
   "time_range": [
-    "2026-07-07 18:45:25",
+    "1990-02-13 11:16:48",
     "2026-07-30 22:38:24"
   ],
   "sources": {
@@ -104,6 +104,56 @@
       "n_platforms": 1,
       "parameters_served": {
         "temp": 35
+      }
+    },
+    "cmems_glider_bob": {
+      "title": "Glider ru29, Sri Lanka and the southern Bay of Bengal (2018)",
+      "citation": "Copernicus Marine in-situ Thematic Assembly Centre, global ocean in-situ near-real-time and historical observations (INSITU_GLO_PHYBGCWAV_DISCRETE_MYNRT_013_030, history part). Glider ru29 operated by Rutgers, The State University of New Jersey, Institute of Marine and Coastal Sciences. Distributed under the EGO glider data management convention.",
+      "source_url": "data/raw/insitu",
+      "variables": [
+        "TEMP",
+        "PSAL"
+      ],
+      "qc_accept_flags": [
+        1,
+        2
+      ],
+      "prefer_adjusted": false,
+      "n_files": 0,
+      "read_by_plugin": "insitu_tac",
+      "n_profiles_reported": 472,
+      "n_profiles_kept": 472,
+      "n_profiles": 109,
+      "n_levels": 13278,
+      "n_platforms": 1,
+      "parameters_served": {
+        "temp": 13278,
+        "psal": 13278
+      }
+    },
+    "cmems_ctd_bob": {
+      "title": "CTD casts, SHINYO MARU, Bay of Bengal (1990 to 1991)",
+      "citation": "Copernicus Marine in-situ Thematic Assembly Centre, global ocean in-situ near-real-time and historical observations (INSITU_GLO_PHYBGCWAV_DISCRETE_MYNRT_013_030, history part). Research vessel SHINYO MARU, platform code JFCL.",
+      "source_url": "data/raw/insitu",
+      "variables": [
+        "TEMP",
+        "PSAL"
+      ],
+      "qc_accept_flags": [
+        1,
+        2
+      ],
+      "prefer_adjusted": false,
+      "n_files": 0,
+      "read_by_plugin": "insitu_tac",
+      "n_profiles_reported": 15,
+      "n_profiles_kept": 15,
+      "n_profiles": 15,
+      "n_levels": 344,
+      "n_platforms": 1,
+      "parameters_served": {
+        "temp": 344,
+        "psal": 344
       }
     }
   }

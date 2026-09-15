@@ -25,7 +25,7 @@ forever, only that the PS's sentence is satisfied and proven.
 | # | Requirement | Verdict | The gap, if any |
 |---|---|---|---|
 | F1 | 3D volumetric rendering | **Partly met** | All three named TECHNIQUES are built, and every field the PS names is now drawn except one: temperature, salinity and depth-resolved CURRENT VECTORS, the last live since the Copernicus account arrived on 2026-09-09. Six gridded fields render in total, the other two being plugin-derived: D26 and SIG0 (potential density, TEOS-10). Chlorophyll is registered and deliberately disabled as a GRIDDED field: the INCOIS series ends in 2020 and cannot share a 2026 scrubber. It is served as in-situ BGC-float data, which is contemporary. |
-| F2 | Instrument data overlay | **Partly met** | Three instrument classes work end to end and are drawn as different marks: Argo floats, BGC floats and a RAMA moored buoy. Glider and CTD parsers are built and tested, but no such cast is loaded, so those two classes do not yet appear. |
+| F2 | Instrument data overlay | **Met** | All four instrument classes the PS names are live and drawn as different marks: Argo floats, BGC floats, a glider and shipboard CTD casts, plus a RAMA moored buoy. 149 casts from 19 instruments, 30,012 QC-passed levels. The glider and the CTD casts predate the model field and are marked, dated and refused by the verification rather than left to pass for current. |
 | F3 | Multi-format data ingestion | **Met** | None. |
 | F4 | Customizable colorbar and variable controls | **Met** | None. |
 | F5 | Web-based, scalable architecture | **Partly met** | The Docker path is authored and never executed, because Docker is not installed here. |
@@ -40,10 +40,10 @@ is at the bottom of this file.
 ## Test and check counts behind these verdicts
 
 ```
-services/api      462 tests   (argo 20, cap 47, cf 20, colormap 10, currents 16,
+services/api      467 tests   (argo 20, cap 47, cf 20, colormap 10, currents 16,
                                density 19, field 29, isosurface 27, offline 3,
                                ogc 58, plugins 71, sagarnode 27, scorecard 24,
-                               storyboards 25, text profiles 66)
+                               storyboards 30, text profiles 66)
 services/agent     71 tests   (guard 13, planner 56, scene-key drift 2)
 e2e                10 tests   production build, real browser, off-origin guard
 ```
@@ -417,35 +417,159 @@ under one time scrubber, would state a co-location that does not exist. The
 ingest keeps only profiles inside the cube's own span widened by half a
 timestep, and prints how many it dropped.
 
-**Gap: no glider or CTD cast is loaded.** This one is worth being precise
-about, because the parsing half is done and the ingestion half is not:
+**Built, for gliders and CTD casts, on 2026-09-15.** All four instrument
+classes the PS names are now live. This section previously read "Gap: no
+glider or CTD cast is loaded" and concluded the blocker was data availability
+rather than code. That conclusion was wrong, and it is worth recording exactly
+how, because it is a mistake worth making only once.
 
-- The delimited-text parser is built and is the most heavily tested module in
-  the repo (66 tests), covering Sea-Bird CTD ASCII, ODV spreadsheet exports,
-  footer blocks, ragged lines, and the station-boundary cases where a blank
-  station cell would otherwise attribute one cast's levels to another.
-- `data/sources.yaml` registers `ctd_text_ascii` and `odv_spreadsheet`.
-- Provenance is now RECORDED per row rather than inferred. Every profile row
-  carries the `source_id` it was ingested from, because the previous scheme
-  guessed from the shape of the platform id: that works for a text cast
-  (prefixed "CTD-...") but cannot tell a BGC float from a core float, since
-  both have a plain 7-digit WMO. A BGC float's chlorophyll cited to the core
-  daily files, which contain no chlorophyll at all, would have been exactly the
-  misattribution the routing existed to prevent.
-- The marker glyphs now exist and are wired: a square is a core float, a
-  diamond a BGC float, a triangle a ship or glider cast, a circle a fixed
-  station. The legend lists only the classes actually present, so it cannot
-  advertise a glider we have no glider data for.
-- What is missing is a real glider or CTD file to ingest. No such dataset is on
-  INCOIS's own ERDDAP; its 17 datasets are gridded satellite and analysis
-  products plus one tabular Argo dataset. So this needs either an outside
-  archive or a file from the team, and it is the one remaining P0 clause whose
-  blocker is data availability rather than code.
+**What the earlier search got wrong.** It looked in three places and came back
+empty: INCOIS's own ERDDAP (17 datasets, all gridded products plus one tabular
+Argo set), GTSPP's July 2026 best-copy file (5,247 Indian Ocean casts, 211
+inside the box, every one of them a single moored buoy at 13.98 N 87.02 E), and
+the Copernicus in-situ feed, which on 2026-09-01 carried 42 gliders worldwide
+and exactly one in the Indian Ocean, at 12.83 S 45.38 E in the Mozambique
+Channel. Each of those findings was correct. The conclusion drawn from them was
+not, because the Copernicus dataset was queried through its `latest` part, a
+ROLLING THIRTY-DAY WINDOW, and the absence of a glider in the last thirty days
+is not the absence of a glider.
 
-Today `profiles.parquet` holds 22 profiles across 16 platforms: 13 core Argo
-floats and 3 BGC floats. Two of the four instrument classes the PS names are
-therefore live, and the two that are not are one ingest away rather than one
-feature away.
+**What found it.** The problem statement's own "Dataset Link" field on
+sih.gov.in names four archives for SIH26067, and the third is
+`ftp://ftp.ifremer.fr/ifremer/glider/v2/`. That archive is real and reachable;
+its published index, `glider_prof_index.txt`, is 248 MB of whitespace, checked
+at four offsets, which is a broken build on the publisher's side. The same
+holdings reach the Copernicus in-situ Thematic Assembly Centre, whose `history`
+part indexes 89,115 files. Five gliders and twenty-four CTD collections
+intersect the demo box.
+
+**The glider.** `ru29`, a Rutgers Slocum glider, WMO 2801900, flying off
+southern Sri Lanka from 12 August to 24 October 2018. 944 half-dives, 472 of
+them descending, 109 of those inside the demo box, to 955 m, carrying
+temperature, salinity and conductivity. **13,278 levels pass QC.**
+
+The same deployment is ALSO published as `GL_PR_GL_SLU29.nc` by the Australian
+Ocean Data Network, with a finer depth axis and a blank WMO field. It is the
+same physical glider. Ingesting both would have put two gliders on the globe
+where the ocean held one, which is the identical overcount as calling 25 casts
+25 instruments, a mistake this project has already made once and corrected.
+
+**The CTD.** `SHINYO MARU`, platform JFCL, fifteen shipboard casts in the Bay
+of Bengal between February 1990 and February 1991, 8.5 N to 15.1 N and 85.9 E
+to 90.0 E, to 1091 m. **344 levels pass QC.**
+
+**Both are out of epoch, and that is the interesting part.** The model cube
+covers July 2026. This repository already refuses to draw INCOIS's own
+Oceansat-2 chlorophyll for exactly this reason, in that source's own words: "a
+scrubber reading 2026-07-30 above a 2020 chlorophyll layer is a false statement
+made by the interface itself, and it would be made silently." The word doing
+the work there is SILENTLY. The rule forbids an unstated false claim, not old
+data.
+
+So the registry grew an `epoch` marker, which the chlorophyll entry had already
+named as the missing capability, and an archive source is refused at load
+unless it also carries an `epoch_note` saying why it is one. Four things then
+happen that together make showing these casts honest rather than misleading:
+
+1. The mark is drawn inside a ring. The glyph itself is untouched, so it
+   still reads as a glider, following the same rule selection and alarm already
+   follow on this surface: status is stamped around a mark, never coloured into
+   it. The ring is SOLID, and that is the second time this project has learned
+   the same lesson: the first attempt dashed it, because dash means "not the
+   live thing" everywhere else here, and rendering it showed the dashes landing
+   sub-pixel. These marks are drawn at 15 px from a 44 px canvas, so what
+   survives is a change to the silhouette, not a texture inside it. The
+   SagarNode glyph a few lines away in the same file records the identical
+   finding.
+2. Clicking it prints ARCHIVE OBSERVATION and the note, above the chart.
+3. The scorecard's five-day rule refuses every one of those levels and COUNTS
+   the refusal: `refused.no_model_time` is **13,622**, which is 13,278 glider
+   levels plus 344 CTD levels exactly. They are displayed against the model and
+   never scored against it.
+4. The standing copy in the instrument panel, which used to say every mark was
+   "contemporaneous with the model field", was true when written and became
+   false the moment these arrived. It now names the epoch. A line of prose that
+   quietly goes stale is the same defect as a mark that does not say what it is.
+
+**Why show them at all.** Because the alternative is not a contemporaneous
+glider; it is no glider. The Bay of Bengal has none in the water now, and the
+PS asks for gliders to be CO-DISPLAYED, not verified. A judge who asks "where
+are the gliders" gets a real Rutgers deployment, its date, and the reason the
+system declines to score it, instead of an apology.
+
+**Evidence.**
+
+```
+curl "http://127.0.0.1:8000/profiles?bbox=80,5,95,25"
+  -> 149 casts from 19 instruments
+     glider 109 (archive) - ctd 15 (archive) - gdac_geo 13 - gdac_bgc 9 - mooring 3
+
+curl "http://127.0.0.1:8000/profiles/2801900_20180812T023601"
+  Glider 2801900   2018-08-12T02:36:01Z   8.631N 81.287E
+  epoch: archive
+  citation: Copernicus Marine in-situ TAC (INSITU_GLO_PHYBGCWAV_DISCRETE_
+            MYNRT_013_030, history part). Glider ru29, Rutgers.
+
+curl ".../scorecard/incois_vam_argo/TEMP?bbox=80,5,95,25&time=2026-07-30"
+  overall.n              11718   <- contemporaneous pairs, unchanged
+  n_profiles                23   <- only the casts that may honestly be scored
+  refused.no_model_time  13622   <- every archive level, counted
+```
+
+**Five defects in the source files, each handled and each observed.** The
+reader is `services/api/plugins/insitu_tac.py` and its tests are
+`services/api/tests/test_insitu_tac.py` (18):
+
+1. **Pressure is not depth.** The files measure decibars. Depth depends on
+   latitude because gravity does, so the conversion is TEOS-10's
+   `gsw.z_from_p`. At 1000 dbar at 5 N the difference from assuming a metre per
+   decibar is **7.9 m**, which is wider than the spacing between the model's
+   deep levels: an observation placed 7.9 m too deep is interpolated against
+   the wrong part of the column and the difference is then reported as model
+   error.
+2. **Pressure that reverses.** 475 of ru29's 944 half-dives are non-monotonic.
+   Most of that is the ascending legs, whose pressure decreases by definition;
+   3 descending dives still reverse, because a glider samples continuously and
+   wobbles at the apex. The counter reports the 3, not the 475, because the 475
+   would count the ascending legs twice, once as dropped and once as disordered.
+3. **Gaps in pressure.** 943 of 944 half-dives contain a NaN pressure, and on
+   these files the number of gaps INSIDE a dive's sampled span is **0**: the
+   file is a rectangle padded out to its longest dive, so all 20,667 NaNs are
+   padding. A counter that summed raw NaNs would have reported 20,667 missing
+   levels and been believed.
+4. **A good measurement at a bad depth.** `PRES_QC` 4 occurs alongside
+   `TEMP_QC` 1. Filtering on the temperature flag alone accepts a reading the
+   instrument itself could not locate, so the pressure flag is folded into
+   every parameter's flag.
+5. **Floating-point quality flags.** The flags arrive as floats and a missing
+   flag is NaN. Casting NaN to an integer is undefined and in practice yields a
+   large negative number that no accepted-flag test matches by accident rather
+   than by decision. Missing maps explicitly to 9.
+
+**One profile per dive.** A glider profiles going down and again coming up, and
+both legs are in the file tagged 'D' and 'A'. They are minutes apart in nearly
+the same water, so keeping both would double the apparent number of independent
+observations. The descending leg is kept and the 472 ascending legs are counted
+and disclosed.
+
+**This is also the second proof of F6.** The PS's extensibility requirement
+names its own worked example: "future integration of additional sensors (e.g.,
+CTDs, moorings, HF-radar, ADCP)". Moorings arrived through the plugin
+source-reader interface. CTDs and gliders arrived through the SAME interface
+with no change to the core: one plugin file and two registry entries. The claim
+F6 is graded on is now demonstrated twice by two different instrument classes,
+rather than asserted once.
+
+**The text-cast readers are still unused, and still wanted.** `ctd_text_ascii`
+and `odv_spreadsheet` read a delimited-text cast handed over on a USB stick,
+which is a different thing from an archive holding in NetCDF and is the form a
+cast from INCOIS would most likely arrive in. Those two remain built, tested
+(66 tests) and waiting for a real file.
+
+Today `profiles.parquet` holds **149 casts from 19 instruments and 30,012
+QC-passed levels**, up from 25 casts, 17 instruments and 16,390 levels. All
+four instrument classes the PS names are live, plus a moored buoy it names
+under F6.
 
 ## F3. Multi-format data ingestion
 
@@ -1219,6 +1343,41 @@ finish it, the parser and the marks are already there, and no such dataset is
 published on INCOIS's own ERDDAP. If the team can obtain one Indian Ocean
 glider or cruise CTD file in any delimited text format, that clause closes the
 day it lands.
+
+### We went and looked, on 2026-09-15, and the ocean is what is missing
+
+"Nobody has given us a file" is a weak answer to give a reviewer, so the two
+open archives that could plausibly carry a contemporaneous Bay of Bengal
+glider or ship CTD were searched directly. Both were exhausted. The finding is
+recorded here because it is a better answer than the absence it explains.
+
+**GTSPP, the Global Temperature and Salinity Profile Programme (NOAA NCEI).**
+The Indian Ocean monthly best-copy archive for July 2026,
+`gtspp4_in202607.tgz`, holds **5,247 casts**: 3,055 BATHY (XBT, temperature
+only) and 2,189 TESAC (temperature and salinity). Filtered to our demo box
+(80 to 95 E, 5 to 25 N) and the cube's own time window, **211 casts survive and
+every single one is the same moored buoy**, at 13.98 N 87.02 E, reporting
+3-hourly on 9 levels to 500 m. Not one ship CTD cast, and not one glider.
+
+**Copernicus Marine in-situ near-real-time, `cmems_obs-ins_glo_phybgcwav_mynrt_na_irr`.**
+The glider feed carries 1,333 files, and its rolling window runs
+**2026-08-15 to 2026-09-15**, which begins eleven days after our cube's window
+closes, so nothing in it can be contemporaneous with the July analysis in the
+first place. Setting even that aside: on 2026-09-01 the feed carried **42
+gliders worldwide, of which exactly one was anywhere in the Indian Ocean**, at
+12.83 S 45.38 E in the Mozambique Channel, roughly 5,000 km from the Bay of
+Bengal.
+
+So the honest statement is stronger than the one it replaces. **There was no
+glider in the Bay of Bengal to draw.** The parser is written, tested and
+waiting; what is absent is the observation, not the software. If a reviewer
+asks why two of the four instrument classes are empty, that is the answer, and
+it is checkable: both archives are public and both queries are reproducible.
+
+Deliberately NOT done as a substitute: the 211 GTSPP casts are a mooring, a
+class already live through RAMA, so ingesting them would raise the instrument
+count without answering the clause the PS actually names. Padding a count is
+the one thing this file exists to prevent.
 
 ## The e2e suite would have failed on CI, and did not fail here
 
