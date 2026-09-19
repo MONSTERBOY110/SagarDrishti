@@ -19,6 +19,7 @@ data/cube/*
 !data/cube/.gitkeep
 ppt examples
 .ppt-build
+docs/evidence
 
 # Env / secrets (Copernicus creds, LLM keys)
 .env
