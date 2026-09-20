@@ -275,3 +275,37 @@ So you are not carrying phantom work:
 
 **Buy the parts, and answer the four logistics questions.** Everything else on
 this list improves the project. Those two decide what the demo IS.
+
+---
+
+## Added 20 September: eleven icon PNGs for slide 3
+
+Slide 3 of `docs/submission/PixelPaws_SIH2026.pptx` is now a real architecture
+diagram, built on the pattern the four winning decks you sent all share. Every
+icon slot in it is drawn as a **dotted placeholder box labelled `icon`**, so
+the slide is complete and presentable exactly as it stands. If you drop PNGs
+in, it gets better. If you run out of time, nothing looks broken.
+
+**All eleven are transparent PNGs. Square unless noted. One colour or two,
+simple enough to read at 0.2 inches, which is about 20 pixels on a projector.**
+
+| Where | What it should show | Size on the slide | Export at |
+|---|---|---|---|
+| Zone 1 header | a database or a cloud, "external sources" | 0.20 in | 256 px |
+| Zone 2 header | a funnel or gears, "processing" | 0.20 in | 256 px |
+| Zone 3 header | a server or an API bracket | 0.20 in | 256 px |
+| Zone 4 header | a person at a screen, "the forecaster" | 0.20 in | 256 px |
+| the 7 component boxes | optional, one line glyph each | 0.18 in | 256 px |
+
+**Where to get them free, with a licence we can name if asked:** Lucide
+(lucide.dev), Tabler Icons, or Google Material Symbols. All three are MIT or
+Apache, so we can use them in a competition deck without attribution trouble.
+Download as PNG at 256 px with a transparent background.
+
+**How to place them:** open the deck in PowerPoint or Slides, click a dotted
+`icon` box, and paste the PNG over it. Do not resize the dotted box first,
+match the image to it.
+
+**The zone 4 slot is labelled `user`, not `icon`.** That one is the human
+in the system, the INCOIS forecaster, and it is the only place a person
+appears in the diagram. If you only do one, do that one.
