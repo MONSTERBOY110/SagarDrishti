@@ -1041,6 +1041,13 @@ def _wms_getmap(request: Request, params: dict, layers: dict[str, LayerInfo]) ->
                 ds,
                 bbox=(layer.west, layer.south, layer.east, layer.north),
                 time=_iso(served_time),
+                # The depth the ELEVATION block resolved above, and None for a
+                # surface product that has none. Omitting it is what made a
+                # volumetric derived layer unservable: the plugin fell back to
+                # depth 0.0 m, the store refused it as outside 5 .. 2000 m, and
+                # SIG0 was advertised in GetCapabilities with 24 elevations
+                # while GetMap could draw none of them.
+                depth=served_depth,
             )
         except plugins.PluginError as exc:
             # The plugin refused: a missing input variable, or a product that
@@ -1628,6 +1635,13 @@ def _wcs_getcoverage(request: Request, params: dict, layers: dict[str, LayerInfo
                 ds,
                 bbox=(west, south, east, north),
                 time=layer.times[-1],
+                # A VOLUMETRIC derived product is computed over the whole
+                # column and sliced to the requested DEPTH below, the same way
+                # the stored branch slices its own. Without this the plugin
+                # fell back to depth 0.0 m and refused every request for SIG0,
+                # a coverage this service advertises. A surface product takes
+                # neither: it has no depth to choose.
+                all_depths=not layer.is_surface,
             )
         except plugins.PluginError as exc:
             raise OgcError(
@@ -1640,6 +1654,13 @@ def _wcs_getcoverage(request: Request, params: dict, layers: dict[str, LayerInfo
                 str(exc), code="InvalidParameterValue", locator="BBOX",
             ) from None
         subset = _dataset_from_slab(computed, layer, derived_prov)
+        if not layer.is_surface:
+            # The same DEPTH window the stored branch applies. Applied here
+            # rather than inside the plugin so that a derived coverage and a
+            # stored one answer the identical request identically.
+            subset = subset.sel(
+                depth=slice(min(depth_lo, depth_hi), max(depth_lo, depth_hi))
+            )
     else:
         subset = ds[[layer.var]].sel(
             lat=slice(south, north) if lat_ascending else slice(north, south),

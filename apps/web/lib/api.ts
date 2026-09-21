@@ -15,6 +15,19 @@ export interface VariableInfo {
   label: string;
   units: string;
   canonical: string | null;
+  /** Present only on a plugin-derived product (PS F6). The server has always
+   *  sent these; they were untyped here, so the client could not tell a
+   *  computed field from a stored one and the interface quietly presented
+   *  both as though they had been measured. D26, SIG0 and SVEL are all
+   *  computed, and saying so is part of the number. */
+  derived?: boolean;
+  derived_from?: string[];
+  method?: string;
+  params?: Record<string, unknown>;
+  /** "column" spans the depth axis; "surface" is a single plane, so it has no
+   *  depth to choose and must not be offered one. */
+  output?: "column" | "surface";
+  plugin?: string;
 }
 
 export interface DatasetInfo {

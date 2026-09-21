@@ -1,0 +1,135 @@
+<!-- ============ PART 3 ============ -->
+<section class="part" id="p3">
+  <div class="partmark">Part 3</div>
+  <h2>What SagarDrishti is</h2>
+  <p class="sub">Sagar Drishti means "ocean vision". The name echoes the SAGAR
+  doctrine and the Deep Ocean Mission, because the audience is a ministry.</p>
+
+  <p class="lead">A web page you open with no installation, showing the Indian
+  Ocean as a three&#8209;dimensional body of water rather than a flat map. The
+  simulated field is drawn through the whole depth of the column. The real
+  instruments floating in that water are drawn inside it as marks you can
+  click. A panel tells you how far the simulation is from those instruments, in
+  degrees. The live government disaster warnings are drawn over the water they
+  concern. And a question box answers in sentences built only from numbers the
+  software actually computed.</p>
+
+  <div class="stats">
+    <div class="stat"><b>13</b><span>sources enabled, across 9 kinds</span></div>
+    <div class="stat"><b>149</b><span>casts from 19 instruments</span></div>
+    <div class="stat"><b>30,012</b><span>quality&#8209;controlled levels</span></div>
+    <div class="stat"><b>567</b><span>automated tests passing</span></div>
+  </div>
+
+  <figure>
+    <img src="../evidence/prototype-2026-09-19/01-scene.png" alt="The main scene">
+    <figcaption><b>The opening view.</b> Bay of Bengal water column in colour,
+    instrument marks across it, a warning area outlined, and the control panel
+    holding the variable selector, colour scale, depth ladder and vertical
+    exaggeration. The box at top left names the dataset and timestamp on
+    screen, so nothing is unattributed.</figcaption>
+  </figure>
+
+  <h3>The core USP, in four claims</h3>
+
+  <h4>1. The water column is drawn as a volume, in a browser, with the real
+  instruments inside it</h4>
+  <p>Not a surface map with a depth dropdown. The field is rendered through
+  depth using the three techniques the problem statement names: stacked depth
+  slices, extracted isosurfaces, and animation through time. Argo, BGC, glider
+  and CTD casts sit in the same 3D space, told apart by mark shape, and
+  clicking one opens its measured profile beside the model's curve at the same
+  place and time.</p>
+
+  <div class="duo">
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/03-isosurface.png" alt="Isosurface">
+      <figcaption><b>The 26 degree isosurface</b>, enclosing all water warmer
+      than 26 degrees Celsius, which is the layer a cyclone draws energy from.
+      Marching cubes on the native grid, no resampling.</figcaption>
+    </figure>
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/05-instruments.png" alt="Instruments">
+      <figcaption><b>All four instrument classes</b> the problem statement
+      names, by mark shape rather than colour alone: Argo 13, BGC 9, glider
+      109, CTD 15, mooring 3.</figcaption>
+    </figure>
+  </div>
+
+  <h4>2. The viewer tells you whether to trust what it is showing you</h4>
+  <p>The differentiator a domain expert notices first. Every operational centre
+  produces skill statistics; they are computed offline and published as
+  quarterly PDFs. Nobody puts the number next to the picture. We do, by
+  <strong>GODAE OceanView Class 4</strong>, the accepted international
+  protocol, which works in <em>observation space</em>: the model is interpolated
+  to each instrument's exact latitude, longitude, depth and time rather than
+  both being averaged onto a convenient grid, and bias and RMSE are reported
+  per depth band using Argo quality flags 1 and 2 only.</p>
+
+  <div class="duo">
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/08-scorecard.png" alt="Scorecard">
+      <figcaption><b>The verification card.</b> Bias +0.026 degrees, RMSE 0.602
+      degrees, 11,718 matched pairs. The caveat is printed in red on the card,
+      not hidden in documentation.</figcaption>
+    </figure>
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/06b-argo-panel.png" alt="Argo panel">
+      <figcaption><b>Argo float 7902073, 71 levels.</b> Measured profile against
+      the model's curve at the same coordinates, WMO identifier carried into
+      every citation.</figcaption>
+    </figure>
+  </div>
+
+  <h4>3. The disaster warnings are on the same globe as the physics</h4>
+  <p>The theme is Disaster Management and the first stated mandate is "timely
+  hazard assessment." HazardWatch reads <strong>CAP</strong> bulletins, the
+  Common Alerting Protocol, which is the international XML standard for public
+  warnings and the format India's national SACHET system speaks. Each becomes a
+  coloured area on the water, severity driving colour, so the warning and the
+  field explaining it are in one picture.</p>
+
+  <h4>4. You can ask it questions, and it cannot make anything up</h4>
+  <p>Samudra Sahayak, "ocean helper", is the question box. The design
+  constraint is the interesting part: <strong>it is structurally unable to
+  compute or invent a number.</strong> Eight tools, each calling the same
+  public API a user could open themselves. Numbers enter an answer only as a
+  tool result, and every answer carries the dataset, the timestamp and the
+  float identifiers it used.</p>
+
+  <div class="duo">
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/12-hazardwatch.png" alt="HazardWatch">
+      <figcaption><b>CAP warning areas over the water they concern.</b> 15
+      bulletins: 12 genuine ones from Indian state disaster management
+      authorities via NDMA SACHET, and 3 ocean&#8209;hazard bulletins for
+      tsunami, high wave and swell surge which are <b>rehearsals we
+      authored</b>, stamped EXERCISE in the data and on screen. India published
+      no live public ocean CAP feed when this was ingested, and the interface
+      says so rather than letting a drill pass for an alert.</figcaption>
+    </figure>
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/13-agent.png" alt="Agent">
+      <figcaption><b>Samudra Sahayak answering "How good is the model?"</b>
+      Assembled from tool results, printing the tool count, the citation list,
+      and the tag <code>planner: rules</code>, which says honestly that the
+      planner is a deterministic router rather than a language model. Part 5
+      explains that choice.</figcaption>
+    </figure>
+  </div>
+
+  <h3>The rest of the product</h3>
+  <p><strong>Six guided tours</strong> drive the real scene rather than playing
+  a video, serving the outreach and education mandate the problem statement
+  asks for and doubling as a demo that cannot go wrong.
+  <strong>It runs with the network unplugged:</strong> offline is the default
+  posture, not a mode, so a demonstration can be given with the WiFi visibly
+  off, which turns "deployable on INCOIS infrastructure" into something the
+  audience watches happen. <strong>SagarNode</strong> is a tabletop ESP32 rig
+  with a temperature probe, a turbidity sensor and a TDS probe used as a
+  <em>conductivity&#8209;derived salinity proxy</em>, which is what it honestly
+  is. It appears on the globe as a live virtual mooring; warm water poured in
+  trips a threshold and fires a CAP&#8209;shaped alert flagged as coming from a
+  demo sensor. It demonstrates requirement F6 with hardware instead of a
+  paragraph.</p>
+</section>

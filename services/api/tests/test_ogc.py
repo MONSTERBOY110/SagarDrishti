@@ -394,7 +394,7 @@ def test_getcapabilities_advertises_one_layer_per_dataset_variable_present(ogc_c
     # /catalog and /field and invisible to QGIS.
     assert names == {
         "incois_vam_argo/TEMP", "incois_vam_argo/SAL",
-        "incois_vam_argo/D26", "incois_vam_argo/SIG0",
+        "incois_vam_argo/D26", "incois_vam_argo/SIG0", "incois_vam_argo/SVEL",
     }
     # TERR and SERR are in data/sources.yaml but not in the cube. Advertising a
     # layer /field would 404 on is the drift this pins shut.
@@ -1010,7 +1010,7 @@ def test_wcs_getcapabilities_is_wcs_100_with_a_lonlat_envelope(ogc_client):
     briefs = root.findall(f"{{{WCS}}}ContentMetadata/{{{WCS}}}CoverageOfferingBrief")
     assert {b.findtext(f"{{{WCS}}}name") for b in briefs} == {
         "incois_vam_argo/TEMP", "incois_vam_argo/SAL",
-        "incois_vam_argo/D26", "incois_vam_argo/SIG0",
+        "incois_vam_argo/D26", "incois_vam_argo/SIG0", "incois_vam_argo/SVEL",
     }
     for brief in briefs:
         assert _child_order_ok(brief, [
@@ -1091,7 +1091,7 @@ def test_wcs_describecoverage_without_a_coverage_describes_all_of_them(ogc_clien
     names = {o.findtext(f"{{{WCS}}}name") for o in root.findall(f"{{{WCS}}}CoverageOffering")}
     assert names == {
         "incois_vam_argo/TEMP", "incois_vam_argo/SAL",
-        "incois_vam_argo/D26", "incois_vam_argo/SIG0",
+        "incois_vam_argo/D26", "incois_vam_argo/SIG0", "incois_vam_argo/SVEL",
     }
 
 
@@ -1387,11 +1387,12 @@ def test_the_shipped_cube_serves_valid_capabilities_and_a_real_tile(shipped_clie
     # product a PLUGIN derives. Two separate demonstrations of the same claim
     # live in this one assertion: a second dataset (Copernicus currents) was
     # added to the registry on 2026-09-09, and a second derived product (SIG0,
-    # density) was added as a plugin on 2026-09-11. Both reached QGIS without
-    # a line of OGC code changing, which is what F6 and F7 assert jointly.
+    # density) was added as a plugin on 2026-09-11, and SVEL (sound speed) on
+    # 2026-09-21. All three reached QGIS without a line of OGC code
+    # changing, which is what F6 and F7 assert jointly.
     assert set(layers) == {
         "incois_vam_argo/TEMP", "incois_vam_argo/SAL",
-        "incois_vam_argo/D26", "incois_vam_argo/SIG0",
+        "incois_vam_argo/D26", "incois_vam_argo/SIG0", "incois_vam_argo/SVEL",
         "glorys12_cur/uo", "glorys12_cur/vo",
     }
 
@@ -1660,3 +1661,81 @@ def test_a_plugin_cannot_shadow_a_stored_variable(ogc_client, monkeypatch):
     assert "COMPUTED, not stored" not in abstract, (
         "the plugin shadowed the stored variable and took over its layer"
     )
+
+
+# --- the VOLUMETRIC derived product through the OGC endpoints ---------------
+#
+# Every test above uses D26, and D26 is a SURFACE: a single lat/lon plane with
+# no depth to choose. That is why this gap survived. SIG0 is the other kind of
+# derived product, a full (depth, lat, lon) field, and it was advertised in
+# GetCapabilities with all 24 elevations while GetMap could not draw a single
+# one of them: both OGC call sites passed bbox and time to the plugin and
+# never passed the depth, so the plugin resolved depth 0.0 m and the store
+# refused it as outside 5 .. 2000 m. A QGIS user clicking the layer we
+# advertised got a 400.
+#
+# The last test here is the one that matters most. Passing the depth is easy
+# to do and just as easy to do while ignoring it, and a renderer that quietly
+# drew 5 m for every elevation would satisfy every other assertion.
+
+VOLUMETRIC = "incois_vam_argo/SIG0"
+
+
+def test_a_volumetric_derived_layer_advertises_its_elevations(ogc_client):
+    _, root = _wms_caps(ogc_client)
+    layer = _named_layers(root)[VOLUMETRIC]
+    dims = {d.get("name"): d for d in layer.findall(f"{{{WMS}}}Dimension")}
+    assert set(dims) == {"time", "elevation"}, (
+        "a computed field that varies with depth must offer a depth to choose"
+    )
+    values = [float(v) for v in dims["elevation"].text.split(",")]
+    assert len(values) > 1 and values[0] == 5.0
+
+
+def test_a_volumetric_derived_layer_draws_at_a_requested_elevation(ogc_client):
+    r = _getmap(ogc_client, LAYERS=VOLUMETRIC, ELEVATION="100",
+                WIDTH="32", HEIGHT="24")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "image/png"
+    rgba = _read_png(r.content)
+    assert int((rgba[..., 3] > 0).sum()) > 0, "the computed layer rendered nothing"
+
+
+def test_a_volumetric_derived_layer_defaults_to_its_shallowest_level(ogc_client):
+    """No ELEVATION is not an error here: capabilities declares a default."""
+    r = _getmap(ogc_client, LAYERS=VOLUMETRIC, WIDTH="32", HEIGHT="24")
+    assert r.status_code == 200, r.text
+
+
+def test_two_elevations_of_a_volumetric_derived_layer_differ(ogc_client):
+    """THE test. Density at 5 m and at 2000 m is not the same field.
+
+    Passing the depth through and then ignoring it would return a valid PNG at
+    every elevation and satisfy every assertion above. Only comparing two
+    depths notices, and potential density is the right probe: it rises
+    monotonically down the column, so identical images mean the depth never
+    reached the plugin.
+    """
+    # Read the extent rather than hardcoding it: the fixture cube is shallower
+    # than the demo cube, and a literal 2000 here would test the refusal path
+    # instead of the one this is about.
+    _, root = _wms_caps(ogc_client)
+    dims = {d.get("name"): d for d in _named_layers(root)[VOLUMETRIC].findall(f"{{{WMS}}}Dimension")}
+    levels = [v.strip() for v in dims["elevation"].text.split(",")]
+
+    shallow = _getmap(ogc_client, LAYERS=VOLUMETRIC, ELEVATION=levels[0],
+                      WIDTH="32", HEIGHT="24")
+    deep = _getmap(ogc_client, LAYERS=VOLUMETRIC, ELEVATION=levels[-1],
+                   WIDTH="32", HEIGHT="24")
+    assert shallow.status_code == 200 and deep.status_code == 200
+    assert shallow.content != deep.content, (
+        "5 m and 2000 m rendered byte-identical tiles, so ELEVATION was "
+        "accepted and then discarded"
+    )
+
+
+def test_wcs_serves_a_volumetric_derived_coverage(ogc_client):
+    r = _wcs(ogc_client, REQUEST="GetCoverage", COVERAGE=VOLUMETRIC,
+             CRS="EPSG:4326", FORMAT="NetCDF3")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/x-netcdf"

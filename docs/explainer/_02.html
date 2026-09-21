@@ -1,0 +1,62 @@
+<!-- ============ PART 2 ============ -->
+<section class="part" id="p2">
+  <div class="partmark">Part 2</div>
+  <h2>What exists, and why it is not enough</h2>
+  <p class="sub">A project claiming a gap has to prove the gap. We reviewed the
+  landscape before writing code, and one finding changed how we talk about the
+  project.</p>
+
+  <div class="callout warn">
+    <span class="lbl">The correction we make first</span>
+    <p>INCOIS already runs <strong>Digital Ocean</strong> (2020), whose launch
+    material claims <em>"3D and 4D (3D in space with time animation) data
+    visualization"</em> on "a georeferenced 3D Ocean." An INCOIS judge knows
+    that sentence, so <strong>we never claim no 3D exists at INCOIS.</strong>
+    Our position is narrower and defensible: Digital Ocean is a data management
+    portal whose 3D is a georeferenced globe with draped layers and time
+    animation. We build with it, consuming INCOIS's own services, and add what
+    it does not do.</p>
+  </div>
+
+  <h3>2.1 The landscape</h3>
+  <table>
+    <tr><th style="width:21%">System</th><th style="width:11%">Where</th><th>Why the problem statement still exists</th></tr>
+    <tr><td><b>Digital Ocean</b></td><td>INCOIS</td><td>No documented volumetric rendering, no model skill scoring, no public embedding story. A portal with globe viewing, not an analysis&#8209;grade renderer.</td></tr>
+    <tr><td><b>Live Access Server</b></td><td>INCOIS</td><td>Static 2D images, one field at a time, no instrument overlay.</td></tr>
+    <tr><td><b>ERDDAP, THREDDS</b></td><td>INCOIS</td><td>Data access layers with rudimentary graphs. <b>These are our backend, not competitors.</b></td></tr>
+    <tr><td><b>SARAT, ITEWC, OSF, PFZ</b></td><td>INCOIS</td><td>A world class dissemination pipeline with text and 2D map front ends. The science visualisation layer is the gap.</td></tr>
+    <tr><td><b>EDITO</b></td><td>EU</td><td>Infrastructure first and notebook centric, Europe scoped, no coherent volumetric globe.</td></tr>
+    <tr><td><b>Copernicus MyOcean Pro</b></td><td>EU</td><td>Best web ocean viewer today, but its depth axis is a <i>selector</i>: one level at a time, never the shape of the column. Their own roadmap puts a 3D globe at January 2027.</td></tr>
+    <tr><td><b>Argovis</b></td><td>US</td><td>The strongest co&#8209;location engine, and 2D. Our methodological ancestor; we mirror its API semantics deliberately.</td></tr>
+    <tr><td><b>nullschool, Windy</b></td><td>Global</td><td>Surface only. Roughly ninety per cent of ocean state, including cyclone intensification and search and rescue physics, is below the pixel they draw.</td></tr>
+    <tr><td><b>Ocean Data View</b></td><td>Desktop</td><td>The standard for in situ sections, weak on gridded model data. A browser version, webODV, exists and is 2D&#8209;plot based.</td></tr>
+    <tr><td><b>pyParaOcean</b></td><td>Desktop</td><td>Our most serious technical prior art: real volume rendering on Bay of Bengal data. It is also exactly what "desktop-bound" means, a ParaView and HPC install a forecast desk officer cannot use.</td></tr>
+    <tr><td><b>FloatChat, cesium-mcp, FathomGPT</b></td><td>AI</td><td>Chat over Argo tables; generic camera control; natural language over ocean imagery. All real, all cited. None touches volumetric scene state or skill metrics.</td></tr>
+  </table>
+
+  <h3>2.2 The four gaps we can defend</h3>
+  <table>
+    <tr><th style="width:33%">Capability</th><th style="width:28%">Closest</th><th>Why they miss</th></tr>
+    <tr><td><b>1.</b> Volumetric water column in a browser, co&#8209;registered with in situ profiles</td><td>pyParaOcean and IDV are volumetric but desktop. MyOcean and Argovis are web but 2D.</td><td>No system occupies both cells.</td></tr>
+    <tr><td><b>2.</b> A live model skill scorecard inside the viewer</td><td>GODAE and Copernicus quality reports</td><td>Computed offline, published as PDFs. No operational viewer shows skill beside the field.</td></tr>
+    <tr><td><b>3.</b> Language control of a <i>scientific</i> scene graph</td><td>FloatChat, cesium-mcp</td><td>Neither knows the other's domain. A tool schema spanning volumetrics and validation does not exist.</td></tr>
+    <tr><td><b>4.</b> Indian Ocean and INCOIS native</td><td>EDITO, Copernicus</td><td>Structurally scoped to Europe.</td></tr>
+  </table>
+
+  <h3>2.3 The four rebuttals, rehearsed</h3>
+  <p><strong>"Digital Ocean already says 3D and 4D."</strong> Correct, and we
+  build with it. It is a data management portal with a draped&#8209;layer globe.
+  We add true volumetrics, a quantitative skill panel and language control,
+  while consuming INCOIS's own ERDDAP and THREDDS, so zero data duplication.</p>
+  <p><strong>"MyOcean Pro already views four dimensions."</strong> Its depth
+  axis is a selector, one level at a time. Copernicus's own roadmap puts their
+  3D globe at January 2027, and even that is without volumetrics or in situ
+  integration.</p>
+  <p><strong>"pyParaOcean already does this."</strong> Yes, and we cite it. It
+  is also the definition of the desktop&#8209;bound tool the problem statement
+  complains about. We deliver a defensible subset at a URL with zero install,
+  plus the observation comparison and language layers it has no scope for.</p>
+  <p><strong>"Is this not nullschool for the ocean?"</strong> Those are surface
+  particle animations. No in situ data, no export, no skill metric, no
+  column.</p>
+</section>

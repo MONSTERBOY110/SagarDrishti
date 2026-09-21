@@ -478,7 +478,12 @@ export default function ProfilePanel(p: Props) {
               ))}
             </div>
           )}
-          <div ref={hostRef} style={{ height: "19rem", width: "100%" }} />
+          {/* Height in CSS, not inline, so a short viewport can shrink it.
+              At 1366x768 this column wanted 949 px in a 728 px box and the
+              chart fell below the fold: the chips were visible and the
+              curve was not, which reads as a station whose data failed to
+              load. See .profile__chart. */}
+          <div ref={hostRef} className="profile__chart" />
           <div
             style={{
               display: "flex",

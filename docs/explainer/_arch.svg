@@ -1,0 +1,154 @@
+<svg class="flow" viewBox="0 0 1000 690" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="ah" markerWidth="8" markerHeight="7" refX="7.2" refY="3.5" orient="auto">
+      <polygon points="0 0, 8 3.5, 0 7" fill="#2B2B2B"/>
+    </marker>
+    <marker id="aht" markerWidth="8" markerHeight="7" refX="7.2" refY="3.5" orient="auto">
+      <polygon points="0 0, 8 3.5, 0 7" fill="#11777A"/>
+    </marker>
+  </defs>
+
+  <!-- ===== zone 1 ===== -->
+  <rect x="0" y="34" width="232" height="380" rx="8" fill="#F6F8FA" stroke="#D3DCE3"/>
+  <rect x="0" y="34" width="232" height="50" rx="8" fill="#E4EAEF"/>
+  <rect x="0" y="66" width="232" height="18" fill="#E4EAEF"/>
+  <rect x="0" y="81" width="232" height="3" fill="#1F4E79"/>
+  <circle cx="24" cy="57" r="13" fill="#1F4E79"/>
+  <text x="24" y="62" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+  <text x="45" y="55" font-size="18" font-weight="700" fill="#1F4E79">SOURCES</text>
+  <text x="45" y="73" font-size="13" fill="#5A6B78">13 enabled, 9 kinds</text>
+  <g>
+    <rect x="12" y="96" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="12" y="96" width="208" height="3" fill="#1F4E79"/>
+    <text x="22" y="119" font-size="15" font-weight="700" fill="#16202A">INCOIS ERDDAP, LAS</text>
+    <text x="22" y="137" font-size="12.5" fill="#5A6B78">gridded model fields, NetCDF</text>
+    <rect x="12" y="158" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="12" y="158" width="208" height="3" fill="#1F4E79"/>
+    <text x="22" y="181" font-size="15" font-weight="700" fill="#16202A">Argo GDAC</text>
+    <text x="22" y="199" font-size="12.5" fill="#5A6B78">core floats and BGC floats</text>
+    <rect x="12" y="220" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="12" y="220" width="208" height="3" fill="#1F4E79"/>
+    <text x="22" y="243" font-size="15" font-weight="700" fill="#16202A">Copernicus GLORYS</text>
+    <text x="22" y="261" font-size="12.5" fill="#5A6B78">depth-resolved currents</text>
+    <rect x="12" y="282" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="12" y="282" width="208" height="3" fill="#1F4E79"/>
+    <text x="22" y="305" font-size="15" font-weight="700" fill="#16202A">Glider, CTD, RAMA</text>
+    <text x="22" y="323" font-size="12.5" fill="#5A6B78">in situ, NetCDF and ASCII</text>
+    <rect x="12" y="344" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="12" y="344" width="208" height="3" fill="#C03A2B"/>
+    <text x="22" y="367" font-size="15" font-weight="700" fill="#16202A">NDMA SACHET</text>
+    <text x="22" y="385" font-size="12.5" fill="#5A6B78">CAP v1.2 warning XML</text>
+  </g>
+  <text x="0" y="432" font-size="12" fill="#5A6B78">one YAML registry declares all of them</text>
+
+  <!-- ===== zone 2 ===== -->
+  <rect x="256" y="34" width="232" height="380" rx="8" fill="#F6F8FA" stroke="#D3DCE3"/>
+  <rect x="256" y="34" width="232" height="50" rx="8" fill="#E4EAEF"/>
+  <rect x="256" y="66" width="232" height="18" fill="#E4EAEF"/>
+  <rect x="256" y="81" width="232" height="3" fill="#1F4E79"/>
+  <circle cx="280" cy="57" r="13" fill="#1F4E79"/>
+  <text x="280" y="62" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+  <text x="301" y="55" font-size="18" font-weight="700" fill="#1F4E79">INGEST</text>
+  <text x="301" y="73" font-size="13" fill="#5A6B78">Python, 4 plugins</text>
+  <g>
+    <rect x="268" y="96" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="268" y="96" width="208" height="3" fill="#1F4E79"/>
+    <text x="278" y="119" font-size="15" font-weight="700" fill="#16202A">CF normalisation</text>
+    <text x="278" y="137" font-size="11.5" fill="#5A6B78">scale_factor, _FillValue, sign of depth</text>
+    <rect x="268" y="158" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="268" y="158" width="208" height="3" fill="#1F4E79"/>
+    <text x="278" y="181" font-size="15" font-weight="700" fill="#16202A">QC flags 1 and 2 only</text>
+    <text x="278" y="199" font-size="12.5" fill="#5A6B78">Argo convention, Wong 2020</text>
+    <rect x="268" y="220" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="268" y="220" width="208" height="3" fill="#1F4E79"/>
+    <text x="278" y="243" font-size="15" font-weight="700" fill="#16202A">Pressure to depth</text>
+    <text x="278" y="261" font-size="12.5" fill="#5A6B78">TEOS-10, latitude aware</text>
+  </g>
+  <path d="M296 296 h144 v66 a72 13 0 0 1 -144 0 z" fill="#fff" stroke="#1F4E79" stroke-width="1.6"/>
+  <ellipse cx="368" cy="296" rx="72" ry="13" fill="#fff" stroke="#1F4E79" stroke-width="1.6"/>
+  <text x="368" y="330" font-size="16" font-weight="700" fill="#1F4E79" text-anchor="middle">Zarr cube</text>
+  <text x="368" y="350" font-size="11.5" fill="#5A6B78" text-anchor="middle">30,012 obs levels in Parquet</text>
+  <text x="256" y="432" font-size="12" fill="#5A6B78">correctness lives here, and so do the tests</text>
+
+  <!-- ===== zone 3 ===== -->
+  <rect x="512" y="34" width="232" height="380" rx="8" fill="#F5FAFA" stroke="#D3DCE3"/>
+  <rect x="512" y="34" width="232" height="50" rx="8" fill="#E2EFEF"/>
+  <rect x="512" y="66" width="232" height="18" fill="#E2EFEF"/>
+  <rect x="512" y="81" width="232" height="3" fill="#11777A"/>
+  <circle cx="536" cy="57" r="13" fill="#11777A"/>
+  <text x="536" y="62" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+  <text x="557" y="55" font-size="18" font-weight="700" fill="#11777A">DATA PLANE</text>
+  <text x="557" y="73" font-size="13" fill="#5A6B78">FastAPI, 16 routes</text>
+  <g>
+    <rect x="524" y="96" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="524" y="96" width="208" height="3" fill="#11777A"/>
+    <text x="534" y="119" font-size="15" font-weight="700" fill="#16202A">14 REST routes</text>
+    <text x="534" y="137" font-size="12.5" fill="#5A6B78">/field /profiles /isosurface /currents</text>
+    <rect x="524" y="158" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="524" y="158" width="208" height="3" fill="#C03A2B"/>
+    <text x="534" y="181" font-size="15" font-weight="700" fill="#16202A">OGC WMS 1.3.0, WCS 1.0.0</text>
+    <text x="534" y="199" font-size="12.5" fill="#5A6B78">QGIS and ERDDAP clients read it</text>
+    <rect x="524" y="220" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="524" y="220" width="208" height="3" fill="#11777A"/>
+    <text x="534" y="243" font-size="15" font-weight="700" fill="#16202A">Class-4 scorecard</text>
+    <text x="534" y="261" font-size="12.5" fill="#5A6B78">bias and RMSE against each cast</text>
+    <rect x="524" y="282" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="524" y="282" width="208" height="3" fill="#11777A"/>
+    <text x="534" y="305" font-size="15" font-weight="700" fill="#16202A">/warnings and device intake</text>
+    <text x="534" y="323" font-size="12.5" fill="#5A6B78">the CAP bus, and /ingest/sagarnode</text>
+  </g>
+  <text x="512" y="432" font-size="12" fill="#5A6B78">no HTTP client exists in this service</text>
+
+  <!-- ===== zone 4 ===== -->
+  <rect x="768" y="34" width="232" height="380" rx="8" fill="#F5FAFA" stroke="#D3DCE3"/>
+  <rect x="768" y="34" width="232" height="50" rx="8" fill="#E2EFEF"/>
+  <rect x="768" y="66" width="232" height="18" fill="#E2EFEF"/>
+  <rect x="768" y="81" width="232" height="3" fill="#11777A"/>
+  <circle cx="792" cy="57" r="13" fill="#11777A"/>
+  <text x="792" y="62" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+  <text x="813" y="55" font-size="18" font-weight="700" fill="#11777A">BROWSER</text>
+  <text x="813" y="73" font-size="13" fill="#5A6B78">CesiumJS, WebGL2</text>
+  <g>
+    <rect x="780" y="96" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="780" y="96" width="208" height="3" fill="#11777A"/>
+    <text x="790" y="119" font-size="15" font-weight="700" fill="#16202A">Volumetric scene</text>
+    <text x="790" y="137" font-size="12.5" fill="#5A6B78">24 depth levels, isosurface, time</text>
+    <rect x="780" y="158" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="780" y="158" width="208" height="3" fill="#11777A"/>
+    <text x="790" y="181" font-size="15" font-weight="700" fill="#16202A">Instrument marks</text>
+    <text x="790" y="199" font-size="12.5" fill="#5A6B78">149 casts, 19 instruments</text>
+    <rect x="780" y="220" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="780" y="220" width="208" height="3" fill="#11777A"/>
+    <text x="790" y="243" font-size="15" font-weight="700" fill="#16202A">Controls and charts</text>
+    <text x="790" y="261" font-size="12.5" fill="#5A6B78">colorbar, opacity, exaggeration</text>
+    <rect x="780" y="282" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="780" y="282" width="208" height="3" fill="#11777A"/>
+    <text x="790" y="305" font-size="15" font-weight="700" fill="#16202A">HazardWatch layer</text>
+    <text x="790" y="323" font-size="12.5" fill="#5A6B78">CAP areas, severity to colour</text>
+  </g>
+  <text x="768" y="432" font-size="12" fill="#5A6B78">nothing to install, one URL</text>
+
+  <!-- ===== edges ===== -->
+  <line x1="236" y1="224" x2="252" y2="224" stroke="#2B2B2B" stroke-width="1.8" marker-end="url(#ah)"/>
+  <text x="244" y="206" font-size="12" fill="#5A6B78" text-anchor="middle">NetCDF</text>
+  <text x="244" y="248" font-size="12" fill="#5A6B78" text-anchor="middle">ASCII</text>
+  <text x="244" y="264" font-size="12" fill="#5A6B78" text-anchor="middle">CAP</text>
+  <line x1="492" y1="224" x2="508" y2="224" stroke="#2B2B2B" stroke-width="1.8" marker-end="url(#ah)"/>
+  <text x="500" y="206" font-size="12" fill="#5A6B78" text-anchor="middle">zarr</text>
+  <text x="500" y="248" font-size="12" fill="#5A6B78" text-anchor="middle">chunks</text>
+  <line x1="748" y1="224" x2="764" y2="224" stroke="#2B2B2B" stroke-width="1.8" marker-end="url(#ah)"/>
+  <text x="756" y="206" font-size="12" fill="#5A6B78" text-anchor="middle">JSON</text>
+  <text x="756" y="248" font-size="12" fill="#5A6B78" text-anchor="middle">PNG</text>
+  <text x="756" y="264" font-size="12" fill="#5A6B78" text-anchor="middle">NetCDF</text>
+
+  <!-- ===== lower band ===== -->
+  <rect x="0" y="560" width="232" height="104" rx="8" fill="#fff" stroke="#11777A" stroke-width="1.6"/>
+  <rect x="0" y="560" width="4" height="104" fill="#11777A"/>
+  <text x="18" y="586" font-size="15" font-weight="700" fill="#11777A">VERIFICATION</text>
+  <text x="18" y="608" font-size="12.5" fill="#5A6B78">Interpolated to each cast's own</text>
+  <text x="18" y="626" font-size="12.5" fill="#5A6B78">position and depth. A level is</text>
+  <text x="18" y="644" font-size="12.5" fill="#5A6B78">refused, never guessed.</text>
+
+  <rect x="256" y="560" width="488" height="104" rx="8" fill="#fff" stroke="#5A6B78" stroke-width="1.6" stroke-dasharray="9 6"/>
+  <text x="276" y="586" font-size="15" font-weight="700" fill="#5A6B78">SAMUDRA SAHAYAK, the agent plane</text>
+  <text x="276" y="608" font-size="12.5" fill="#5A6B78">Eight tools, each one an HTTP call to the routes above. No array library, no</text>
+  <text x="276" y="626" font-size="12.5" fill="#5A6B78">storage driver, no direct file access, so it cannot know anything a user could</text>
+  <text x="276" y="644" font-size="12.5" fill="#5A6B78">not check. Cut this box and every requirement still passes.</text>
+  <line x1="628" y1="558" x2="628" y2="470" stroke="#11777A" stroke-width="2.6" stroke-dasharray="7 5" marker-end="url(#aht)"/>
+  <text x="642" y="512" font-size="12.5" fill="#11777A">reaches the data plane</text>
+  <text x="642" y="530" font-size="12.5" fill="#11777A">through the same public API</text>
+
+  <rect x="768" y="560" width="232" height="104" rx="8" fill="#fff" stroke="#C03A2B" stroke-width="1.6"/>
+  <rect x="768" y="560" width="4" height="104" fill="#C03A2B"/>
+  <text x="786" y="586" font-size="15" font-weight="700" fill="#C03A2B">ANY OGC CLIENT</text>
+  <text x="786" y="608" font-size="12.5" fill="#5A6B78">QGIS, ERDDAP, and the desktop</text>
+  <text x="786" y="626" font-size="12.5" fill="#5A6B78">tools INCOIS already runs, with</text>
+  <text x="786" y="644" font-size="12.5" fill="#5A6B78">no adapter to write.</text>
+
+  <text x="0" y="16" font-size="12.5" font-weight="700" fill="#1F4E79">SOLID BORDER = the P0 data plane</text>
+  <text x="256" y="16" font-size="12.5" font-weight="700" fill="#5A6B78">DASHED BORDER = detachable, not required by the specification</text>
+</svg>

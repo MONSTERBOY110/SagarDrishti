@@ -28,6 +28,8 @@ import AskPanel from "@/components/AskPanel";
 import ScorecardPanel from "@/components/ScorecardPanel";
 import StoryPlayer from "@/components/StoryPlayer";
 import SagarNodePanel from "@/components/SagarNodePanel";
+import ColumnStudio from "@/components/ColumnStudio";
+import LayerCatalog from "@/components/LayerCatalog";
 import StationLegend from "@/components/StationLegend";
 import StationSheet from "@/components/StationSheet";
 import TimeRule from "@/components/TimeRule";
@@ -81,6 +83,10 @@ export default function Page() {
      and two pollers could disagree about whether the threshold has tripped.
      Null is the normal state and means no mark and no panel. */
   const [sagarnode, setSagarnode] = useState<SagarNodeStation | null>(null);
+  /* The water column studio (beat-competition.md T2). Closed by default and
+     mounted only while open, so an overlay can never be in the way of the
+     scene and a fault in it cannot reach the globe. */
+  const [studioOpen, setStudioOpen] = useState(false);
 
   /* --- load the cast ------------------------------------------------------- */
   useEffect(() => {
@@ -331,11 +337,35 @@ export default function Page() {
     };
   }, [scene.selection]);
 
+  /* Which profile column the scene's variable is scored against. The studio
+     draws the residual between these two, so passing the wrong one would
+     shade the gap between a temperature and a salinity. */
+  const observedColumn = scene.variable === "SAL" ? "psal" : "temp";
+
   const onFps = useCallback(
     (s: { fps: number; p1: number; moving: boolean }) => setFps(s),
     [],
   );
   const onPick = useCallback((id: string | null) => useScene.setState({ selection: id }), []);
+  /* A studio with no cast behind it would render an empty frame over the
+     scene, so deselecting closes it. */
+  useEffect(() => {
+    if (!scene.selection) setStudioOpen(false);
+  }, [scene.selection]);
+
+  /* Bring a newly opened cast into view inside the right column.
+     That column scrolls, and on anything shorter than about 900 px the
+     verification card alone pushes the profile's chart past the bottom: the
+     parameter chips are visible and the curve under them is not, which looks
+     exactly like a station that failed to load. It is worst during a guided
+     tour, where nobody has a hand on the scroll wheel. `nearest` scrolls the
+     minimum needed, so on a tall screen it does nothing at all. */
+  useEffect(() => {
+    if (!detail) return;
+    document
+      .querySelector('[aria-label="Instrument profile"]')
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [detail]);
   const onReady = useCallback(() => undefined, []);
 
   return (
@@ -433,6 +463,18 @@ export default function Page() {
             dataset?.variables.find((v) => v.name === scene.variable)?.label ?? scene.variable
           }
         />
+        {/* Opens the column studio for the cast already on screen. Rendered
+            here rather than inside ProfilePanel so that the panel, which the
+            browser suite drives heavily, is untouched by this feature. */}
+        {detail && column && (
+          <button
+            type="button"
+            className="tick studio__open"
+            onClick={() => setStudioOpen(true)}
+          >
+            Inspect the water column
+          </button>
+        )}
         <ProfilePanel
           detail={detail}
           column={column}
@@ -492,6 +534,17 @@ export default function Page() {
           onRehearsal={(rehearsal) => useScene.setState({ rehearsal })}
           onLayer={setWarnings}
         />
+        {/* What the platform can draw, stated on the first frame.
+
+            LAST IN THIS COLUMN, AND THAT IS LOAD BEARING. This panel is inert
+            (pointer-events: none), so it never intercepts a click on the
+            water. HazardWatch below it is not. Placed FIRST, this panel's
+            243 px pushed HazardWatch from y 376 down to y 629, directly onto
+            the glider track at x 310 to 622, y 610 to 785, and clicking a
+            dive opened the warning card instead of the profile. The e2e suite
+            caught it. Ordered last, HazardWatch never moves and the measured
+            cost of this panel is zero blocked marks. */}
+        <LayerCatalog dataset={dataset} levels={depths.length} />
       </div>
 
       {/* --- the vertical scale, so 200x is checkable rather than asserted -- */}
@@ -514,6 +567,24 @@ export default function Page() {
         <AskPanel />
         <StoryPlayer />
       </div>
+
+      {studioOpen && (
+        <ColumnStudio
+          detail={detail}
+          column={column}
+          variableLabel={variableInfo?.label ?? scene.variable}
+          units={unitsLabel}
+          palette={scene.palette}
+          scale={scene.scale}
+          vmin={scene.vmin}
+          vmax={scene.vmax}
+          reverse={scene.reverse}
+          sourceId={dataset?.id ?? null}
+          variable={scene.variable}
+          observed={observedColumn}
+          onClose={() => setStudioOpen(false)}
+        />
+      )}
 
       {/* --- provenance ------------------------------------------------------ */}
       <div className="provenance">

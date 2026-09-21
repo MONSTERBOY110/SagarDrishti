@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SagarDrishti, explained from zero</title>
+<style>
+@page { size: A4; margin: 17mm 16mm 18mm 16mm; }
+@page :first { margin: 0; }
+
+:root{
+  --navy:#1F4E79; --teal:#11777A; --coral:#C03A2B;
+  --ink:#16202A; --muted:#5A6B78; --rule:#D3DCE3; --paper:#F4F7F9;
+  --wash:#F8FAFB;
+}
+*{ box-sizing:border-box; }
+html{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+body{
+  font:10.5pt/1.62 Georgia,"Cambria",serif; color:var(--ink);
+  margin:0; hyphens:none;
+}
+h1,h2,h3,h4,.ui{ font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif; }
+code,kbd,.mono{ font-family:Consolas,"Courier New",monospace; font-size:.88em; }
+
+/* ---------- cover ---------- */
+.cover{
+  height:297mm; padding:30mm 22mm 20mm; color:#fff;
+  background:linear-gradient(158deg,#0B2136 0%,#1F4E79 52%,#11777A 100%);
+  display:flex; flex-direction:column; page-break-after:always; position:relative;
+}
+.cover .kicker{ font:600 9.5pt/1.5 "Segoe UI",sans-serif; letter-spacing:.22em;
+  text-transform:uppercase; color:#8FD3D6; }
+.cover h1{ font-size:40pt; line-height:1.03; margin:14mm 0 0; font-weight:700;
+  letter-spacing:-.015em; }
+.cover h1 small{ display:block; font-size:16pt; font-weight:400; color:#BFE3E5;
+  margin-top:5mm; letter-spacing:0; line-height:1.35; }
+.cover .lede{ font:12pt/1.65 Georgia,serif; color:#DCEAF0; margin-top:11mm;
+  max-width:132mm; }
+.cover .meta{ margin-top:auto; border-top:1px solid rgba(255,255,255,.28);
+  padding-top:6mm; display:grid; grid-template-columns:repeat(4,1fr); gap:5mm;
+  font:9pt/1.5 "Segoe UI",sans-serif; }
+.cover .meta b{ display:block; color:#8FD3D6; font-weight:600; font-size:7.6pt;
+  letter-spacing:.14em; text-transform:uppercase; margin-bottom:1.6mm; }
+
+/* ---------- structure ---------- */
+.part{ page-break-before:always; }
+.partmark{ font:600 8.6pt/1 "Segoe UI",sans-serif; letter-spacing:.24em;
+  text-transform:uppercase; color:var(--teal); margin-bottom:3mm; }
+h2{ font-size:19pt; line-height:1.18; margin:0 0 4mm; color:var(--navy);
+  font-weight:700; letter-spacing:-.01em; }
+h3{ font-size:12.4pt; line-height:1.3; margin:8mm 0 2.5mm; color:var(--navy);
+  font-weight:600; page-break-after:avoid; }
+h4{ font-size:10.4pt; margin:6mm 0 1.5mm; color:var(--ink); font-weight:600;
+  page-break-after:avoid; }
+p{ margin:0 0 3.2mm; }
+.sub{ color:var(--muted); font-size:10pt; margin:-2mm 0 6mm; }
+ul,ol{ margin:0 0 3.6mm; padding-left:5.5mm; }
+li{ margin-bottom:1.6mm; }
+a{ color:var(--teal); text-decoration:none; }
+strong{ font-weight:700; }
+.lead{ font-size:11.4pt; line-height:1.6; color:#233240; }
+
+/* ---------- devices ---------- */
+table{ width:100%; border-collapse:collapse; margin:3mm 0 5mm;
+  font:9.2pt/1.45 "Segoe UI",sans-serif; page-break-inside:avoid; }
+th{ text-align:left; background:var(--navy); color:#fff; font-weight:600;
+  padding:2mm 2.4mm; font-size:8.4pt; letter-spacing:.04em; }
+td{ padding:2mm 2.4mm; border-bottom:.6pt solid var(--rule); vertical-align:top; }
+tr:nth-child(even) td{ background:var(--wash); }
+td code{ font-size:8.4pt; }
+
+.callout{ border-left:2.6pt solid var(--teal); background:var(--wash);
+  padding:3.4mm 4mm; margin:4mm 0; page-break-inside:avoid; }
+.callout.warn{ border-left-color:var(--coral); }
+.callout.navy{ border-left-color:var(--navy); }
+.callout p:last-child{ margin-bottom:0; }
+.callout .lbl{ font:600 7.8pt/1 "Segoe UI",sans-serif; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--teal); display:block; margin-bottom:2mm; }
+.callout.warn .lbl{ color:var(--coral); }
+.callout.navy .lbl{ color:var(--navy); }
+
+figure{ margin:5mm 0; page-break-inside:avoid; }
+figure img{ width:100%; display:block; border:.6pt solid var(--rule); }
+figcaption{ font:8.6pt/1.4 "Segoe UI",sans-serif; color:var(--muted);
+  margin-top:1.8mm; }
+figcaption b{ color:var(--navy); font-weight:600; }
+.duo{ display:grid; grid-template-columns:1fr 1fr; gap:4mm; }
+.trio{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:3mm; }
+
+.stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:3mm; margin:4mm 0 5mm; }
+.stat{ background:var(--wash); border-top:2.2pt solid var(--teal); padding:3mm; }
+.stat b{ display:block; font:700 16pt/1.1 "Segoe UI",sans-serif; color:var(--navy); }
+.stat span{ font:8.4pt/1.35 "Segoe UI",sans-serif; color:var(--muted);
+  display:block; margin-top:1.2mm; }
+
+.pill{ display:inline-block; background:var(--navy); color:#fff; padding:.5mm 2mm;
+  border-radius:2mm; font:600 7.8pt "Segoe UI",sans-serif; letter-spacing:.04em; }
+.pill.t{ background:var(--teal); } .pill.c{ background:var(--coral); }
+.pill.g{ background:var(--muted); }
+
+.gloss dt{ font-weight:700; color:var(--navy); margin-top:3mm; font-size:10pt; }
+.gloss dd{ margin:.6mm 0 0; padding-left:0; }
+
+.refs{ font-size:8.8pt; line-height:1.5; }
+.refs li{ margin-bottom:1.8mm; }
+
+.toc{ font:10pt/1.9 "Segoe UI",sans-serif; }
+.toc a{ color:var(--ink); }
+.toc .n{ color:var(--teal); font-weight:600; display:inline-block; width:9mm; }
+.toc .pg{ float:right; color:var(--muted); }
+.toc .l2{ padding-left:9mm; font-size:9.2pt; color:var(--muted); line-height:1.7; }
+
+.flow{ width:100%; margin:4mm 0 5mm; page-break-inside:avoid; }
+.hr{ border:0; border-top:.8pt solid var(--rule); margin:7mm 0; }
+.endnote{ font:8.6pt/1.5 "Segoe UI",sans-serif; color:var(--muted);
+  border-top:.6pt solid var(--rule); padding-top:2.5mm; margin-top:6mm; }
+
+.coverpts{ margin-top:13mm; display:grid; grid-template-columns:1fr 1fr;
+  gap:6mm 9mm; max-width:150mm; }
+.coverpts div{ font:9.6pt/1.5 Georgia,serif; color:#D2E5EC;
+  border-top:1px solid rgba(143,211,214,.45); padding-top:3mm; }
+.coverpts b{ display:block; font:700 8.4pt/1 "Segoe UI",sans-serif; color:#8FD3D6;
+  letter-spacing:.18em; margin-bottom:2mm; }
+
+/* compact edition */
+body{ font-size:9.8pt; line-height:1.52; }
+h2{ font-size:17pt; margin-bottom:3mm; }
+h3{ font-size:11.4pt; margin:6mm 0 2mm; }
+h4{ font-size:9.9pt; margin:4mm 0 1mm; }
+p{ margin:0 0 2.4mm; }
+.lead{ font-size:10.6pt; }
+.sub{ margin:-1.5mm 0 4mm; font-size:9.4pt; }
+table{ font-size:8.5pt; margin:2mm 0 4mm; }
+th{ padding:1.5mm 2mm; font-size:7.9pt; }
+td{ padding:1.5mm 2mm; }
+.callout{ padding:2.6mm 3.2mm; margin:3mm 0; }
+figure{ margin:3.5mm 0; }
+figcaption{ font-size:8pt; margin-top:1.2mm; }
+.stats{ gap:2.5mm; margin:3mm 0 4mm; }
+.stat{ padding:2.4mm; }
+.stat b{ font-size:14pt; }
+.stat span{ font-size:7.8pt; }
+ul,ol{ margin-bottom:2.6mm; }
+li{ margin-bottom:1.1mm; }
+.gloss{ column-count:2; column-gap:7mm; font-size:8.6pt; line-height:1.45; }
+.gloss dt{ margin-top:2.2mm; font-size:8.8pt; break-after:avoid; }
+.gloss dd{ break-inside:avoid; }
+.refs{ column-count:2; column-gap:7mm; font-size:8pt; line-height:1.42; }
+.coverpts div{ font-size:9pt; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="cover">
+  <div class="kicker">Smart India Hackathon 2026 &middot; Problem Statement SIH26067</div>
+  <h1>SagarDrishti
+    <small>A browser&#8209;native 3D digital twin of India's ocean, built for the
+    Ministry of Earth Sciences and INCOIS.</small>
+  </h1>
+  <p class="lede">The whole project from zero. It assumes you have never heard
+  of INCOIS, an Argo float or a NetCDF file, and ends with you knowing what we
+  built, why it did not exist before, and how each part works.</p>
+  <div class="coverpts">
+    <div><b>01</b>The whole water column drawn as a volume in a browser, with the
+      real instruments positioned inside it.</div>
+    <div><b>02</b>A live score, by the international Class&#8209;4 method, of how
+      far the simulation is from those instruments.</div>
+    <div><b>03</b>India's disaster warnings drawn over the water they concern,
+      in the CAP standard the government already speaks.</div>
+    <div><b>04</b>A question box that cannot invent a number, because every
+      figure arrives as a tool result with its citation.</div>
+  </div>
+  <div class="meta">
+    <div><b>Problem owner</b>Ministry of Earth Sciences, INCOIS Hyderabad</div>
+    <div><b>Category</b>Software &middot; Disaster Management</div>
+    <div><b>Team</b>PixelPaws</div>
+    <div><b>Document date</b>20 September 2026</div>
+  </div>
+</section>
+
+<!-- ============ PART 1 ============ -->
+<section class="part" id="p1">
+  <div class="partmark">Part 1</div>
+  <h2>The problem</h2>
+  <p class="sub">No background assumed. Every term used later is introduced
+  here, and the glossary on the last page repeats them.</p>
+
+  <h3>1.1 Who INCOIS is</h3>
+  <p>The <strong>Indian National Centre for Ocean Information Services</strong>,
+  Hyderabad, under the <strong>Ministry of Earth Sciences</strong>. It is the
+  body that tells India what its ocean is doing. It runs India's Tsunami Early
+  Warning Centre and is a UNESCO&#8209;recognised Tsunami Service Provider for
+  the wider Indian Ocean; it issues the daily Ocean State Forecasts behind high
+  wave and swell surge advisories; it supports Coast Guard search and rescue,
+  where knowing which way the water moved <em>at depth</em> decides where to
+  look; and its Potential Fishing Zone advisories reach roughly nine lakh
+  fishing households.</p>
+  <p>All four jobs turn on one question asked under time pressure:
+  <em>what is the ocean doing right now, and do I believe it?</em></p>
+
+  <h3>1.2 The two kinds of ocean data</h3>
+  <p>There are exactly two ways to know, and the gap between them is the whole
+  problem.</p>
+  <p>A <strong>numerical ocean model</strong> is a physics simulation. It cuts
+  the ocean into boxes a few kilometres wide and tens of levels deep and solves
+  equations of motion and heat for each one. The output is complete and
+  gap&#8209;free: a temperature, a salinity and a water velocity for every
+  longitude, latitude, depth and time. It is also a guess. A good one, but a
+  guess.</p>
+  <p>An <strong>in situ observation</strong> is a real instrument in real water
+  reporting a real number. True, and almost empty: a handful of points in an
+  ocean. The problem statement names four kinds.</p>
+
+  <table>
+    <tr><th style="width:17%">Instrument</th><th>What it is</th></tr>
+    <tr><td><b>Argo float</b></td><td>A metre&#8209;long cylinder that drifts at about 1000 m, then every ten days sinks to 2000 m and rises, recording temperature and salinity the whole way up, transmitting by satellite at the surface. About four thousand are active worldwide, each with a unique WMO identifier. One rise is a <b>profile</b> or <b>cast</b>: a column of measurements at one place and time.</td></tr>
+    <tr><td><b>BGC float</b></td><td>The same machine with more sensors: dissolved oxygen, chlorophyll, nitrate, pH and particle backscatter.</td></tr>
+    <tr><td><b>Glider</b></td><td>A winged robot that changes its buoyancy to fly up and down in a sawtooth, steered from shore. It surveys a chosen line instead of drifting.</td></tr>
+    <tr><td><b>CTD cast</b></td><td>The oldest method. A ship stops and lowers an instrument on a wire. Conductivity, Temperature, Depth, because salinity is computed from conductivity rather than measured.</td></tr>
+  </table>
+
+  <div class="callout">
+    <span class="lbl">The central tension</span>
+    <p>The model is complete but possibly wrong. The observations are correct
+    but almost empty. A forecaster issuing a cyclone advisory must hold both in
+    mind and judge whether today's run can be trusted in the place that
+    matters. <strong>Supporting that judgement is the job.</strong></p>
+  </div>
+
+  <p><strong>The formats.</strong> Model output and most observations arrive as
+  <strong>NetCDF</strong>, a self&#8209;describing binary format for
+  multidimensional arrays, written to the <strong>CF Conventions</strong>
+  (Climate and Forecast). Older CTD work arrives as plain delimited text. A
+  platform that wants to read what INCOIS holds must handle all of it.</p>
+
+  <h3>1.3 What the problem statement says</h3>
+  <p>SIH26067 was written by INCOIS: <em>"Develop a web-based interactive 3D
+  visualization platform that integrates numerical ocean model outputs and
+  in-situ observations."</em> It is unusually direct about what is wrong. In
+  their words: <strong>"no integrated, web-based 3D visualization platform
+  currently exists"</strong> that renders model fields and instrument
+  observations "in a single interactive environment"; existing tools are
+  <strong>"desktop-bound, support only 2D plan views, or lack the ability to
+  co-visualize model outputs alongside instrument profiles"</strong>;
+  forecasters are "forced to toggle between disparate software packages"; and
+  this <strong>"impedes timely hazard assessment, search-and-rescue support,
+  fishery advisories, climate monitoring."</strong></p>
+  <p>The complaint is not aesthetic. The claim is that the missing tool costs
+  time in the four operations that save lives and livelihoods.</p>
+
+  <h3>1.4 The seven requirements, which are the objectives</h3>
+  <table>
+    <tr><th style="width:6%">#</th><th style="width:26%">Requirement</th><th>In plain terms</th></tr>
+    <tr><td><b>F1</b></td><td>3D volumetric rendering</td><td>Draw the whole water column in three dimensions, not a flat map: depth slices, isosurfaces, animation through time.</td></tr>
+    <tr><td><b>F2</b></td><td>Instrument data overlay</td><td>Put Argo, BGC, glider and CTD on the same globe as clickable marks, each opening its depth&#8209;versus&#8209;variable profile.</td></tr>
+    <tr><td><b>F3</b></td><td>Multi-format ingestion</td><td>Read NetCDF and delimited text automatically; add a source without rewriting the software.</td></tr>
+    <tr><td><b>F4</b></td><td>Colorbar and controls</td><td>Choose variable, depth, time, colour scale and limits, layer opacity, vertical exaggeration.</td></tr>
+    <tr><td><b>F5</b></td><td>Web-based, scalable</td><td>Runs in a browser with nothing to install; deployable on INCOIS servers.</td></tr>
+    <tr><td><b>F6</b></td><td>Extensible design</td><td>A documented way to add future sensors (moorings, HF radar, ADCP) and derived products.</td></tr>
+    <tr><td><b>F7</b></td><td>Open standards</td><td>Serve OGC WMS and WCS, comply with CF, so other software can consume it.</td></tr>
+  </table>
+  <p>The portal files it under the theme <strong>Disaster Management</strong>,
+  category <strong>Software</strong>. That is why the project carries a warning
+  layer as well as a viewer.</p>
+</section>
+
+<!-- ============ PART 2 ============ -->
+<section class="part" id="p2">
+  <div class="partmark">Part 2</div>
+  <h2>What exists, and why it is not enough</h2>
+  <p class="sub">A project claiming a gap has to prove the gap. We reviewed the
+  landscape before writing code, and one finding changed how we talk about the
+  project.</p>
+
+  <div class="callout warn">
+    <span class="lbl">The correction we make first</span>
+    <p>INCOIS already runs <strong>Digital Ocean</strong> (2020), whose launch
+    material claims <em>"3D and 4D (3D in space with time animation) data
+    visualization"</em> on "a georeferenced 3D Ocean." An INCOIS judge knows
+    that sentence, so <strong>we never claim no 3D exists at INCOIS.</strong>
+    Our position is narrower and defensible: Digital Ocean is a data management
+    portal whose 3D is a georeferenced globe with draped layers and time
+    animation. We build with it, consuming INCOIS's own services, and add what
+    it does not do.</p>
+  </div>
+
+  <h3>2.1 The landscape</h3>
+  <table>
+    <tr><th style="width:21%">System</th><th style="width:11%">Where</th><th>Why the problem statement still exists</th></tr>
+    <tr><td><b>Digital Ocean</b></td><td>INCOIS</td><td>No documented volumetric rendering, no model skill scoring, no public embedding story. A portal with globe viewing, not an analysis&#8209;grade renderer.</td></tr>
+    <tr><td><b>Live Access Server</b></td><td>INCOIS</td><td>Static 2D images, one field at a time, no instrument overlay.</td></tr>
+    <tr><td><b>ERDDAP, THREDDS</b></td><td>INCOIS</td><td>Data access layers with rudimentary graphs. <b>These are our backend, not competitors.</b></td></tr>
+    <tr><td><b>SARAT, ITEWC, OSF, PFZ</b></td><td>INCOIS</td><td>A world class dissemination pipeline with text and 2D map front ends. The science visualisation layer is the gap.</td></tr>
+    <tr><td><b>EDITO</b></td><td>EU</td><td>Infrastructure first and notebook centric, Europe scoped, no coherent volumetric globe.</td></tr>
+    <tr><td><b>Copernicus MyOcean Pro</b></td><td>EU</td><td>Best web ocean viewer today, but its depth axis is a <i>selector</i>: one level at a time, never the shape of the column. Their own roadmap puts a 3D globe at January 2027.</td></tr>
+    <tr><td><b>Argovis</b></td><td>US</td><td>The strongest co&#8209;location engine, and 2D. Our methodological ancestor; we mirror its API semantics deliberately.</td></tr>
+    <tr><td><b>nullschool, Windy</b></td><td>Global</td><td>Surface only. Roughly ninety per cent of ocean state, including cyclone intensification and search and rescue physics, is below the pixel they draw.</td></tr>
+    <tr><td><b>Ocean Data View</b></td><td>Desktop</td><td>The standard for in situ sections, weak on gridded model data. A browser version, webODV, exists and is 2D&#8209;plot based.</td></tr>
+    <tr><td><b>pyParaOcean</b></td><td>Desktop</td><td>Our most serious technical prior art: real volume rendering on Bay of Bengal data. It is also exactly what "desktop-bound" means, a ParaView and HPC install a forecast desk officer cannot use.</td></tr>
+    <tr><td><b>FloatChat, cesium-mcp, FathomGPT</b></td><td>AI</td><td>Chat over Argo tables; generic camera control; natural language over ocean imagery. All real, all cited. None touches volumetric scene state or skill metrics.</td></tr>
+  </table>
+
+  <h3>2.2 The four gaps we can defend</h3>
+  <table>
+    <tr><th style="width:33%">Capability</th><th style="width:28%">Closest</th><th>Why they miss</th></tr>
+    <tr><td><b>1.</b> Volumetric water column in a browser, co&#8209;registered with in situ profiles</td><td>pyParaOcean and IDV are volumetric but desktop. MyOcean and Argovis are web but 2D.</td><td>No system occupies both cells.</td></tr>
+    <tr><td><b>2.</b> A live model skill scorecard inside the viewer</td><td>GODAE and Copernicus quality reports</td><td>Computed offline, published as PDFs. No operational viewer shows skill beside the field.</td></tr>
+    <tr><td><b>3.</b> Language control of a <i>scientific</i> scene graph</td><td>FloatChat, cesium-mcp</td><td>Neither knows the other's domain. A tool schema spanning volumetrics and validation does not exist.</td></tr>
+    <tr><td><b>4.</b> Indian Ocean and INCOIS native</td><td>EDITO, Copernicus</td><td>Structurally scoped to Europe.</td></tr>
+  </table>
+
+  <h3>2.3 The four rebuttals, rehearsed</h3>
+  <p><strong>"Digital Ocean already says 3D and 4D."</strong> Correct, and we
+  build with it. It is a data management portal with a draped&#8209;layer globe.
+  We add true volumetrics, a quantitative skill panel and language control,
+  while consuming INCOIS's own ERDDAP and THREDDS, so zero data duplication.</p>
+  <p><strong>"MyOcean Pro already views four dimensions."</strong> Its depth
+  axis is a selector, one level at a time. Copernicus's own roadmap puts their
+  3D globe at January 2027, and even that is without volumetrics or in situ
+  integration.</p>
+  <p><strong>"pyParaOcean already does this."</strong> Yes, and we cite it. It
+  is also the definition of the desktop&#8209;bound tool the problem statement
+  complains about. We deliver a defensible subset at a URL with zero install,
+  plus the observation comparison and language layers it has no scope for.</p>
+  <p><strong>"Is this not nullschool for the ocean?"</strong> Those are surface
+  particle animations. No in situ data, no export, no skill metric, no
+  column.</p>
+</section>
+
+<!-- ============ PART 3 ============ -->
+<section class="part" id="p3">
+  <div class="partmark">Part 3</div>
+  <h2>What SagarDrishti is</h2>
+  <p class="sub">Sagar Drishti means "ocean vision". The name echoes the SAGAR
+  doctrine and the Deep Ocean Mission, because the audience is a ministry.</p>
+
+  <p class="lead">A web page you open with no installation, showing the Indian
+  Ocean as a three&#8209;dimensional body of water rather than a flat map. The
+  simulated field is drawn through the whole depth of the column. The real
+  instruments floating in that water are drawn inside it as marks you can
+  click. A panel tells you how far the simulation is from those instruments, in
+  degrees. The live government disaster warnings are drawn over the water they
+  concern. And a question box answers in sentences built only from numbers the
+  software actually computed.</p>
+
+  <div class="stats">
+    <div class="stat"><b>13</b><span>sources enabled, across 9 kinds</span></div>
+    <div class="stat"><b>149</b><span>casts from 19 instruments</span></div>
+    <div class="stat"><b>30,012</b><span>quality&#8209;controlled levels</span></div>
+    <div class="stat"><b>567</b><span>automated tests passing</span></div>
+  </div>
+
+  <figure>
+    <img src="../evidence/prototype-2026-09-19/01-scene.png" alt="The main scene">
+    <figcaption><b>The opening view.</b> Bay of Bengal water column in colour,
+    instrument marks across it, a warning area outlined, and the control panel
+    holding the variable selector, colour scale, depth ladder and vertical
+    exaggeration. The box at top left names the dataset and timestamp on
+    screen, so nothing is unattributed.</figcaption>
+  </figure>
+
+  <h3>The core USP, in four claims</h3>
+
+  <h4>1. The water column is drawn as a volume, in a browser, with the real
+  instruments inside it</h4>
+  <p>Not a surface map with a depth dropdown. The field is rendered through
+  depth using the three techniques the problem statement names: stacked depth
+  slices, extracted isosurfaces, and animation through time. Argo, BGC, glider
+  and CTD casts sit in the same 3D space, told apart by mark shape, and
+  clicking one opens its measured profile beside the model's curve at the same
+  place and time.</p>
+
+  <div class="duo">
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/03-isosurface.png" alt="Isosurface">
+      <figcaption><b>The 26 degree isosurface</b>, enclosing all water warmer
+      than 26 degrees Celsius, which is the layer a cyclone draws energy from.
+      Marching cubes on the native grid, no resampling.</figcaption>
+    </figure>
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/05-instruments.png" alt="Instruments">
+      <figcaption><b>All four instrument classes</b> the problem statement
+      names, by mark shape rather than colour alone: Argo 13, BGC 9, glider
+      109, CTD 15, mooring 3.</figcaption>
+    </figure>
+  </div>
+
+  <h4>2. The viewer tells you whether to trust what it is showing you</h4>
+  <p>The differentiator a domain expert notices first. Every operational centre
+  produces skill statistics; they are computed offline and published as
+  quarterly PDFs. Nobody puts the number next to the picture. We do, by
+  <strong>GODAE OceanView Class 4</strong>, the accepted international
+  protocol, which works in <em>observation space</em>: the model is interpolated
+  to each instrument's exact latitude, longitude, depth and time rather than
+  both being averaged onto a convenient grid, and bias and RMSE are reported
+  per depth band using Argo quality flags 1 and 2 only.</p>
+
+  <div class="duo">
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/08-scorecard.png" alt="Scorecard">
+      <figcaption><b>The verification card.</b> Bias +0.026 degrees, RMSE 0.602
+      degrees, 11,718 matched pairs. The caveat is printed in red on the card,
+      not hidden in documentation.</figcaption>
+    </figure>
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/06b-argo-panel.png" alt="Argo panel">
+      <figcaption><b>Argo float 7902073, 71 levels.</b> Measured profile against
+      the model's curve at the same coordinates, WMO identifier carried into
+      every citation.</figcaption>
+    </figure>
+  </div>
+
+  <h4>3. The disaster warnings are on the same globe as the physics</h4>
+  <p>The theme is Disaster Management and the first stated mandate is "timely
+  hazard assessment." HazardWatch reads <strong>CAP</strong> bulletins, the
+  Common Alerting Protocol, which is the international XML standard for public
+  warnings and the format India's national SACHET system speaks. Each becomes a
+  coloured area on the water, severity driving colour, so the warning and the
+  field explaining it are in one picture.</p>
+
+  <h4>4. You can ask it questions, and it cannot make anything up</h4>
+  <p>Samudra Sahayak, "ocean helper", is the question box. The design
+  constraint is the interesting part: <strong>it is structurally unable to
+  compute or invent a number.</strong> Eight tools, each calling the same
+  public API a user could open themselves. Numbers enter an answer only as a
+  tool result, and every answer carries the dataset, the timestamp and the
+  float identifiers it used.</p>
+
+  <div class="duo">
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/12-hazardwatch.png" alt="HazardWatch">
+      <figcaption><b>CAP warning areas over the water they concern.</b> 15
+      bulletins: 12 genuine ones from Indian state disaster management
+      authorities via NDMA SACHET, and 3 ocean&#8209;hazard bulletins for
+      tsunami, high wave and swell surge which are <b>rehearsals we
+      authored</b>, stamped EXERCISE in the data and on screen. India published
+      no live public ocean CAP feed when this was ingested, and the interface
+      says so rather than letting a drill pass for an alert.</figcaption>
+    </figure>
+    <figure>
+      <img src="../evidence/prototype-2026-09-19/13-agent.png" alt="Agent">
+      <figcaption><b>Samudra Sahayak answering "How good is the model?"</b>
+      Assembled from tool results, printing the tool count, the citation list,
+      and the tag <code>planner: rules</code>, which says honestly that the
+      planner is a deterministic router rather than a language model. Part 5
+      explains that choice.</figcaption>
+    </figure>
+  </div>
+
+  <h3>The rest of the product</h3>
+  <p><strong>Six guided tours</strong> drive the real scene rather than playing
+  a video, serving the outreach and education mandate the problem statement
+  asks for and doubling as a demo that cannot go wrong.
+  <strong>It runs with the network unplugged:</strong> offline is the default
+  posture, not a mode, so a demonstration can be given with the WiFi visibly
+  off, which turns "deployable on INCOIS infrastructure" into something the
+  audience watches happen. <strong>SagarNode</strong> is a tabletop ESP32 rig
+  with a temperature probe, a turbidity sensor and a TDS probe used as a
+  <em>conductivity&#8209;derived salinity proxy</em>, which is what it honestly
+  is. It appears on the globe as a live virtual mooring; warm water poured in
+  trips a threshold and fires a CAP&#8209;shaped alert flagged as coming from a
+  demo sensor. It demonstrates requirement F6 with hardware instead of a
+  paragraph.</p>
+</section>
+
+<!-- ============ PART 4 ============ -->
+<section class="part" id="p4">
+  <div class="partmark">Part 4</div>
+  <h2>How it works</h2>
+  <p class="sub">Everything named here exists in the repository.</p>
+
+  <h3>4.1 The most important design decision: two planes</h3>
+  <p>The <strong>data plane</strong> is deterministic: files become arrays,
+  arrays become a chunked store, the store is served over HTTP, the browser
+  draws it. It satisfies all seven requirements on its own. The
+  <strong>agent plane</strong> is orchestration, and it reaches the data plane
+  over the same public HTTP API the browser uses, through nothing else.</p>
+  <p>The split is enforced, not merely described. The agent service's
+  dependency list contains no array library, no storage library and no
+  database driver, so it physically cannot read a data file even by mistake,
+  and therefore cannot know anything a user could not verify by opening the
+  same URL. Cut the agent out and the product still meets the
+  specification.</p>
+
+  <svg class="flow" viewBox="0 0 1000 690" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="ah" markerWidth="8" markerHeight="7" refX="7.2" refY="3.5" orient="auto">
+      <polygon points="0 0, 8 3.5, 0 7" fill="#2B2B2B"/>
+    </marker>
+    <marker id="aht" markerWidth="8" markerHeight="7" refX="7.2" refY="3.5" orient="auto">
+      <polygon points="0 0, 8 3.5, 0 7" fill="#11777A"/>
+    </marker>
+  </defs>
+
+  <!-- ===== zone 1 ===== -->
+  <rect x="0" y="34" width="232" height="380" rx="8" fill="#F6F8FA" stroke="#D3DCE3"/>
+  <rect x="0" y="34" width="232" height="50" rx="8" fill="#E4EAEF"/>
+  <rect x="0" y="66" width="232" height="18" fill="#E4EAEF"/>
+  <rect x="0" y="81" width="232" height="3" fill="#1F4E79"/>
+  <circle cx="24" cy="57" r="13" fill="#1F4E79"/>
+  <text x="24" y="62" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+  <text x="45" y="55" font-size="18" font-weight="700" fill="#1F4E79">SOURCES</text>
+  <text x="45" y="73" font-size="13" fill="#5A6B78">13 enabled, 9 kinds</text>
+  <g>
+    <rect x="12" y="96" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="12" y="96" width="208" height="3" fill="#1F4E79"/>
+    <text x="22" y="119" font-size="15" font-weight="700" fill="#16202A">INCOIS ERDDAP, LAS</text>
+    <text x="22" y="137" font-size="12.5" fill="#5A6B78">gridded model fields, NetCDF</text>
+    <rect x="12" y="158" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="12" y="158" width="208" height="3" fill="#1F4E79"/>
+    <text x="22" y="181" font-size="15" font-weight="700" fill="#16202A">Argo GDAC</text>
+    <text x="22" y="199" font-size="12.5" fill="#5A6B78">core floats and BGC floats</text>
+    <rect x="12" y="220" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="12" y="220" width="208" height="3" fill="#1F4E79"/>
+    <text x="22" y="243" font-size="15" font-weight="700" fill="#16202A">Copernicus GLORYS</text>
+    <text x="22" y="261" font-size="12.5" fill="#5A6B78">depth-resolved currents</text>
+    <rect x="12" y="282" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="12" y="282" width="208" height="3" fill="#1F4E79"/>
+    <text x="22" y="305" font-size="15" font-weight="700" fill="#16202A">Glider, CTD, RAMA</text>
+    <text x="22" y="323" font-size="12.5" fill="#5A6B78">in situ, NetCDF and ASCII</text>
+    <rect x="12" y="344" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="12" y="344" width="208" height="3" fill="#C03A2B"/>
+    <text x="22" y="367" font-size="15" font-weight="700" fill="#16202A">NDMA SACHET</text>
+    <text x="22" y="385" font-size="12.5" fill="#5A6B78">CAP v1.2 warning XML</text>
+  </g>
+  <text x="0" y="432" font-size="12" fill="#5A6B78">one YAML registry declares all of them</text>
+
+  <!-- ===== zone 2 ===== -->
+  <rect x="256" y="34" width="232" height="380" rx="8" fill="#F6F8FA" stroke="#D3DCE3"/>
+  <rect x="256" y="34" width="232" height="50" rx="8" fill="#E4EAEF"/>
+  <rect x="256" y="66" width="232" height="18" fill="#E4EAEF"/>
+  <rect x="256" y="81" width="232" height="3" fill="#1F4E79"/>
+  <circle cx="280" cy="57" r="13" fill="#1F4E79"/>
+  <text x="280" y="62" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+  <text x="301" y="55" font-size="18" font-weight="700" fill="#1F4E79">INGEST</text>
+  <text x="301" y="73" font-size="13" fill="#5A6B78">Python, 4 plugins</text>
+  <g>
+    <rect x="268" y="96" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="268" y="96" width="208" height="3" fill="#1F4E79"/>
+    <text x="278" y="119" font-size="15" font-weight="700" fill="#16202A">CF normalisation</text>
+    <text x="278" y="137" font-size="11.5" fill="#5A6B78">scale_factor, _FillValue, sign of depth</text>
+    <rect x="268" y="158" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="268" y="158" width="208" height="3" fill="#1F4E79"/>
+    <text x="278" y="181" font-size="15" font-weight="700" fill="#16202A">QC flags 1 and 2 only</text>
+    <text x="278" y="199" font-size="12.5" fill="#5A6B78">Argo convention, Wong 2020</text>
+    <rect x="268" y="220" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="268" y="220" width="208" height="3" fill="#1F4E79"/>
+    <text x="278" y="243" font-size="15" font-weight="700" fill="#16202A">Pressure to depth</text>
+    <text x="278" y="261" font-size="12.5" fill="#5A6B78">TEOS-10, latitude aware</text>
+  </g>
+  <path d="M296 296 h144 v66 a72 13 0 0 1 -144 0 z" fill="#fff" stroke="#1F4E79" stroke-width="1.6"/>
+  <ellipse cx="368" cy="296" rx="72" ry="13" fill="#fff" stroke="#1F4E79" stroke-width="1.6"/>
+  <text x="368" y="330" font-size="16" font-weight="700" fill="#1F4E79" text-anchor="middle">Zarr cube</text>
+  <text x="368" y="350" font-size="11.5" fill="#5A6B78" text-anchor="middle">30,012 obs levels in Parquet</text>
+  <text x="256" y="432" font-size="12" fill="#5A6B78">correctness lives here, and so do the tests</text>
+
+  <!-- ===== zone 3 ===== -->
+  <rect x="512" y="34" width="232" height="380" rx="8" fill="#F5FAFA" stroke="#D3DCE3"/>
+  <rect x="512" y="34" width="232" height="50" rx="8" fill="#E2EFEF"/>
+  <rect x="512" y="66" width="232" height="18" fill="#E2EFEF"/>
+  <rect x="512" y="81" width="232" height="3" fill="#11777A"/>
+  <circle cx="536" cy="57" r="13" fill="#11777A"/>
+  <text x="536" y="62" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+  <text x="557" y="55" font-size="18" font-weight="700" fill="#11777A">DATA PLANE</text>
+  <text x="557" y="73" font-size="13" fill="#5A6B78">FastAPI, 16 routes</text>
+  <g>
+    <rect x="524" y="96" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="524" y="96" width="208" height="3" fill="#11777A"/>
+    <text x="534" y="119" font-size="15" font-weight="700" fill="#16202A">14 REST routes</text>
+    <text x="534" y="137" font-size="12.5" fill="#5A6B78">/field /profiles /isosurface /currents</text>
+    <rect x="524" y="158" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="524" y="158" width="208" height="3" fill="#C03A2B"/>
+    <text x="534" y="181" font-size="15" font-weight="700" fill="#16202A">OGC WMS 1.3.0, WCS 1.0.0</text>
+    <text x="534" y="199" font-size="12.5" fill="#5A6B78">QGIS and ERDDAP clients read it</text>
+    <rect x="524" y="220" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="524" y="220" width="208" height="3" fill="#11777A"/>
+    <text x="534" y="243" font-size="15" font-weight="700" fill="#16202A">Class-4 scorecard</text>
+    <text x="534" y="261" font-size="12.5" fill="#5A6B78">bias and RMSE against each cast</text>
+    <rect x="524" y="282" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="524" y="282" width="208" height="3" fill="#11777A"/>
+    <text x="534" y="305" font-size="15" font-weight="700" fill="#16202A">/warnings and device intake</text>
+    <text x="534" y="323" font-size="12.5" fill="#5A6B78">the CAP bus, and /ingest/sagarnode</text>
+  </g>
+  <text x="512" y="432" font-size="12" fill="#5A6B78">no HTTP client exists in this service</text>
+
+  <!-- ===== zone 4 ===== -->
+  <rect x="768" y="34" width="232" height="380" rx="8" fill="#F5FAFA" stroke="#D3DCE3"/>
+  <rect x="768" y="34" width="232" height="50" rx="8" fill="#E2EFEF"/>
+  <rect x="768" y="66" width="232" height="18" fill="#E2EFEF"/>
+  <rect x="768" y="81" width="232" height="3" fill="#11777A"/>
+  <circle cx="792" cy="57" r="13" fill="#11777A"/>
+  <text x="792" y="62" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+  <text x="813" y="55" font-size="18" font-weight="700" fill="#11777A">BROWSER</text>
+  <text x="813" y="73" font-size="13" fill="#5A6B78">CesiumJS, WebGL2</text>
+  <g>
+    <rect x="780" y="96" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="780" y="96" width="208" height="3" fill="#11777A"/>
+    <text x="790" y="119" font-size="15" font-weight="700" fill="#16202A">Volumetric scene</text>
+    <text x="790" y="137" font-size="12.5" fill="#5A6B78">24 depth levels, isosurface, time</text>
+    <rect x="780" y="158" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="780" y="158" width="208" height="3" fill="#11777A"/>
+    <text x="790" y="181" font-size="15" font-weight="700" fill="#16202A">Instrument marks</text>
+    <text x="790" y="199" font-size="12.5" fill="#5A6B78">149 casts, 19 instruments</text>
+    <rect x="780" y="220" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="780" y="220" width="208" height="3" fill="#11777A"/>
+    <text x="790" y="243" font-size="15" font-weight="700" fill="#16202A">Controls and charts</text>
+    <text x="790" y="261" font-size="12.5" fill="#5A6B78">colorbar, opacity, exaggeration</text>
+    <rect x="780" y="282" width="208" height="52" fill="#fff" stroke="#D3DCE3"/><rect x="780" y="282" width="208" height="3" fill="#11777A"/>
+    <text x="790" y="305" font-size="15" font-weight="700" fill="#16202A">HazardWatch layer</text>
+    <text x="790" y="323" font-size="12.5" fill="#5A6B78">CAP areas, severity to colour</text>
+  </g>
+  <text x="768" y="432" font-size="12" fill="#5A6B78">nothing to install, one URL</text>
+
+  <!-- ===== edges ===== -->
+  <line x1="236" y1="224" x2="252" y2="224" stroke="#2B2B2B" stroke-width="1.8" marker-end="url(#ah)"/>
+  <text x="244" y="206" font-size="12" fill="#5A6B78" text-anchor="middle">NetCDF</text>
+  <text x="244" y="248" font-size="12" fill="#5A6B78" text-anchor="middle">ASCII</text>
+  <text x="244" y="264" font-size="12" fill="#5A6B78" text-anchor="middle">CAP</text>
+  <line x1="492" y1="224" x2="508" y2="224" stroke="#2B2B2B" stroke-width="1.8" marker-end="url(#ah)"/>
+  <text x="500" y="206" font-size="12" fill="#5A6B78" text-anchor="middle">zarr</text>
+  <text x="500" y="248" font-size="12" fill="#5A6B78" text-anchor="middle">chunks</text>
+  <line x1="748" y1="224" x2="764" y2="224" stroke="#2B2B2B" stroke-width="1.8" marker-end="url(#ah)"/>
+  <text x="756" y="206" font-size="12" fill="#5A6B78" text-anchor="middle">JSON</text>
+  <text x="756" y="248" font-size="12" fill="#5A6B78" text-anchor="middle">PNG</text>
+  <text x="756" y="264" font-size="12" fill="#5A6B78" text-anchor="middle">NetCDF</text>
+
+  <!-- ===== lower band ===== -->
+  <rect x="0" y="560" width="232" height="104" rx="8" fill="#fff" stroke="#11777A" stroke-width="1.6"/>
+  <rect x="0" y="560" width="4" height="104" fill="#11777A"/>
+  <text x="18" y="586" font-size="15" font-weight="700" fill="#11777A">VERIFICATION</text>
+  <text x="18" y="608" font-size="12.5" fill="#5A6B78">Interpolated to each cast's own</text>
+  <text x="18" y="626" font-size="12.5" fill="#5A6B78">position and depth. A level is</text>
+  <text x="18" y="644" font-size="12.5" fill="#5A6B78">refused, never guessed.</text>
+
+  <rect x="256" y="560" width="488" height="104" rx="8" fill="#fff" stroke="#5A6B78" stroke-width="1.6" stroke-dasharray="9 6"/>
+  <text x="276" y="586" font-size="15" font-weight="700" fill="#5A6B78">SAMUDRA SAHAYAK, the agent plane</text>
+  <text x="276" y="608" font-size="12.5" fill="#5A6B78">Eight tools, each one an HTTP call to the routes above. No array library, no</text>
+  <text x="276" y="626" font-size="12.5" fill="#5A6B78">storage driver, no direct file access, so it cannot know anything a user could</text>
+  <text x="276" y="644" font-size="12.5" fill="#5A6B78">not check. Cut this box and every requirement still passes.</text>
+  <line x1="628" y1="558" x2="628" y2="470" stroke="#11777A" stroke-width="2.6" stroke-dasharray="7 5" marker-end="url(#aht)"/>
+  <text x="642" y="512" font-size="12.5" fill="#11777A">reaches the data plane</text>
+  <text x="642" y="530" font-size="12.5" fill="#11777A">through the same public API</text>
+
+  <rect x="768" y="560" width="232" height="104" rx="8" fill="#fff" stroke="#C03A2B" stroke-width="1.6"/>
+  <rect x="768" y="560" width="4" height="104" fill="#C03A2B"/>
+  <text x="786" y="586" font-size="15" font-weight="700" fill="#C03A2B">ANY OGC CLIENT</text>
+  <text x="786" y="608" font-size="12.5" fill="#5A6B78">QGIS, ERDDAP, and the desktop</text>
+  <text x="786" y="626" font-size="12.5" fill="#5A6B78">tools INCOIS already runs, with</text>
+  <text x="786" y="644" font-size="12.5" fill="#5A6B78">no adapter to write.</text>
+
+  <text x="0" y="16" font-size="12.5" font-weight="700" fill="#1F4E79">SOLID BORDER = the P0 data plane</text>
+  <text x="256" y="16" font-size="12.5" font-weight="700" fill="#5A6B78">DASHED BORDER = detachable, not required by the specification</text>
+</svg>
+
+  <h3>4.2 Sources and the registry</h3>
+  <p>Fourteen sources declared, thirteen enabled, across nine kinds, all in one
+  file, <code>data/sources.yaml</code>. That file is the extensibility surface
+  F3 and F6 ask for: adding a variable or a source is an edit to it, not a code
+  change.</p>
+  <table>
+    <tr><th style="width:26%">Kind</th><th style="width:8%">No.</th><th>Reads</th></tr>
+    <tr><td><code>erddap_griddap</code></td><td>2</td><td>Gridded model fields from an ERDDAP server, the software INCOIS already runs</td></tr>
+    <tr><td><code>gdac_geo</code>, <code>gdac_bgc</code></td><td>2</td><td>Argo core and biogeochemical float profiles</td></tr>
+    <tr><td><code>insitu_tac</code></td><td>2</td><td>Copernicus in situ files: the glider and shipboard CTD data</td></tr>
+    <tr><td><code>copernicus</code></td><td>1</td><td>GLORYS reanalysis, source of depth&#8209;resolved currents</td></tr>
+    <tr><td><code>mooring</code></td><td>1</td><td>RAMA moored buoy, Bay of Bengal</td></tr>
+    <tr><td><code>file</code></td><td>2</td><td>Plain delimited text: CTD ASCII and ODV spreadsheet exports</td></tr>
+    <tr><td><code>cap</code></td><td>2</td><td>Common Alerting Protocol warning XML</td></tr>
+    <tr><td><code>mqtt</code>, <code>zarr</code></td><td>2</td><td>The SagarNode device feed, and the local offline cube</td></tr>
+  </table>
+
+  <h3>4.3 Ingestion, where correctness is actually decided</h3>
+  <p>Reading scientific files correctly is most of the difficulty, and it is
+  where the tests are concentrated. Four problems recur:</p>
+  <ul>
+    <li><strong>CF decoding.</strong> A variable may be stored as small integers
+    with a <code>scale_factor</code> and <code>add_offset</code> to apply and a
+    <code>_FillValue</code> marking absent data. Wrong order, or treating the
+    fill value as real, gives a plausible field that is wrong.</li>
+    <li><strong>The sign of depth.</strong> Some files count depth positive
+    downwards, some negative. Backwards silently inverts the ocean.</li>
+    <li><strong>Pressure is not depth.</strong> Instruments record decibars. The
+    convenient one&#8209;decibar&#8209;equals&#8209;one&#8209;metre approximation
+    is wrong by enough to matter: at 1000 dbar at five degrees north, true depth
+    is 992.08 m. We convert through <strong>TEOS-10</strong>, which is latitude
+    aware, and the value is pinned in a test.</li>
+    <li><strong>Quality control.</strong> We keep Argo QC flags 1 and 2 and
+    discard the rest. A subtlety found the hard way: a level whose
+    <em>pressure</em> flag is bad is unusable even if its temperature flag is
+    good, because we no longer know where the measurement was taken. That rule
+    is enforced across every parameter.</li>
+  </ul>
+  <p>Output is a <strong>Zarr</strong> store, NetCDF array data re&#8209;chunked
+  so a browser can fetch one block over HTTP instead of a whole file, plus a
+  <strong>Parquet</strong> table of 30,012 quality&#8209;controlled levels.</p>
+
+  <h3>4.4 The API, and the four plugins</h3>
+  <p>FastAPI in Python, sixteen routes: <code>/catalog</code>,
+  <code>/field</code>, <code>/isosurface</code>, <code>/currents</code>,
+  <code>/profiles</code> and <code>/profiles/{id}</code>,
+  <code>/scorecard</code>, <code>/warnings</code>, <code>/storyboards</code>,
+  <code>/plugins</code> and <code>/plugins/reload</code>,
+  <code>/ingest/sagarnode</code> and <code>/sagarnode</code>,
+  <code>/healthz</code>, plus <strong><code>/wms</code> and
+  <code>/wcs</code></strong>. That last pair is requirement F7 and the strongest
+  deployment argument in the project: because the platform speaks WMS 1.3.0 and
+  WCS 1.0.0, the desktop software INCOIS already runs can read from it on
+  installation day, with no adapter to write.</p>
+  <table>
+    <tr><th style="width:22%">Plugin</th><th style="width:18%">Kind</th><th>What it proves</th></tr>
+    <tr><td><code>insitu_tac</code></td><td>Source reader</td><td>A new observation format can be taught to the platform. Carries five documented defect handlers.</td></tr>
+    <tr><td><code>rama_mooring</code></td><td>Source reader</td><td>A moored buoy, one of the sensor types F6 names explicitly.</td></tr>
+    <tr><td><code>d26_isotherm</code></td><td>Derived field</td><td>Depth of the 26 degree isotherm. Nothing measures it; it is computed, then served like any stored variable, including through WMS and WCS.</td></tr>
+    <tr><td><code>density_sigma0</code></td><td>Derived field</td><td>Potential density anomaly via TEOS-10, with real thermodynamics behind it.</td></tr>
+  </table>
+
+  <h3>4.5 The browser</h3>
+  <p>Next.js 15, React 19 and TypeScript; <strong>CesiumJS</strong> for the
+  globe, <strong>deck.gl</strong> for custom WebGL layers,
+  <strong>ECharts</strong> for profile plots, and Zustand holding one
+  serializable scene state object that the interface, deep links and the agent
+  all mutate through the same door. Volume rendering follows the performance
+  budget in order: stacked depth&#8209;slice textures first because they always
+  work, server&#8209;precomputed isosurface meshes second, GPU ray marching last
+  and only where the frame rate holds. Measured on the demo laptop: 60 frames
+  per second at 1920 by 1080 on the integrated chip, against a target of 60 and
+  a floor of 30.</p>
+
+  <h3>4.6 The agent, HazardWatch, SagarNode, offline</h3>
+  <p><strong>Eight agent tools</strong>, each a thin call to a route above:
+  <code>search_catalog</code>, <code>get_field_summary</code>,
+  <code>find_profiles</code>, <code>get_profile</code>,
+  <code>compare_model_obs</code>, <code>get_warnings</code>,
+  <code>list_storyboards</code>, and <code>set_scene</code>, which is the only
+  way the agent can affect what is drawn. A guard runs over every finished
+  answer regardless of what produced it, and a question outside the tool set
+  gets a refusal listing what the tools can actually do.</p>
+  <p><strong>HazardWatch</strong> turns a parsed CAP bulletin into an event,
+  severity, urgency, certainty, polygon and validity window, drawn as a
+  coloured area with a pulsing border for immediate urgency. The 15 bulletins
+  were reduced from roughly 114,000 polygon vertices to 3,390 by simplification
+  at a hundredth of a degree, which is what makes them cheap enough to draw
+  every frame.</p>
+  <p><strong>SagarNode</strong> is about 230 lines of ESP32 sketch sampling a
+  DS18B20 probe, a TDS probe and a turbidity sensor at one hertz with a
+  ten&#8209;sample median filter, publishing JSON over MQTT with an HTTP POST
+  fallback because campus WiFi frequently blocks the MQTT port. It is
+  registered in the same YAML file as every other source. A rolling z&#8209;score
+  trips a threshold and publishes onto the same CAP bus HazardWatch reads.</p>
+  <p><strong>Offline</strong> is the default: the <code>OFFLINE</code>
+  environment variable defaults to 1, so you opt in to touching the network
+  rather than out. The API has no HTTP client in its dependency list and an
+  assertion that fails if one appears. Exactly one file in the repository
+  reaches the network, <code>tools/fetch_sample.py</code>, and the running
+  service never imports it.</p>
+</section>
+
+<!-- ============ PART 5 ============ -->
+<section class="part" id="p5">
+  <div class="partmark">Part 5</div>
+  <h2>What is built, what is not, and the evidence</h2>
+  <p class="sub">A status table is only useful if it is willing to say no.</p>
+
+  <table>
+    <tr><th style="width:6%">#</th><th style="width:24%">Requirement</th><th style="width:13%">Verdict</th><th>The gap, if any</th></tr>
+    <tr><td><b>F1</b></td><td>3D volumetric rendering</td><td><span class="pill t">Partly</span></td><td>All three named techniques built, six gridded fields render. Chlorophyll is <b>deliberately disabled as a gridded field</b>: the INCOIS series ends in 2020 and cannot honestly share a 2026 time scrubber. It is served as contemporary BGC float data instead.</td></tr>
+    <tr><td><b>F2</b></td><td>Instrument data overlay</td><td><span class="pill">Met</span></td><td>None. All four named classes live, plus a moored buoy.</td></tr>
+    <tr><td><b>F3</b></td><td>Multi-format ingestion</td><td><span class="pill">Met</span></td><td>None.</td></tr>
+    <tr><td><b>F4</b></td><td>Colorbar and controls</td><td><span class="pill">Met</span></td><td>None.</td></tr>
+    <tr><td><b>F5</b></td><td>Web-based, scalable</td><td><span class="pill t">Partly</span></td><td>The Docker path is authored and <b>has never been executed</b>, because Docker is not installed on the build machine.</td></tr>
+    <tr><td><b>F6</b></td><td>Extensible design</td><td><span class="pill">Met</span></td><td>None. Both extension points have running examples; the device path accepts a plain <code>curl</code> as a sufficient sensor.</td></tr>
+    <tr><td><b>F7</b></td><td>Open standards</td><td><span class="pill">Met</span></td><td>None. Stored and derived variables both served through WMS and WCS.</td></tr>
+    <tr><td colspan="4" style="background:#EDF2F5;font-weight:600;padding-top:2.5mm">Beyond the requirement list</td></tr>
+    <tr><td></td><td>Class-4 scorecard</td><td><span class="pill">Built</span></td><td>Bias +0.026 degrees, RMSE 0.602, 11,718 pairs, worst band 50 to 100 m at 2.07 degrees. It also counts and prints the 4,672 levels it could not use, with a reason for each.</td></tr>
+    <tr><td></td><td>HazardWatch</td><td><span class="pill">Built</span></td><td>15 CAP bulletins parsed and drawn. 12 real, 3 rehearsals marked EXERCISE.</td></tr>
+    <tr><td></td><td>Guided tours, offline, SagarNode</td><td><span class="pill">Built</span></td><td>Six tours and 43 steps; offline enforced by the dependency list; firmware, endpoint, globe glyph and alert path all working.</td></tr>
+    <tr><td></td><td>Samudra Sahayak</td><td><span class="pill t">Partly</span></td><td>Tools, schemas, guard, citations and tool trace are all real. <b>The planner is a deterministic router, not a language model.</b></td></tr>
+    <tr><td></td><td>Voice, Indian languages</td><td><span class="pill c">Not built</span></td><td>Bhashini and the speech stack are in the design documents. No speech code exists in the repository today.</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <span class="lbl">The one thing most likely to be misread</span>
+    <p>Every answer the question box gives is tagged <code>planner: rules</code>
+    in the interface. A demo that lets an audience believe a language model is
+    reasoning when a regular expression is matching has misled them, and a
+    reviewer who works that out unprompted has caught us rather than been told.
+    The reason it is rules today is practical: an air&#8209;gapped demo rules
+    out a cloud model, no local model server is installed, and a small local
+    model doing reliable tool calling is a week of work with a real chance of
+    failing on stage. What matters is that the <em>shape</em> is real. The tools
+    are the tools a model would be handed, with the schemas it would be handed,
+    and the guard that stops fabrication already runs on every answer. When a
+    model lands it replaces one function, which means the safety layer will
+    have been in production for weeks before the thing it guards against
+    becomes possible.</p>
+  </div>
+
+  <h3>Evidence</h3>
+  <div class="stats">
+    <div class="stat"><b>567</b><span>tests: 485 API, 71 agent, 11 browser</span></div>
+    <div class="stat"><b>60</b><span>fps at 1920 by 1080, integrated chip</span></div>
+    <div class="stat"><b>11,718</b><span>model to observation pairs scored</span></div>
+    <div class="stat"><b>0.602</b><span>degrees RMSE, bias +0.026</span></div>
+  </div>
+  <p>The test distribution is itself an argument: the heaviest suites are on
+  the data plane, because that is where a silent error produces a convincing
+  picture of the wrong ocean. Plugins 71, text profiles 66, OGC 58, CAP 47,
+  field and isosurface and currents 72, storyboards 30, and 141 across
+  SagarNode, scorecard, density, Argo, CF edge cases, colormaps and offline.
+  Reproduce with <code>./tasks.ps1 test</code> and <code>./tasks.ps1 e2e</code>;
+  <code>python tools/validate_rmse.py</code> re&#8209;derives the scorecard.</p>
+  <p><strong>Three things we found by checking rather than assuming.</strong>
+  A counter reporting re&#8209;sorted profiles said 475; the true answer was 3,
+  the rest being ascending legs already dropped upstream. A count of levels
+  with no pressure said 20,667; the true answer was zero, because array padding
+  in a ragged file had been counted as missing data. And we recorded F2 as
+  unachievable after searching only Copernicus's rolling thirty&#8209;day data
+  part; the archive had the glider and CTD data, the requirement was met, and
+  the reasoning error is written into the status document rather than quietly
+  corrected.</p>
+</section>
+
+<!-- ============ GLOSSARY ============ -->
+<section class="part" id="p6">
+  <div class="partmark">Reference</div>
+  <h2>Glossary</h2>
+
+  <dl class="gloss">
+    <dt>ADCP</dt><dd>Acoustic Doppler Current Profiler. Measures water speed at many depths using sound.</dd>
+    <dt>Argo float</dt><dd>A drifting robot that sinks to about 2000 m and rises every ten days, recording temperature and salinity. Roughly four thousand active worldwide.</dd>
+    <dt>BGC float</dt><dd>A biogeochemical Argo float, adding oxygen, chlorophyll, nitrate, pH and backscatter.</dd>
+    <dt>Bias and RMSE</dt><dd>Two ways of scoring a forecast. Bias is the average signed error, so it says whether the model runs warm or cold. RMSE is the typical error size regardless of sign.</dd>
+    <dt>CAP</dt><dd>Common Alerting Protocol. An OASIS standard XML format for public warnings, carrying event, severity, urgency, certainty and area. India's backbone for it is NDMA SACHET.</dd>
+    <dt>CF Conventions</dt><dd>Climate and Forecast. The agreed rules for how a NetCDF file describes its own contents.</dd>
+    <dt>Class 4</dt><dd>The GODAE OceanView protocol for verifying forecasts in observation space, interpolating the model to each observation's exact position, depth and time.</dd>
+    <dt>CTD cast</dt><dd>Conductivity, Temperature, Depth. An instrument package lowered from a ship. Salinity is computed from conductivity.</dd>
+    <dt>Digital twin</dt><dd>A continuously updated computational model of a physical system, detailed enough to be interrogated in its place.</dd>
+    <dt>ERDDAP</dt><dd>A scientific data server exposing the same dataset in many formats over HTTP. INCOIS runs one, and we consume it rather than duplicating its data.</dd>
+    <dt>Glider</dt><dd>A winged underwater robot that changes buoyancy to fly up and down in a sawtooth, surveying a chosen line.</dd>
+    <dt>HF radar</dt><dd>Shore radar measuring surface currents out to about a hundred kilometres.</dd>
+    <dt>INCOIS</dt><dd>Indian National Centre for Ocean Information Services, Hyderabad, under the Ministry of Earth Sciences. Author of the problem statement.</dd>
+    <dt>In situ</dt><dd>"In position". A measurement taken by an instrument physically in the water, as opposed to a simulation or satellite estimate.</dd>
+    <dt>Isosurface</dt><dd>The surface joining every point of equal value in a volume. The 26 degree isosurface bounds the water a cyclone feeds on.</dd>
+    <dt>Marching cubes</dt><dd>The standard algorithm for extracting an isosurface from a 3D grid.</dd>
+    <dt>Mooring</dt><dd>An instrumented line anchored to the seabed, reporting from fixed depths. RAMA is the Indian Ocean array.</dd>
+    <dt>NetCDF</dt><dd>Network Common Data Form. The standard self&#8209;describing binary format for multidimensional scientific arrays.</dd>
+    <dt>OGC WMS, WCS</dt><dd>Open Geospatial Consortium standards. WMS returns a rendered map picture, WCS returns the underlying numbers. Speaking both means existing GIS software reads our data unmodified.</dd>
+    <dt>Parquet</dt><dd>A columnar table format, efficient to filter and read in parts. It holds our observation levels.</dd>
+    <dt>Profile, cast</dt><dd>One column of measurements at a single place and time.</dd>
+    <dt>QC flag</dt><dd>Quality control flag, recording how far a measured value can be trusted. We keep 1 and 2, good and probably good.</dd>
+    <dt>Reanalysis</dt><dd>A model run over the past with all observations available, giving the best reconstruction of what the ocean did. GLORYS is the Copernicus one.</dd>
+    <dt>TEOS-10</dt><dd>Thermodynamic Equation of Seawater 2010. Used here to convert pressure to depth and to derive density.</dd>
+    <dt>Thermocline</dt><dd>The depth band where temperature falls fastest, separating the warm surface layer from the cold deep. Our model error is largest there.</dd>
+    <dt>Volumetric rendering</dt><dd>Drawing the interior of a 3D body of data rather than its surface or a flat slice.</dd>
+    <dt>WMO identifier</dt><dd>The World Meteorological Organization number uniquely identifying an instrument. Ours appear in every citation.</dd>
+    <dt>Zarr</dt><dd>A format storing an array as many small chunk files, so a browser can fetch one block over HTTP instead of a whole dataset.</dd>
+  </dl>
+
+  <h3>Key references</h3>
+  <ol class="refs">
+    <li>Ryan et al. 2015, GODAE OceanView Class 4 verification. <i>J. Operational Oceanography</i> 8. The scorecard backbone.</li>
+    <li>Wong et al. 2020, Argo two million profiles. <i>Frontiers in Marine Science</i> 7:700. The QC flag policy.</li>
+    <li>Qin et al. 2021, web 3D framework for ocean forecast data. <i>Env. Modelling and Software</i> 135:104908. The closest ancestor.</li>
+    <li>Yu, Qin and Xu 2025, WebGPU volume rendering. <i>Applied Sciences</i> 15(5):2782. Early ray termination, adopted.</li>
+    <li>Liu, Silver and Bemis 2019, 3D ocean eddies in browsers. <i>IEEE Access</i> 7. The two tier rendering rule.</li>
+    <li>Signell and Pothina 2019, coastal model analysis in the cloud. <i>JMSE</i> 7(4):110. The Zarr decision.</li>
+    <li>Tucker et al. 2020, Argovis. <i>JTECH</i> 37(3). The co&#8209;location API semantics we mirror.</li>
+    <li>Blower et al. 2013, ncWMS. <i>Env. Modelling and Software</i> 47. The 2D status quo, and the vertical section idea.</li>
+    <li>Tzachor et al. 2023, digital twins of the ocean. <i>npj Ocean Sustainability</i> 2:16. Problem framing.</li>
+    <li>pyParaOcean, IISc Bangalore, EnvirVis 2023 and <i>CGF</i> 2025. Our most serious technical prior art.</li>
+    <li>Khanal et al. 2024, FathomGPT. <i>ACM UIST</i>. Pre&#8209;register the tools, never generate code on stage.</li>
+    <li>Balakrishnan Nair et al. 2013, INCOIS Ocean State Forecast validation. <i>Current Science</i> 105(2).</li>
+  </ol>
+
+  <p class="endnote">SagarDrishti, Team PixelPaws. Problem statement SIH26067,
+  Ministry of Earth Sciences and INCOIS. Figures measured on the build machine
+  on 19 and 20 September 2026. Screenshots are unstaged captures of the running
+  build with the network disabled.</p>
+</section>
+</body>
+</html>
