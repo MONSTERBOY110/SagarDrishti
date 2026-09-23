@@ -53,7 +53,7 @@ flowchart LR
 |---|---|---|
 | Frontend framework | **Next.js 15 + TypeScript** | Lead's proven stack; static-export friendly for offline mode |
 | Globe | **CesiumJS** | PS names it; geodetic accuracy, built-in terrain, time-dynamic primitives |
-| Volumetrics | **deck.gl custom layers + raw WebGL2 shaders** (three.js fallback) | Cesium alone can't do volume slicing/isosurfaces well; deck.gl interleaves with Cesium; marching-cubes isosurfaces precomputed server-side (Python `scikit-image`) when GPU budget is tight |
+| Volumetrics | **Three.js + raw WebGL2 shaders**, beside Cesium rather than inside it | Cesium alone can't do volume slicing/isosurfaces well; marching-cubes isosurfaces precomputed server-side (Python `scikit-image`). **Built 2026-09-22 and this row was rewritten to match what shipped**: deck.gl was planned as the volumetric host and never used. The volume is a Three.js scene on its own canvas with a `Data3DTexture`, which the PS explicitly permits ("WebGL / Three.js or Cesium.js") and which avoids interleaving two engines in one context |
 | Charts | **Apache ECharts** | Profile plots (depth-vs-variable), RMSE scorecards; canvas perf |
 | State | Zustand + a single serializable `SceneState` object | Deep-linkable scenes; the agent mutates the same state object the UI does |
 | Backend | **FastAPI (Python 3.12)** | PS suggests REST/OPeNDAP; xarray ecosystem is Python |
@@ -96,7 +96,13 @@ flowchart LR
 
 ### M3 — 3D engine (owner: lead)
 - Cesium globe with GEBCO bathymetry terrain (offline: pre-tiled).
-- Volume rendering strategy (perf-budgeted, in order): (a) stacked depth-slice textures with opacity transfer function — cheap, always works; (b) server-precomputed isosurface meshes (marching cubes) streamed as glTF; (c) GPU ray-marched volume in a custom deck.gl layer — **with early ray termination + adaptive step size** (Yu et al. 2025, PRIOR-ART §E), WebGPU where available / WebGL2 fallback — only where FPS ≥ 45 on the demo laptop.
+- Volume rendering strategy (perf-budgeted, in order): (a) stacked depth-slice textures with opacity transfer function, cheap, always works; (b) server-precomputed isosurface meshes (marching cubes) streamed as glTF; (c) GPU ray-marched volume **with early ray termination** (Yu et al. 2025, PRIOR-ART §E).
+
+- **All three are built as of 2026-09-22, and (c) differs from what this line said.** It shipped as a Three.js scene rather than a custom deck.gl layer, on WebGL2 only rather than WebGPU-where-available, and with a fixed 64 samples per ray rather than an adaptive step size. Three corrections, each for a reason worth recording:
+  - **Three.js, not deck.gl.** deck.gl exists to interleave with Cesium's context, which matters for a layer that must share the globe's depth buffer. The volume does not: it is a separate canvas in the Water Column Studio, so the interleaving is cost with no benefit, and the PS names Three.js in the same breath as Cesium.
+  - **WebGL2 only.** A 3D texture has no WebGL1 equivalent, so the component checks `isWebGL2` and says so in words rather than rendering an empty box. WebGPU would buy nothing at 8,000 voxels and would add a second shader path to keep honest.
+  - **Fixed step count.** Adaptive stepping pays off when the volume is large enough for the empty-space skip to save real time. This one is 24 by 21 by 16, about 8,000 voxels: the cost is screen pixels times steps, not data, and 64 fixed steps already sit comfortably above the 24 levels the data has. Early ray termination is kept because it is nearly free and does help.
+  - Strategy (c) was the perf-gated option "only where FPS >= 45". Measured 60 fps with the volume spinning at 465 by 411 px, so the gate is met with room. It is not gated at runtime: `apps/web/components/VolumeCube.tsx` falls back to a stated message, not to a silent (a).
 - **Two-tier rendering rule** (Liu et al. 2019): raw volume only for the scalar being actively inspected; eddies/fronts extracted server-side and streamed as light geometry.
 - Current vectors: GPU particle advection (like earth.nullschool but depth-resolved; seed density adaptive).
 - Argo/Glider entities: Cesium point primitives with time-dynamic positions; click → ECharts profile panel; glider tracks as depth-colored polylines.

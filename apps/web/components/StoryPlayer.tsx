@@ -35,6 +35,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api, type Tour, type TourStep } from "@/lib/api";
 import { INITIAL_SCENE, useScene } from "@/lib/scene";
+import { STAGES, usePanels } from "@/lib/panels";
 
 /** Everything the scene store actually holds, read from the store itself.
  *
@@ -90,6 +91,21 @@ export default function StoryPlayer() {
     const usable: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(patch)) if (LIVE_KEYS.has(k)) usable[k] = v;
     if (Object.keys(usable).length > 0) useScene.setState(usable as never);
+
+    /* The stage, which is not the scene. Checked against what this client can
+       actually raise and reported out loud when it cannot, the same treatment
+       an unknown patch key gets: the loader keeps its own copy of the list and
+       a drift test holds the two together, but a server allowlist is not a
+       promise about THIS build. Set on EVERY step rather than only on the ones
+       that ask for it, so a tour cannot leave the studio standing over the
+       four beats that follow it. */
+    if (step.stage && !STAGES.has(step.stage)) {
+      setProblem(
+        `This step asks to raise ${step.stage}, which this build has no such ` +
+          "surface for. It has been skipped rather than silently ignored.",
+      );
+    }
+    usePanels.getState().setStudio(step.stage === "studio");
   }, []);
 
   const stop = useCallback(() => {
@@ -98,6 +114,8 @@ export default function StoryPlayer() {
     setRunning(false);
     setActive(null);
     setIndex(0);
+    // Give the screen back exactly as it was found.
+    usePanels.getState().endTour();
   }, []);
 
   const goto = useCallback(
@@ -113,12 +131,48 @@ export default function StoryPlayer() {
     (tour: Tour) => {
       setProblem(null);
       setOpen(false);
+      /* A tour narrates the hazard card and the mark legend BY NAME. Since the
+         opening frame hides them, playing one against a bare globe would
+         describe panels that are not on screen. So a tour takes the whole
+         chrome for its duration and hands it back on stop. */
+      usePanels.getState().beginTour();
       setActive(tour);
       setRunning(true);
       goto(tour, 0);
     },
     [goto],
   );
+
+  /* NEVER STRAND THE CHROME. `endTour()` is otherwise only reachable from this
+     component's own stop(), so if this component ever goes away while a tour
+     is running, the panel store keeps the tour's layout with `beforeTour`
+     non-null and nothing left on screen able to put it back. page.tsx now
+     hides this panel rather than unmounting it for exactly that reason; this
+     is the belt to that pair of braces, for a real unmount such as a route
+     change. */
+  useEffect(
+    () => () => {
+      if (usePanels.getState().beforeTour) usePanels.getState().endTour();
+    },
+    [],
+  );
+
+  /* A TOUR IS ON, said to the document so CSS can hear it.
+   *
+   * The narration lives in the foot band and the water column studio is a
+   * modal, so during the cube step one of them has to yield. Out of a tour the
+   * modal wins, which is what a modal is for: it has its own Close and Escape,
+   * and a dock floating over it would be wrong. During a tour the narration
+   * wins, because a presenter reads the step off the screen and a video whose
+   * caption is behind the picture is a take nobody can use. Both rules live in
+   * globals.css, keyed on this attribute, because they are layout. */
+  useEffect(() => {
+    if (!active) return;
+    document.body.dataset.tour = "running";
+    return () => {
+      delete document.body.dataset.tour;
+    };
+  }, [active]);
 
   /* Advance on a timer while running. The hold is per step and authored,
      because a sentence about the oxygen minimum needs longer on screen than

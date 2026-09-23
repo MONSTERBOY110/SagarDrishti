@@ -111,6 +111,23 @@ async function sceneReady(page: Page) {
   );
 }
 
+/** Open one of the overlays the opening frame deliberately hides.
+ *
+ * The first frame is the globe, the cartouche and the verification card, and
+ * nothing else: judges reviewing the prototype said the panels covered so much
+ * screen that the water had no room. Everything else is one dock button away.
+ *
+ * These tests drive the product through that same button rather than through a
+ * test-only escape hatch, because a suite that exercises a layout no user ever
+ * sees is worse than no suite. Idempotent, so a test may ask twice. */
+async function openPanel(page: Page, label: string) {
+  const tab = page.getByRole("button", { name: label, exact: true });
+  await tab.waitFor({ timeout: 30_000 });
+  if ((await tab.getAttribute("aria-pressed")) === "true") return;
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-pressed", "true");
+}
+
 test.describe("SagarDrishti demo path", () => {
   test("the water column renders, an instrument opens, and nothing leaves the machine", async ({
     page,
@@ -121,6 +138,47 @@ test.describe("SagarDrishti demo path", () => {
     await page.goto(PROBE, { waitUntil: "networkidle" });
     await recordRenderer(page);
     await sceneReady(page);
+
+    /* --- 0a. THE OPENING FRAME IS THE GLOBE ---------------------------------
+       Judges reviewing the prototype said the panels covered so much screen
+       that the water had no room, and the answer was to open with one panel
+       and put the other eight behind a dock. Nothing asserted that, which
+       meant the regression could come back in one line: every other test in
+       this file opens the panels it needs, so a store that opened all eight on
+       load would keep the whole suite green while restoring exactly the
+       letterbox the change exists to remove.
+
+       The verification card is the one that earns the empty screen: it answers
+       a question nobody else on this problem statement answers. */
+    const pressed = page.locator('.dock__tab[aria-pressed="true"]');
+    await expect(pressed).toHaveCount(1);
+    await expect(pressed).toHaveText(/Verification/);
+    await expect(page.locator('[aria-label="Model verification"]')).toBeVisible();
+    /* NOT VISIBLE, rather than not present. Three of these are deliberately
+       MOUNTED and hidden rather than unmounted, because mounting is what does
+       their work: HazardWatch is what fetches the warnings the globe draws,
+       the sensor card is what polls the rig, and the tour player holds a
+       running tour's entire state. Asserting absence here failed on exactly
+       that, correctly. What the opening frame promises is that they are not
+       ON it, which is what visibility means. */
+    for (const closed of [
+      ".panel-stack",
+      ".legend",
+      ".catalog",
+      ".hazard",
+      ".ask",
+      ".node",
+      ".tour",
+    ]) {
+      await expect(
+        page.locator(closed),
+        `${closed} must not be on the opening frame`,
+      ).not.toBeVisible();
+    }
+    // And the way back is on screen, named, with its own key printed on it.
+    await expect(page.getByRole("button", { name: /Water only/ })).toBeVisible();
+
+    await openPanel(page, "Station sheet");
 
     const scene = await page.evaluate(() => {
       const s = (
@@ -342,6 +400,7 @@ test.describe("SagarDrishti demo path", () => {
     const w = watch(page);
     await page.goto(PROBE, { waitUntil: "networkidle" });
     await sceneReady(page);
+    await openPanel(page, "Marks");
 
     const legend = page.locator(".legend");
     await expect(legend).toContainText("Glider");
@@ -444,6 +503,7 @@ test.describe("SagarDrishti demo path", () => {
     const w = watch(page);
     await page.goto(PROBE, { waitUntil: "networkidle" });
     await sceneReady(page);
+    await openPanel(page, "Marks");
 
     // The legend names only the classes present, so its rows ARE the claim.
     // Three instrument classes are live: core Argo floats, BGC floats, and a
@@ -585,6 +645,7 @@ test.describe("SagarDrishti demo path", () => {
     const w = watch(page);
     await page.goto(PROBE, { waitUntil: "networkidle" });
     await sceneReady(page);
+    await openPanel(page, "Station sheet");
 
     const probe = () =>
       page.evaluate(() => {
@@ -770,6 +831,8 @@ test.describe("SagarDrishti demo path", () => {
     const w = watch(page);
     await page.goto(PROBE, { waitUntil: "networkidle" });
     await sceneReady(page);
+    await openPanel(page, "Hazards");
+    await openPanel(page, "Station sheet");
 
     const panel = page.locator('[aria-label="HazardWatch warnings"]');
     await expect(panel).toBeVisible();
@@ -858,6 +921,7 @@ test.describe("SagarDrishti demo path", () => {
     const w = watch(page);
     await page.goto(PROBE, { waitUntil: "networkidle" });
     await sceneReady(page);
+    await openPanel(page, "Tours");
 
     await page.locator(".tour__open").click();
     const picks = page.locator(".tour__pick");
@@ -881,7 +945,15 @@ test.describe("SagarDrishti demo path", () => {
     await stage.getByRole("button", { name: "Pause" }).click();
     const profile = page.locator('[aria-label="Instrument profile"]');
     for (let i = 0; i < 6; i++) {
-      const header = await profile.locator("h2").innerText();
+      /* The panel does not exist until a cast is open. Its empty state used
+         to be three paragraphs explaining the mark shapes, which is what the
+         Marks legend says one dock button away, so on the opening frame it was
+         300 px of text competing with the verification card. Early tour steps
+         therefore have no profile at all, and asking a missing element for its
+         text throws rather than returning "". */
+      const header = (await profile.locator("h2").count())
+        ? await profile.locator("h2").innerText()
+        : "";
       if (/2903831/.test(header)) break;
       await stage.getByRole("button", { name: "Next" }).click();
     }
@@ -892,6 +964,57 @@ test.describe("SagarDrishti demo path", () => {
 
     // --- and shows what the sentence rests on -------------------------------
     await expect(stage.locator(".tour__evidence li").first()).not.toBeEmpty();
+
+    /* --- THE SUBMISSION TOUR RAISES THE VOLUMETRIC CUBE --------------------
+       This is the beat that answers the review the prototype actually got, and
+       it is the only one a tour cannot reach through a scene patch: the studio
+       is a modal, chrome rather than scene state, so the tour format gained a
+       `stage` field for it. A server test pins that the step is IN the tour.
+       What is pinned here is the half the server cannot see: that the step
+       actually raises the modal in a browser, and that the modal comes back
+       down again rather than standing over every beat that follows. A tour
+       whose stage never lowered would put a cube over the verification card,
+       which is the one thing the recording plan says never to cover. */
+    await page.keyboard.press("Escape");
+    await expect(stage).toHaveCount(0);
+    await page.locator(".tour__open").click();
+    await page.locator(".tour__pick").filter({ hasText: "The whole story" }).click();
+    await expect(stage).toBeVisible();
+    await stage.getByRole("button", { name: "Pause" }).click();
+
+    const studio = page.locator('[aria-label="Water column studio"]');
+    let raised = false;
+    for (let i = 0; i < 14; i++) {
+      if (await studio.count()) {
+        raised = true;
+        break;
+      }
+      await stage.getByRole("button", { name: "Next" }).click();
+      await page.waitForTimeout(250);
+    }
+    expect(raised, "the submission tour never raises the water column studio").toBe(true);
+    /* `div.cube` alone would ALSO match the failure state, which renders as
+       `<div class="cube cube--failed">` with an apology in it: the one
+       outcome this assertion exists to catch would have kept the job green.
+       Assert the success element and the absence of the failure one, and that
+       three actually put a canvas inside it. */
+    await expect(studio.locator("div.cube:not(.cube--failed)")).toBeVisible({ timeout: 30_000 });
+    await expect(studio.locator(".cube--failed")).toHaveCount(0);
+    await expect(studio.locator("div.cube canvas")).toHaveCount(1);
+    // The next beat is the verification card, and it must not be behind a cube.
+    await stage.getByRole("button", { name: "Next" }).click();
+    await expect(studio).toHaveCount(0);
+    // And leaving the tour never leaves the modal behind either.
+    await stage.getByRole("button", { name: "Back" }).click();
+    await expect(studio).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(studio).toHaveCount(0);
+
+    // Back into the tour the rest of this test drives.
+    await page.locator(".tour__open").click();
+    await page.locator(".tour__pick").filter({ hasText: "The instruments" }).click();
+    await expect(stage).toBeVisible();
+    await stage.getByRole("button", { name: "Pause" }).click();
 
     // --- a presenter can drive it from the keyboard -------------------------
     const before = await stage.locator(".tour__step").innerText();
@@ -921,6 +1044,7 @@ test.describe("SagarDrishti demo path", () => {
     const w = watch(page);
     await page.goto(PROBE, { waitUntil: "networkidle" });
     await sceneReady(page);
+    await openPanel(page, "Agent");
 
     const ask = page.locator('[aria-label="Ask Samudra Sahayak"]');
     await expect(ask).toBeVisible({ timeout: 30_000 });
@@ -987,6 +1111,7 @@ test.describe("SagarDrishti demo path", () => {
     const w = watch(page);
     await page.goto(PROBE, { waitUntil: "networkidle" });
     await sceneReady(page);
+    await openPanel(page, "Station sheet");
 
     const sheet = page.locator('[aria-label="Station sheet"]');
     const block = sheet.locator(".block").filter({ hasText: "Currents" });
@@ -1092,6 +1217,8 @@ test.describe("SagarDrishti demo path", () => {
     const w = watch(page);
     await page.goto(PROBE, { waitUntil: "networkidle" });
     await sceneReady(page);
+    await openPanel(page, "Marks");
+    await openPanel(page, "Hazards");
 
     // --- 1. nothing plugged in, nothing drawn, nothing claimed --------------
     // The route answers an EMPTY station rather than a 404, because a 404
@@ -1137,6 +1264,12 @@ test.describe("SagarDrishti demo path", () => {
     expect(quiet.alert, "a settled tank must not trip anything").toBeNull();
 
     await page.reload({ waitUntil: "networkidle" });
+    /* A reload is a fresh panel store, so the overlays this test reads are
+       closed again. Panel visibility is chrome, deliberately not part of the
+       deep-linkable scene state, so it does not survive navigation. */
+    await sceneReady(page);
+    await openPanel(page, "Marks");
+    await openPanel(page, "Sensor");
     await sceneReady(page);
 
     const panel = page.locator(".node");
@@ -1170,7 +1303,9 @@ test.describe("SagarDrishti demo path", () => {
     expect((await warm.json()).alert).toMatch(/Rapid warming/);
 
     await page.reload({ waitUntil: "networkidle" });
+    /* The second fresh panel store in this test. See the note on the first. */
     await sceneReady(page);
+    await openPanel(page, "Sensor");
     await expect(panel).toBeVisible({ timeout: 30_000 });
 
     // The reading itself, on screen.
@@ -1223,6 +1358,11 @@ test.describe("SagarDrishti demo path", () => {
     );
     expect(overflow, "a narrow window must not scroll sideways").toBe(false);
 
+    /* This test is about STACKING: that a narrow window puts everything in one
+       honest column instead of overlapping. It therefore needs the panels it
+       measures to be on screen, which on the opening frame they are not. */
+    await openPanel(page, "Station sheet");
+
     const boxes = await page.evaluate(() => {
       const pick = (q: string) => {
         const el = document.querySelector(q);
@@ -1242,5 +1382,111 @@ test.describe("SagarDrishti demo path", () => {
 
     await expect(page.locator(".cartouche")).toContainText("incois_argo_10d_VAM");
     expect(w.offOrigin).toEqual([]);
+  });
+  test("the chrome hides and comes back, and the scene cannot be lost", async ({ page }) => {
+    /* The three things judges asked for on 21 September, none of which any
+       test touched until now: that the panels get out of the way, that a
+       guided tour hands the screen back exactly as it found it, and that the
+       camera stays on the water instead of wandering off the planet.
+
+       All three are one-action behaviours a presenter performs on stage, and
+       all three are the kind that break silently: the panel store is not in
+       the deep link, the camera is not in any assertion, and a tour that
+       leaves eight overlays open still LOOKS like a tour that ended. */
+    const w = watch(page);
+    await page.goto(PROBE, { waitUntil: "networkidle" });
+    await sceneReady(page);
+
+    /* The chrome toggle is EXCLUDED. It is a dock tab too, and its pressed
+       state means "the chrome is hidden", so counting it made "nothing is
+       open" read as one thing open. The count here is panels. */
+    const pressed = () =>
+      page.locator('.dock__tab:not(.dock__tab--chrome)[aria-pressed="true"]').count();
+    const drawn = () =>
+      page.evaluate(() =>
+        [".panel-stack", ".legend", ".catalog", ".hazard", ".ask", ".node", ".tour"].filter((q) => {
+          const el = document.querySelector(q);
+          if (!el) return false;
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && getComputedStyle(el).display !== "none";
+        }),
+      );
+
+    // --- 1. "water only" means it, and it is reversible ---------------------
+    await openPanel(page, "Station sheet");
+    await openPanel(page, "Marks");
+    const before = await pressed();
+    expect(before).toBe(3); // Verification, Station sheet, Marks
+
+    await page.keyboard.press("h");
+    expect(await pressed(), "h must leave no tab reading as open").toBe(0);
+    expect(await drawn(), "h must leave nothing but the water").toEqual([]);
+
+    await page.keyboard.press("h");
+    expect(await pressed(), "h again must restore the same set, not a default").toBe(before);
+
+    /* And the key does not fire while somebody is typing, which is the bug
+       that would only appear when a presenter asks the agent a question. */
+    await openPanel(page, "Agent");
+    const ask = page.locator(".ask__input");
+    if (await ask.count()) {
+      await ask.fill("how warm is it at 100 m?");
+      await ask.press("h");
+      expect(await pressed(), "h inside a text field must type, not hide the screen").toBeGreaterThan(0);
+      await expect(ask).toHaveValue(/h$/);
+    }
+
+    // --- 2. a tour borrows the screen and gives it back ---------------------
+    await openPanel(page, "Tours");
+    const kept = await pressed();
+    await page.locator(".tour__open").click();
+    await page.locator(".tour__pick").first().click();
+    const stage = page.locator('[aria-label="Guided tour"]');
+    await expect(stage).toBeVisible();
+    // A tour narrates the hazard card and the mark legend by name, so it opens
+    // everything for its own duration.
+    expect(await pressed(), "a tour must not narrate panels that are not there").toBe(8);
+    await page.keyboard.press("Escape");
+    await expect(stage).toHaveCount(0);
+    expect(await pressed(), "a tour must hand back the layout it borrowed").toBe(kept);
+
+    // --- 3. the scene cannot be flown away from ------------------------------
+    const camera = () =>
+      page.evaluate(() => {
+        const c = (window as unknown as { __sagarScene?: any }).__sagarScene.viewer.camera;
+        const p = c.positionCartographic;
+        return { lon: (p.longitude * 180) / Math.PI, lat: (p.latitude * 180) / Math.PI, h: p.height };
+      });
+    const home = await camera();
+    expect(home.h, "the opening camera must be above the water, not inside it").toBeGreaterThan(0);
+
+    /* Zoom in hard, THROUGH THE WHEEL. The minimum distance lives on Cesium's
+       screen-space camera controller, so it governs what a person can do and
+       not what `camera.zoomIn` can do: driving the camera directly would sail
+       straight through the bound and prove nothing about the control a judge
+       actually uses. */
+    await page.mouse.move(960, 520);
+    for (let i = 0; i < 60; i++) await page.mouse.wheel(0, -400);
+    await page.waitForTimeout(1200);
+    const close = await camera();
+    /* ABOVE THE SEA SURFACE. This assertion found a real defect the first time
+       it ran: the wheel drove the camera to 151 km BELOW the ellipsoid, inside
+       the Earth, looking out at the data from behind it. The zoom bound is
+       measured from the lookAt origin, and that origin is 190 km down because
+       the column is exaggerated 200 times, so no value of it could have
+       stopped this. Collision detection does. */
+    expect(close.h, "the wheel must not fly the camera underground").toBeGreaterThan(0);
+    expect(close.h, "and it must still let a judge get close").toBeLessThan(home.h);
+
+    // And the way back is one visible control, not a technique.
+    await page.getByRole("button", { name: "Recentre", exact: true }).click();
+    await page.waitForTimeout(2500);
+    const back = await camera();
+    expect(Math.abs(back.lon - home.lon), "Recentre must return to the box").toBeLessThan(6);
+    expect(Math.abs(back.lat - home.lat), "Recentre must return to the box").toBeLessThan(6);
+    expect(back.h, "Recentre must pull back out").toBeGreaterThan(close.h);
+
+    expect(w.offOrigin, "PRD F11: none of this may reach the network").toEqual([]);
+    expect(w.consoleErrors, "no console error").toEqual([]);
   });
 });

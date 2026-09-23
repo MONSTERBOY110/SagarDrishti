@@ -29,6 +29,7 @@ import ScorecardPanel from "@/components/ScorecardPanel";
 import StoryPlayer from "@/components/StoryPlayer";
 import SagarNodePanel from "@/components/SagarNodePanel";
 import ColumnStudio from "@/components/ColumnStudio";
+import PanelDock from "@/components/PanelDock";
 import LayerCatalog from "@/components/LayerCatalog";
 import StationLegend from "@/components/StationLegend";
 import StationSheet from "@/components/StationSheet";
@@ -49,12 +50,24 @@ import {
 import { describeMesh } from "@/lib/isosurface";
 import { CURRENT_SOURCE, describeCurrents } from "@/lib/currents";
 import { defaultIsovalue, useScene } from "@/lib/scene";
+import { panelVisible, usePanels } from "@/lib/panels";
+import { useTimePlayback } from "@/lib/playback";
 
 // Cesium is browser-only and large; it must never enter the server bundle.
 const OceanGlobe = dynamic(() => import("@/components/OceanGlobe"), { ssr: false });
 
 export default function Page() {
   const scene = useScene();
+  /* Which overlays are on screen. Chrome, not scene state: see lib/panels.ts
+     for why it is a separate store. */
+  const panelOpen = usePanels((p) => p.open);
+  const chromeHidden = usePanels((p) => p.chromeHidden);
+  /* The studio lives in that store too, so a guided tour can raise it: the
+     volumetric cube is inside it and the submission video is a tour replay. */
+  const studioOpen = usePanels((p) => p.studioOpen);
+  const setStudioOpen = usePanels((p) => p.setStudio);
+  const shows = (id: Parameters<typeof panelVisible>[2]) =>
+    panelVisible(panelOpen, chromeHidden, id);
   const [dataset, setDataset] = useState<DatasetInfo | null>(null);
   const [columns, setColumns] = useState<Record<string, FieldColumn>>({});
   const [profiles, setProfiles] = useState<ProfileGlyph[]>([]);
@@ -86,7 +99,6 @@ export default function Page() {
   /* The water column studio (beat-competition.md T2). Closed by default and
      mounted only while open, so an overlay can never be in the way of the
      scene and a fault in it cannot reach the globe. */
-  const [studioOpen, setStudioOpen] = useState(false);
 
   /* --- load the cast ------------------------------------------------------- */
   useEffect(() => {
@@ -347,6 +359,12 @@ export default function Page() {
     [],
   );
   const onPick = useCallback((id: string | null) => useScene.setState({ selection: id }), []);
+  /* THE CLOCK RUNS HERE, not inside the time rule.
+     `playing` is scene state the agent and a tour can both patch, and the
+     control that shows it lives in the station sheet, which is closed on the
+     opening frame. See lib/playback.ts. */
+  useTimePlayback(dataset?.times, scene.time, scene.playing, scene.setTime);
+
   /* A studio with no cast behind it would render an empty frame over the
      scene, so deselecting closes it. */
   useEffect(() => {
@@ -397,6 +415,7 @@ export default function Page() {
       </div>
 
       {/* --- the sheet, and the time rule under it --------------------------- */}
+      {shows("sheet") && (
       <div className="panel-stack">
         <StationSheet
           dataset={dataset}
@@ -450,12 +469,17 @@ export default function Page() {
           />
         )}
       </div>
+      )}
 
       {/* --- the certificate, then the clicked instrument -------------------
           The verification card sits ABOVE the profile, because it is the claim
           the profile is evidence for: a reader meets "the model is 0.60 degC
           off" before they meet one cast that shows why. */}
       <div className="panel-right">
+        {/* The verification card is the one panel the opening frame keeps:
+            it answers a question no other team on this problem statement
+            answers, and it earned the empty screen. */}
+        {shows("scorecard") && (
         <ScorecardPanel
           sourceId={dataset?.id ?? null}
           variable={scene.variable}
@@ -463,10 +487,11 @@ export default function Page() {
             dataset?.variables.find((v) => v.name === scene.variable)?.label ?? scene.variable
           }
         />
+        )}
         {/* Opens the column studio for the cast already on screen. Rendered
             here rather than inside ProfilePanel so that the panel, which the
             browser suite drives heavily, is untouched by this feature. */}
-        {detail && column && (
+        {detail && column && !chromeHidden && (
           <button
             type="button"
             className="tick studio__open"
@@ -475,6 +500,19 @@ export default function Page() {
             Inspect the water column
           </button>
         )}
+        {/* Only once a cast is open. Its empty state is three paragraphs
+            explaining what the mark shapes mean, which is genuinely useful and
+            is also exactly what the Marks legend says, one dock button away.
+            On the opening frame it was 300 px of text competing with the
+            verification card for the only panel the clean frame keeps.
+
+            AND IT OBEYS "water only". The profile is not in the panel dock,
+            because it has no tab of its own: it belongs to the cast that is
+            selected. That meant the pure-globe shot still had a 620 px chart
+            in the top right, which is the one frame that has to be clean. The
+            cast stays selected, so the panel is there again the moment the
+            chrome comes back. */}
+        {(detail || loadingDetail) && !chromeHidden && (
         <ProfilePanel
           detail={detail}
           column={column}
@@ -492,6 +530,7 @@ export default function Page() {
           onFocusDepth={scene.setFocusDepth}
           onClose={() => scene.select(null)}
         />
+        )}
       </div>
 
       {/* The scene in words, for a reader who cannot see the canvas. */}
@@ -519,21 +558,35 @@ export default function Page() {
       {/* --- the open band beside the sheet: what the marks are, and what is
               being warned about over this water (PS F13) ------------------ */}
       <div className="panel-mid">
-        <StationLegend
-          profiles={profiles}
-          platformCount={platformCount}
-          sagarnode={sagarnode !== null}
-        />
+        {shows("legend") && (
+          <StationLegend
+            profiles={profiles}
+            platformCount={platformCount}
+            sagarnode={sagarnode !== null}
+          />
+        )}
         {/* The live rig, above the warnings and below the legend. Absent
-            entirely when nothing is plugged in, which is most of the time. */}
-        <SagarNodePanel onStation={setSagarnode} />
-        <HazardPanel
-          at={column?.time ?? scene.time}
-          bbox={dataset ? dataset.bbox.join(",") : null}
-          rehearsal={scene.rehearsal}
-          onRehearsal={(rehearsal) => useScene.setState({ rehearsal })}
-          onLayer={setWarnings}
-        />
+            entirely when nothing is plugged in, which is most of the time.
+
+            MOUNTED EVEN WHEN HIDDEN, for the same reason HazardWatch is: this
+            panel is what polls the rig and hands the station up through
+            onStation, and the globe draws the mark from that. Unmounting it
+            to hide the card would quietly take the rig off the water. */}
+        <div style={{ display: shows("sensor") ? undefined : "none" }}>
+          <SagarNodePanel onStation={setSagarnode} />
+        </div>
+        {/* Mounted whenever the layer is wanted OR the panel is open: the
+            globe must draw the warnings the panel fetched, so hiding the card
+            must not silently empty the water. */}
+        <div style={{ display: shows("hazards") ? undefined : "none" }}>
+          <HazardPanel
+            at={column?.time ?? scene.time}
+            bbox={dataset ? dataset.bbox.join(",") : null}
+            rehearsal={scene.rehearsal}
+            onRehearsal={(rehearsal) => useScene.setState({ rehearsal })}
+            onLayer={setWarnings}
+          />
+        </div>
         {/* What the platform can draw, stated on the first frame.
 
             LAST IN THIS COLUMN, AND THAT IS LOAD BEARING. This panel is inert
@@ -544,8 +597,24 @@ export default function Page() {
             dive opened the warning card instead of the profile. The e2e suite
             caught it. Ordered last, HazardWatch never moves and the measured
             cost of this panel is zero blocked marks. */}
-        <LayerCatalog dataset={dataset} levels={depths.length} />
+        {shows("catalog") && (
+          <LayerCatalog dataset={dataset} levels={depths.length} />
+        )}
       </div>
+
+      {/* Put the water back in the middle. The camera now orbits the data box
+          rather than the planet (see CAMERA in OceanGlobe), but a scene can
+          still be dragged somewhere unhelpful, and a judge who loses it needs
+          one obvious way back rather than a technique. */}
+      <button
+        type="button"
+        className="recentre"
+        onClick={() =>
+          (window as unknown as { __sagarRecentre?: () => void }).__sagarRecentre?.()
+        }
+      >
+        Recentre
+      </button>
 
       {/* --- the vertical scale, so 200x is checkable rather than asserted -- */}
       <ScaleBar
@@ -564,11 +633,29 @@ export default function Page() {
           step, and the agent panel is absent entirely when its service is not
           running, which is TRD section 6.5 made visible. */}
       <div className="stage-foot">
-        <AskPanel />
-        <StoryPlayer />
+        {shows("agent") && <AskPanel />}
+        {/* HIDDEN, NEVER UNMOUNTED, for the same reason HazardWatch is.
+            A running tour lives entirely in this component's state, and
+            `endTour()` is only reachable from its own stop(). Unmounting it
+            mid-tour therefore threw the tour away AND left the panel store
+            holding the tour's layout with `beforeTour` orphaned, so all eight
+            overlays stayed open with nothing left to close them: the exact
+            letterbox the dock exists to remove. Two one-action paths did it,
+            `h` and this panel's own dock tab. Kept mounted, `h` during a tour
+            is now a feature instead: the tour keeps driving the water with no
+            chrome over it, and `h` again brings the narration back. */}
+        <div style={{ display: shows("tours") ? undefined : "none" }}>
+          <StoryPlayer />
+        </div>
+        {/* Always present. A clean frame is only an improvement if what it
+            hides is obviously reachable. */}
+        <PanelDock />
       </div>
 
-      {studioOpen && (
+      {/* "Water only" means it. The studio is chrome like every other overlay,
+          so `h` suppresses it without closing it: pressing `h` again brings
+          back exactly the screen you had, cast and cube included. */}
+      {studioOpen && !chromeHidden && (
         <ColumnStudio
           detail={detail}
           column={column}

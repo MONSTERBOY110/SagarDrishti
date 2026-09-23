@@ -1,0 +1,19 @@
+plate.png - SagarDrishti station-sheet substrate
+
+Origin: generated procedurally by tools/make_plate_tile.py in this
+repository. Seed 20260907, size 160x160, seamlessly tiling via an
+FFT low-pass (periodic by construction).
+
+Not sourced, not stock, not AI-image-generated. No third-party rights
+attach to it. Re-run the script to reproduce it byte-for-byte.
+
+Mean RGB: (34.0, 43.0, 54.0) - matches the
+--plate token #222b36 = (34, 43, 54), so the tile
+is painted directly on the sheet rather than under a colour wash.
+The script reads that token out of globals.css and refuses to run if
+the two disagree, because the tile is opaque and would otherwise
+silently override whatever the stylesheet says.
+
+Supersedes manila.png (warm stock, retired 22 September 2026).
+
+sha256 (first 16): f9c2cc48646d2c36

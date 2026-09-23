@@ -162,7 +162,7 @@ The plugin interface is documented in [`docs/PLUGINS.md`](docs/PLUGINS.md).
 ## Tests
 
 ```bash
-./tasks.ps1 test     # 485 data-plane tests
+./tasks.ps1 test     # 512 data-plane tests
 ./tasks.ps1 agent    # then: python -m pytest services/agent/tests  (71 tests)
 ./tasks.ps1 e2e      # 11 browser tests against a production build
 ```

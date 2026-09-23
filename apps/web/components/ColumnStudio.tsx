@@ -33,6 +33,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api, modelProfileAt, type FieldColumn, type ProfileDetail, type Scorecard } from "@/lib/api";
 import { rgbFor, type Palette, type Scale } from "@/lib/colormap";
+import VolumeCube from "./VolumeCube";
 
 /** Water masses, as an oceanographer reads a tropical column. The thermocline
  *  band is the one that matters and its top is taken from the D26 field when
@@ -81,6 +82,30 @@ export default function ColumnStudio({
   onClose: () => void;
 }) {
   const [cursor, setCursor] = useState<number | null>(null);
+  /* Auto-rotation is ON by default because the first second of this panel has
+     to say "this is a volume", and a still box does not. It is stoppable
+     because reading a cutaway while it turns is impossible.
+     Seeded from the reduced-motion preference, which this surface honours
+     everywhere else (globals.css disables the stamp transitions under it): a
+     guided tour raises this panel hands free and holds it for thirteen
+     seconds, so an unprompted spinning object is exactly the case the
+     preference exists for. The button still turns it on deliberately. */
+  const [spin, setSpin] = useState(
+    () =>
+      typeof window === "undefined" ||
+      !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
+  );
+  /* WHERE THE CUBE IS CUT, AS A LEVEL INDEX, not as a fraction.
+     The shader compares against the texture's depth axis, which is the LEVEL
+     INDEX axis, and the model's 24 levels are strongly irregular: 5, 10, 20 m
+     near the surface and 200 m apart at the bottom. A fraction of that axis
+     converted to metres linearly is not a depth. Half the levels is index 12,
+     which is 400 m, and the old readout called it 1000 m. At the shallow end
+     it was out by more than a factor of ten, printed as a measurement, in a
+     panel whose whole argument is that its numbers can be checked.
+     Held as the index the cut actually lands on, so the control, the shader
+     and the readout are the same fact. */
+  const [cutLevel, setCutLevel] = useState<number | null>(null);
   const [scorecard, setScorecard] = useState<Scorecard | null>(null);
   const plotRef = useRef<SVGSVGElement>(null);
 
@@ -140,6 +165,13 @@ export default function ColumnStudio({
       return { depth: d, mod: m !== null && Number.isFinite(m) ? m : null, obs: interp(pts, d) };
     });
   }, [model, detail, observed]);
+
+  /* The MODEL column's own depth axis, which is what the cube is a picture of
+     and is not the same axis as the cast's levels below: a BGC float can
+     report 1,440 of its own levels through a 24-level analysis. */
+  const nLevels = column?.depths.length ?? 0;
+  const cutAt = nLevels ? Math.min(cutLevel ?? nLevels - 1, nLevels - 1) : null;
+  const cutDepth = cutAt === null ? 0 : Math.round(column!.depths[cutAt]);
 
   const usable = rows.filter((r) => r.obs !== null || r.mod !== null);
   if (!detail || !model || usable.length === 0) return null;
@@ -296,6 +328,56 @@ export default function ColumnStudio({
               {units ? ` · ${units}` : ""}
             </text>
           </svg>
+
+          {/* THE CUBE SITS IN THE SAME GRID ROW AS THE RESIDUAL, not above
+              it. Stacked, the cube was a 34rem block floating in the middle of
+              a 72rem dialog with the plot below it and most of the width left
+              empty, which is a weak composition for the one thing a judge came
+              to see. Side by side they also make the argument this panel
+              exists to make: a cube on its own is a prettier picture of the
+              same field, and a cube next to its own error is a claim about
+              it. */}
+          <div className="studio__cube">
+            <VolumeCube
+              column={column}
+              label={variableLabel}
+              palette={palette}
+              scale={scale}
+              vmin={vmin}
+              vmax={vmax}
+              reverse={reverse}
+              sliceTop={0}
+              /* +1 so the chosen level is drawn in full: texel k spans
+                 k/nz to (k+1)/nz along the axis the shader tests. */
+              sliceBottom={cutAt === null ? 1 : (cutAt + 1) / nLevels}
+              spin={spin}
+            />
+            <div className="studio__cubebar">
+              <button
+                type="button"
+                className="tick"
+                aria-pressed={spin}
+                onClick={() => setSpin((v) => !v)}
+              >
+                {spin ? "Stop" : "Spin"}
+              </button>
+              <label className="studio__cut">
+                Cut away below
+                <input
+                  className="field"
+                  type="range"
+                  min={1}
+                  max={Math.max(1, nLevels - 1)}
+                  step={1}
+                  value={cutAt ?? nLevels - 1}
+                  onChange={(e) => setCutLevel(Number(e.target.value))}
+                  aria-label="Cut the volume away below this level"
+                  aria-valuetext={`${cutDepth} metres`}
+                />
+                <span className="num">{cutDepth} m</span>
+              </label>
+            </div>
+          </div>
 
           <div className="studio__read">
             <div className="studio__key">

@@ -309,3 +309,161 @@ match the image to it.
 **The zone 4 slot is labelled `user`, not `icon`.** That one is the human
 in the system, the INCOIS forecaster, and it is the only place a person
 appears in the diagram. If you only do one, do that one.
+
+---
+
+## Added 22 September: two decisions, and one thing I refused to fake
+
+These came out of rebuilding the prototype against the judges' review. None of
+them blocks me; all three are yours to reverse.
+
+### 10. The submission video got 13 seconds longer. Say if that is a problem
+
+`storyboards/00-the-whole-story.tour.json` is what the portal video is recorded
+from, and it ran 150 seconds in twelve steps. It now runs **163 seconds in
+thirteen**, because it gained the volumetric cube: the beat that answers the
+one thing the judges said was missing. The cube lives in a modal that no scene
+key could open, so the tour format itself learned to raise it, and a test now
+fails if a future edit drops that step.
+
+I raised the self-imposed 150-second cap in the test to 165 and wrote the
+reason into the test rather than moving the number quietly. The real constraint
+is the five-minute slot, so 163 seconds still leaves better than two to one
+margin, and the 200-second ceiling that was already there is untouched.
+
+**What I need from you: nothing, unless you want it back under 150.** If you
+do, say so and I will take the seconds out of the six steps with the most
+visual slack rather than out of the verification card, which is the beat the
+recording plan says never to trim.
+
+### 11. India's EEZ boundary: I will not draw one from memory
+
+`docs/beat-competition.md` lists an India EEZ boundary as a two-hour Tier 1
+item, on the grounds that a jurisdiction layer is a signal a ministry audience
+reads immediately. It is the one item on that list I have not built, and the
+reason is not time.
+
+We have no EEZ dataset offline, and the demo is air-gapped. Drawing an
+approximate maritime boundary from memory and putting it on screen in front of
+MoES would be exactly the kind of invented number this whole project refuses,
+except worse, because a maritime boundary is a legal object and a wrong one is
+a claim about where India's rights end.
+
+**What I need from you, only if you want the layer:** a boundary file we can
+name and cite. Marine Regions (marineregions.org, VLIZ) publishes world EEZ
+polygons under CC-BY, which would be citable and is the usual source; the
+Survey of India is the authoritative Indian one but is not a casual download.
+Send me a file and it is an afternoon. Without one, I would rather ship no
+boundary than a drawn one.
+
+### 12. The evidence screenshots are re-taken, and the old set is marked
+
+`docs/evidence/prototype-2026-09-22/` is the current build: 26 shots and a
+README written by the capture script from numbers it read off the running page.
+`docs/evidence/prototype-2026-09-19/` is the internal-round build and now
+carries a SUPERSEDED banner at the top.
+
+**What I need from you: do not paste a 19 September screenshot into anything.**
+Every one of them shows the warm manila panels, nine of them open at once, and
+no cube. `node tools/capture_evidence.mjs` re-takes the whole set in about four
+minutes if you want a fresher one on the day.
+
+### 13. The deck: one thing to act on, and one to look at
+
+**Act on this.** These instructions used to say "upload
+`SagarDrishti_SIH2026_Idea.pdf`". That file is a 15 September export of a deck
+that has since been renamed, restructured and re-measured, and it is still
+sitting in `docs/submission/`. Anyone following the old line would have
+submitted the wrong PDF. The line is corrected and the file is flagged as
+superseded, but deleting it is your call. **The one to upload is
+`docs/submission/PixelPaws_SIH2026.pdf`.**
+
+**Look at this.** Slides 2, 3 and 4 changed overnight on 23 September, driven by
+`.ppt-build/refresh_23sep.py` so every edit is recorded and re-runnable:
+
+- **Slide 2 has a flowchart now**, in the shape the winning deck you sent uses:
+  one entry, a branch into the model field and the instruments, both converging
+  on the Class-4 co-location, branching again into the number and the refusals,
+  and closing on "a number a forecaster can defend". It replaced the old
+  screenshot block.
+- **Every screenshot in the deck was of a build that no longer exists.** All of
+  them showed the warm manila panels we replaced on the 22nd. Slide 2 now
+  carries two fresh ones, slide 3's browser thumbnail and slide 4's phone shot
+  are re-taken, and all four are of the build that will be on screen in the
+  video.
+- **"WHERE THIS SITS" left slide 2.** Slide 6 already makes the same claim as a
+  six-row gap analysis against four named tool families, and saying it twice
+  cost the room the flowchart needed. Nothing was lost.
+- **Figures re-read rather than retyped:** 567 automated tests is 594, the
+  source registry serves 10 kinds and not 9, and the ingest plane runs 5 plugins
+  and not 4. The script counts them from the repository, so it fails rather than
+  ages.
+- **Two long-standing blemishes fixed:** the team oval read "PixelPaw / s" on
+  all five content slides, and the title slide's last sentence ended mid-word at
+  "not estimate".
+
+If you dislike any of it, the deck as it was is kept at
+`PixelPaws_SIH2026.BEFORE-REFRESH.pptx`.
+
+### 14. Citations added, and one number went DOWN
+
+Your mentor's suggestion is in: every claim on slides 2, 3, 4 and 6 that rests
+on a paper, a data source or a standard now carries a numbered marker beside
+it, and the marker is a live hyperlink straight to that reference. The example
+she gave is done: the Class-4 scorecard box in the slide 3 diagram, and the
+VERIFICATION callout under it, both read `[1]` and both jump to Ryan et al.
+2015. Twenty-six markers across four slides, forty-three links in the file,
+all forty-three verified to survive the PDF export.
+
+**The numbers are derived, not typed.** The script reads slide 6 top to bottom
+and numbers what it finds, so if you add or reorder a reference, every marker
+in the deck renumbers itself. A hand-typed `[7]` that quietly becomes the wrong
+paper is the one thing a judge can catch you on in a single click.
+
+Slide 6's reference list is now numbered `[1]` to `[20]`, and the number
+replaced the bullet rather than sitting after it, because keeping both clipped
+the trailing note off two references.
+
+**One thing to know before you present.** The deck said **13 ocean parameters**
+and it now says **12**, because the script counts them instead of trusting the
+number. The catalogue serves seven gridded fields (temperature, salinity, D26,
+SIG0, sound speed, and the two current components) and the profile store
+carries seven in-situ ones (temperature, salinity, oxygen, chlorophyll-a,
+nitrate, pH, particle backscattering). Temperature and salinity are on both
+sides and are one parameter each, so the distinct total is twelve. I could not
+find a derivation for the old thirteen anywhere, and a number nobody can
+reproduce is the wrong kind of number for this deck. If you know where the
+thirteenth came from, tell me and I will put it back with its working.
+
+The same pass moved the test count to **595** (512 data plane, 71 agent, 12
+browser) and the plugin-derived field count to **3**, both counted rather than
+retyped.
+
+
+### 15. Tonight's list is in docs/WHAT-REMAINS.md
+
+Checked against the PS text rather than from memory, because the answer changes
+what the night is worth spending on.
+
+**Docker is the only P0 item still open.** Install Desktop and tell me; I will
+build, run the demo path against the containerised stack rather than the local
+one, fix whatever the first real run turns up, and move F5 to Met with the
+commands that prove it.
+
+**Bhashini is not in the problem statement.** The PS names seven requirements
+and voice is not among them. What it does name is public outreach, education,
+exhibitions and e-learning, and the six guided tours already answer that. Voice
+is our own P1 differentiator, and it is a good one, so it is worth the night
+AFTER Docker rather than instead of it.
+
+Three things about voice need your answer before code:
+
+1. **A Bhashini API key**, if you can register at bhashini.gov.in tonight.
+   Without one we build the offline path and name Bhashini as the production
+   route, which is honest and still demonstrates the capability.
+2. **The air-gap claim.** Cloud speech-to-text is a request that leaves the
+   machine, and the browser test fails the build when one does. Narrated
+   answers are free and offline today; the microphone needs a local model.
+3. **Devanagari, Telugu and Tamil glyphs.** Both our typefaces are latin only,
+   so Indian-language text would render as empty boxes in an air-gapped demo.
+   This has to land before any multilingual text, not after.

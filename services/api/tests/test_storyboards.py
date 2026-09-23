@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 
 import pytest
 
@@ -332,6 +333,26 @@ def test_the_submission_tour_drives_every_p0_claim_in_one_run():
     glider_dives = [v for v in patched.get("selection", set())
                     if isinstance(v, str) and v.startswith("2801900_")]
     assert glider_dives, "the submission video never opens the glider"
+    # F1 again, and the strongest one: the VOLUME. The scene drew this field as
+    # stacked depth slices until 2026-09-22, which is 3D-positioned and is not a
+    # volume render, and judges said so within seconds of seeing it. The cube
+    # answers that, and it lives in a modal no scene key can open, so the tour
+    # raises it through `stage`. A future edit that drops this step would ship a
+    # submission video with no volumetric rendering in it, which is the first
+    # technique the PS names.
+    studio = [s for s in tour.steps if s.get("stage") == "studio"]
+    assert studio, "the submission video never opens the volumetric cube"
+    # And it must open ON a cast whose profile is already up, because the studio
+    # renders nothing at all without one: a blank modal held for thirteen
+    # seconds is the silent failure the loader's own validator exists to stop.
+    at = tour.steps.index(studio[0])
+    assert at > 0 and tour.steps[at - 1].get("patch", {}).get("selection") == studio[0][
+        "patch"
+    ].get("selection"), (
+        "the studio step must follow the step that opened the same cast, or the "
+        "modal goes up before the profile it is meant to contain"
+    )
+
     # F6: the plugin-derived field is shown, not just described
     assert "SIG0" in patched.get("variable", set()), "the derived density field is never shown"
     # F13: the drill layer is REVEALED rather than being on from the start
@@ -353,10 +374,26 @@ def test_the_submission_tour_fits_a_portal_video():
 
 def test_no_shipped_tour_outstays_a_demo_slot():
     """Five minutes is the shortest slot the SPOC might give us, and a tour
-    that cannot finish inside one is a tour nobody will run."""
+    that cannot finish inside one is a tour nobody will run.
+
+    RAISED FROM 150 TO 165 ON 2026-09-22, and the reason is written here rather
+    than left as a number that moved. The submission tour gained a beat: the
+    GPU ray-marched volume, which is the answer to the single thing judges said
+    the prototype was missing, and which no scene key could raise until the
+    tour learned to open the studio. The alternative was to re-time six
+    rehearsed steps three days before the recording in order to protect a
+    number that has no external basis: the slot is FIVE MINUTES, and 165s
+    leaves better than two to one margin against it. The 200s ceiling in
+    test_the_submission_tour_is_the_length_of_a_submission_video is unchanged
+    and is the real bound.
+
+    A threshold that moves to make a change pass, quietly, certifies nothing.
+    This one moved for a stated reason and is still far inside the constraint
+    it exists to enforce.
+    """
     tours, _ = storyboards.load_tours(TOURS)
     for t in tours:
-        assert t.seconds <= 150, f"{t.id} runs {t.seconds}s"
+        assert t.seconds <= 165, f"{t.id} runs {t.seconds}s"
 
 
 def test_every_shipped_tour_names_a_real_dataset():
@@ -387,3 +424,92 @@ def test_a_tour_that_selects_a_station_selects_one_that_exists():
             picked = s.get("patch", {}).get("selection")
             if picked:
                 assert picked in known, f"{t.id} step {i} selects a profile that is not served"
+
+
+# --- the stage: a surface a step may raise that is not the scene -------------
+#
+# `patch` is the scene. `stage` is chrome: the water column studio, which holds
+# the volumetric cube. It exists because the submission video is a replay of a
+# tour, and the cube lives in a modal that no scene key can open, so a tour that
+# could not raise it would produce a video with the headline feature missing.
+# Validated here for exactly the reason `patch` is: a step that asks for
+# something the client cannot do is a step that does nothing at all, silently,
+# in a take that has already been submitted.
+
+
+def test_a_stage_the_client_cannot_raise_is_refused(tmp_path):
+    t = tour(steps=[step(stage="lightshow", patch={"selection": "x"})])
+    (tmp_path / "01-a.tour.json").write_text(json.dumps(t), encoding="utf-8")
+    _, refused = storyboards.load_tours(tmp_path)
+    assert len(refused) == 1
+    assert "lightshow" in refused[0]["reason"]
+    assert "studio" in refused[0]["reason"], "the error must name what IS available"
+
+
+def test_the_studio_stage_needs_a_cast_on_the_same_step(tmp_path):
+    """The studio opens FOR a cast and renders nothing without one.
+
+    A step that raises it with no selection puts a blank modal over the scene
+    for the length of its hold, which on a recording day is a take nobody
+    notices is broken until they watch it back.
+    """
+    t = tour(steps=[step(stage="studio", patch={"variable": "TEMP"})])
+    (tmp_path / "01-a.tour.json").write_text(json.dumps(t), encoding="utf-8")
+    _, refused = storyboards.load_tours(tmp_path)
+    assert len(refused) == 1
+    assert "selection" in refused[0]["reason"]
+
+
+def test_a_studio_step_with_a_cast_is_accepted(tmp_path):
+    t = tour(steps=[step(stage="studio", patch={"selection": "2903831_20260728T141348"})])
+    (tmp_path / "01-a.tour.json").write_text(json.dumps(t), encoding="utf-8")
+    tours, refused = storyboards.load_tours(tmp_path)
+    assert refused == []
+    assert tours[0].steps[0]["stage"] == "studio"
+
+
+def test_a_step_with_no_stage_is_still_a_valid_step(tmp_path):
+    """The field is optional. Twelve of the thirteen steps in the submission
+    tour have no stage, and every other shipped tour has none at all."""
+    t = tour(steps=[step()])
+    (tmp_path / "01-a.tour.json").write_text(json.dumps(t), encoding="utf-8")
+    tours, refused = storyboards.load_tours(tmp_path)
+    assert refused == []
+    assert "stage" not in tours[0].steps[0]
+
+
+def test_the_stage_survives_the_round_trip_to_the_client(tmp_path):
+    """as_dict() is what the browser receives. A stage stripped on the way out
+    would validate perfectly and still never raise anything."""
+    t = tour(steps=[step(stage="studio", patch={"selection": "abc"})])
+    (tmp_path / "01-a.tour.json").write_text(json.dumps(t), encoding="utf-8")
+    tours, _ = storyboards.load_tours(tmp_path)
+    assert tours[0].as_dict()["steps"][0]["stage"] == "studio"
+
+
+def test_the_stage_allowlist_matches_what_the_client_can_actually_raise():
+    """Two copies of "what a step may raise", held together by a test.
+
+    `STAGEABLE` here refuses a malformed tour before it is ever served.
+    `STAGES` in `apps/web/lib/panels.ts` is what the player checks at runtime
+    and is the authority, because it is the build that has to do the raising.
+    Neither can import the other: this is Python validating a file the browser
+    owns.
+
+    The same shape as `test_scene_keys.py` in the agent suite, and for the same
+    reason. A server allowlist that has drifted ahead of the client serves a
+    step that silently raises nothing, which on a recording day is a take
+    nobody notices is broken until they watch it back.
+    """
+    src = (
+        pathlib.Path(__file__).resolve().parents[3] / "apps" / "web" / "lib" / "panels.ts"
+    ).read_text(encoding="utf-8")
+    block = re.search(r"export const STAGES = new Set\(\[(.*?)\]\)", src, re.S)
+    assert block, "apps/web/lib/panels.ts no longer declares STAGES as a Set literal"
+    client = set(re.findall(r'"([a-z_]+)"', block.group(1)))
+    assert client, "could not read any stage names out of panels.ts"
+    assert storyboards.STAGEABLE == client, (
+        f"the tour loader allows {sorted(storyboards.STAGEABLE ^ client)} which the "
+        "browser does not agree about. A stage the client cannot raise is a step "
+        "that does nothing at all, silently, in a take that has been submitted."
+    )

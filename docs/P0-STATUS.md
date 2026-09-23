@@ -1,9 +1,16 @@
 # P0 status: the problem statement's own requirement list
 
-**Measured 2026-09-07, extended 2026-09-08.** Every number below was read off
-the running service on the build laptop, not copied from an earlier run. The
-commands that produced them are in each row so anyone can re-run them and
-disagree with me.
+**Measured 2026-09-07, extended 2026-09-08 and 2026-09-22.** Every number
+below was read off the running service on the build laptop, not copied from an
+earlier run. The commands that produced them are in each row so anyone can
+re-run them and disagree with me.
+
+**What the 22 September pass changed here.** The test counts, and F1: a GPU
+ray-marched volume now renders the box, where before the scene drew the field
+as stacked depth slices. The Intel UHD frame-rate measurement below was NOT
+re-run and is NOT overwritten, because today's machine offered a discrete GPU
+and a number from an RTX 3050 is a different claim about a different computer.
+It is quoted separately and labelled.
 
 PRD §5 defines P0 as the PS's explicit requirement list, F1 to F7. CLAUDE.md
 says P0 comes before P1 always, so this file exists to make "is a P0 item
@@ -24,12 +31,12 @@ forever, only that the PS's sentence is satisfied and proven.
 
 | # | Requirement | Verdict | The gap, if any |
 |---|---|---|---|
-| F1 | 3D volumetric rendering | **Partly met** | All three named TECHNIQUES are built, and every field the PS names is now drawn except one: temperature, salinity and depth-resolved CURRENT VECTORS, the last live since the Copernicus account arrived on 2026-09-09. Six gridded fields render in total, the other two being plugin-derived: D26 and SIG0 (potential density, TEOS-10). Chlorophyll is registered and deliberately disabled as a GRIDDED field: the INCOIS series ends in 2020 and cannot share a 2026 scrubber. It is served as in-situ BGC-float data, which is contemporary. |
+| F1 | 3D volumetric rendering | **Partly met** | All three named techniques are built, and since 2026-09-22 so is a fourth that the PS's own words ask for before it names any technique: a GPU ray-marched volume, in Three.js, which the PS explicitly permits. The remaining gap is a field, not a technique. Every field the PS names is now drawn except one: temperature, salinity and depth-resolved CURRENT VECTORS, the last live since the Copernicus account arrived on 2026-09-09. SEVEN gridded fields render in total, three of them plugin-derived: D26, SIG0 (potential density, TEOS-10) and sound speed. Chlorophyll is registered and deliberately disabled as a GRIDDED field: the INCOIS series ends in 2020 and cannot share a 2026 scrubber. It is served as in-situ BGC-float data, which is contemporary. |
 | F2 | Instrument data overlay | **Met** | All four instrument classes the PS names are live and drawn as different marks: Argo floats, BGC floats, a glider and shipboard CTD casts, plus a RAMA moored buoy. 149 casts from 19 instruments, 30,012 QC-passed levels. The glider and the CTD casts predate the model field and are marked, dated and refused by the verification rather than left to pass for current. |
 | F3 | Multi-format data ingestion | **Met** | None. |
 | F4 | Customizable colorbar and variable controls | **Met** | None. |
 | F5 | Web-based, scalable architecture | **Partly met** | The Docker path is authored and never executed, because Docker is not installed here. |
-| F6 | Extensible design | **Met** | Both extension points have running examples: TWO derived products (D26, and SIG0 density via TEOS-10), both served through WMS and WCS, and a `mooring` source reader on real RAMA buoy data. The PS's "additional sensors" clause also has a live device path: SagarNode posts to `/ingest/sagarnode` and appears on the globe, with `curl` as a sufficient device. |
+| F6 | Extensible design | **Met** | Both extension points have running examples: THREE derived products (D26, SIG0 density via TEOS-10, and sound speed, the last added 21 September), all served through WMS and WCS, and a `mooring` source reader on real RAMA buoy data. The PS's "additional sensors" clause also has a live device path: SagarNode posts to `/ingest/sagarnode` and appears on the globe, with `curl` as a sufficient device. |
 | F7 | Open standards (OGC WMS/WCS, CF) | **Met** | None. Stored variables and plugin-derived products are both served. |
 
 Five of seven have no gap. Two have a named gap: one blocked on the team lead
@@ -40,13 +47,25 @@ is at the bottom of this file.
 ## Test and check counts behind these verdicts
 
 ```
-services/api      467 tests   (argo 20, cap 47, cf 20, colormap 10, currents 16,
-                               density 19, field 29, isosurface 27, offline 3,
-                               ogc 58, plugins 71, sagarnode 27, scorecard 24,
-                               storyboards 30, text profiles 66)
+services/api      512 tests   (argo 20, cap 47, cf 20, colormap 10, currents 16,
+                               density 19, field 30, in-situ TAC 17,
+                               isosurface 27, offline 3, ogc 63, plugins 71,
+                               sagarnode 27, scorecard 24, sound speed 16,
+                               storyboards 36, text profiles 66)
 services/agent     71 tests   (guard 13, planner 56, scene-key drift 2)
-e2e                10 tests   production build, real browser, off-origin guard
+e2e                12 tests   production build, real browser, off-origin guard
 ```
+
+Re-collected on 2026-09-23 with `pytest --collect-only -q`, not from memory.
+The first version of this block said 506 with storyboards at 30, which was a
+true reading taken an hour before the same day's six new storyboard tests
+landed: a number can go stale inside a working day, and a block whose whole
+claim is that it was measured rather than remembered is the wrong place to
+find that out. The growth since 2026-09-08 is the in-situ TAC reader, the
+sound-speed plugin, more OGC coverage, the tour `stage` field with its
+validation and its client drift check, and two browser tests: one for the
+current-vector layer and one, added 23 September, for the panel dock, the tour
+restore path and the camera bounds.
 
 The two Python suites are run separately, and must be: both declare a `tests`
 package, so pytest resolves the second one's modules against the first one's
@@ -109,6 +128,41 @@ screenshots every action, and it is recorded for trend only with no threshold
 asserted. Asserting the TRD floor inside an instrumented run would either fail
 a healthy build or get quietly lowered until it passed and then certify
 nothing. The annotation says so in its own label.
+
+**Built 2026-09-22: a GPU ray-marched volume.** The PS sentence is "3D
+Volumetric Rendering ... WebGL / Three.js or Cesium.js". Until today the scene
+answered it with stacked depth-slice rectangles carrying an opacity transfer
+function, which TRD 6.4 itself calls the slices-only fallback floor: 3D
+positioned, but not a volume render. TRD M3 strategy (c) was specified and
+never built. It is built now, in `apps/web/components/VolumeCube.tsx`, and the
+statement names both tools, so Cesium keeps the geodesy and Three.js gets the
+volumetrics rather than one replacing the other.
+
+```
+technique     single-pass ray march in a GLSL3 fragment shader
+              ray-box intersection, front-to-back accumulation,
+              early ray termination at alpha 0.96, 64 samples per ray
+data          THREE.Data3DTexture, RG8: R is the value normalised over
+              vmin..vmax, G is validity. Two channels, deliberately: folding
+              validity into the value channel made every gap in the analysis
+              render as the coldest water in the box
+box           24 depth levels by 21 latitudes by 16 longitudes, ~8,000 voxels,
+              which is a rounding error for a GPU. The cost is screen pixels
+              times steps, not data
+colour        the ramp is built by calling rgbFor() from lib/colormap.ts at the
+              same vmin and vmax the globe uses, so the cube CANNOT disagree
+              with the colorbar about what a colour means
+controls      orbit with damping, auto-rotate, and a depth cutaway that
+              discards everything below a chosen level to expose the
+              thermocline
+measured      465 by 411 px in the studio, 60 fps with the volume spinning
+              (RTX 3050 laptop GPU via ANGLE D3D11, 1920x1080)
+```
+
+It is placed in the Water Column Studio in the same grid row as the residual
+plot, so the same cast appears twice: once as a volume and once as the
+difference between the model and the instrument that measured it. That is the
+part no competitor repository found on 2026-09-22 does.
 
 **Built: isosurface extraction.** `GET /isosurface/{source}/{var}` returns the
 surface where a field takes a given value as a triangle mesh, and the scene

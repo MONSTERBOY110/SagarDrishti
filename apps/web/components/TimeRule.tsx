@@ -6,9 +6,12 @@
  * Ticks, not a continuous slider: this analysis has exactly three 10-day steps
  * and a smooth track would imply timesteps that do not exist. The control
  * states the sampling.
+ *
+ * IT DOES NOT DRIVE THE CLOCK. It used to, and the advance loop moved to
+ * `lib/playback.ts` on 23 September: this component renders inside the station
+ * sheet, the sheet is closed on the opening frame, and an animation that stops
+ * when its switch is off screen is not an animation. See the note there.
  */
-
-import { useEffect } from "react";
 
 interface Props {
   times: string[];
@@ -19,8 +22,6 @@ interface Props {
   onTime: (t: string) => void;
   onTogglePlay: () => void;
 }
-
-const STEP_MS = 1400;
 
 export default function TimeRule({ times, loaded, current, playing, onTime, onTogglePlay }: Props) {
   /* -1 when the scene's time is not on THIS axis, and that is deliberately
@@ -34,18 +35,6 @@ export default function TimeRule({ times, loaded, current, playing, onTime, onTo
      epoch is added. */
   const index = times.indexOf(current);
   const offAxis = index < 0 && times.length > 0;
-
-  useEffect(() => {
-    if (!playing || times.length < 2) return;
-    const t = setInterval(() => {
-      const at = times.indexOf(current);
-      // Same root cause as above: -1 made this land on step 0 and silently
-      // "work", which is what hid the defect. Off the axis, play starts from
-      // the beginning EXPLICITLY rather than by arithmetic accident.
-      onTime(at < 0 ? times[0] : times[(at + 1) % times.length]);
-    }, STEP_MS);
-    return () => clearInterval(t);
-  }, [playing, times, current, onTime]);
 
   return (
     <div

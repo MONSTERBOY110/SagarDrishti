@@ -1,17 +1,26 @@
 # The SIH 2026 idea submission deck
 
-> **Two other PDFs sit in this folder and neither goes to the portal.**
-> `SagarDrishti_Mentor_Brief.pdf` (4 pages) is the current briefing to hand a
-> mentor across a table. `SagarDrishti_Brief.pdf` is a SUPERSEDED draft of that
-> same document from 14 September and should be deleted; it is kept only
-> because deleting a file is the lead's call, not mine.
-
-**Upload `SagarDrishti_SIH2026_Idea.pdf` to the SIH portal.** The template's own
+**Upload `PixelPaws_SIH2026.pdf` to the SIH portal.** The template's own
 instruction slide is explicit: *"You need to save the file in PDF and upload the
 same on portal. No PPT, Word Doc or any other format will be supported."*
 
-`SagarDrishti_SIH2026_Idea.pptx` is the editable source. Edit that, re-export to
-PDF, and upload the PDF.
+`PixelPaws_SIH2026.pptx` is the editable source. Edit that, re-export the PDF
+with `.ppt-build/export_pixelpaws_pdf.py`, and upload the PDF.
+
+> **THE FILENAME CHANGED AND THIS FILE DID NOT, UNTIL 23 SEPTEMBER.** These
+> instructions said to upload `SagarDrishti_SIH2026_Idea.pdf`, which is a
+> 15 September export of a deck that has since been renamed, restructured and
+> re-measured. Anyone following the old line would have submitted a five-day-old
+> PDF with the wrong screenshots and a wrong test count. That file is still in
+> this folder because deleting one is the lead's call, not mine; it should go.
+>
+> Superseded, in this folder, none of them for the portal:
+> `SagarDrishti_SIH2026_Idea.pdf` (15 September, wrong deck),
+> `PixelPaws_SIH2026.BACKUP-20260920-1655.pptx`,
+> `PixelPaws_SIH2026.BACKUP-20260923-0135.pptx` and
+> `PixelPaws_SIH2026.BEFORE-REFRESH.pptx` (the last is what
+> `.ppt-build/refresh_23sep.py` re-applies itself from, so keep that one until
+> the refresh is settled).
 
 ---
 
@@ -57,8 +66,8 @@ you to:
 | # | Section | The argument |
 |---|---|---|
 | 1 | Title page | PS identity, the product, and one line of proof that this already runs |
-| 2 | Idea title | The problem in INCOIS's own quoted words, the solution against it, innovation, and a screenshot of the running system with the verification card enlarged |
-| 3 | Technical approach | A four-stage architecture diagram (sources → ingest → data plane → browser) with labelled arrows, plus verification, the agent plane, OGC clients, and the stack |
+| 2 | Idea title | The problem in INCOIS's own quoted words, the solution against it, a branching flowchart of how one answer is made, and two photographs of the running system |
+| 3 | Technical approach | A four-stage architecture diagram (sources, ingest, data plane, browser) with labelled arrows, plus verification, the agent plane, OGC clients, and the stack |
 | 4 | Feasibility and viability | A measured-evidence strip, then feasibility / risks / mitigations, then why it survives after the hackathon |
 | 5 | Impact and benefits | Five stakeholder groups, benefits, national alignment, and a four-step scenario of what changes on the day a depression forms in the Bay |
 | 6 | Research and references | 20 hyperlinked references in four groups, how the literature changed the build, and a gap-analysis matrix against desktop tools, web viewers and INCOIS's own portal |
@@ -67,31 +76,49 @@ you to:
 
 ## Every figure in the deck is measured, and re-derivable
 
-Read off the running system on 11 to 13 September 2026. If you change anything,
-re-check these against `docs/P0-STATUS.md` before exporting.
+Read off the running system on 11 to 13 September 2026, and re-read on
+23 September for the rows marked below. If you change anything, re-check these
+against `docs/P0-STATUS.md` before exporting.
 
 | Figure | Where it comes from |
 |---|---|
 | Bias +0.026 degC, RMSE 0.602 degC, 11,718 pairs, 23 casts | `GET /scorecard/incois_vam_argo/TEMP?observed=temp` |
 | 2.07 degC worst band at 50 to 100 m | the same response, `by_depth` |
-| 567 tests (485 data plane + 71 agent + 11 browser) | `./tasks.ps1 test` and `./tasks.ps1 e2e` |
+| **595** tests (512 data plane + 71 agent + 12 browser) | Counted by `refresh_23sep.py` itself now, not typed. It was 567, then 594 for about an hour on the 23rd until the browser suite gained a twelfth test |
 | 51 fps at 1080p, integrated GPU | `docs/P0-STATUS.md` under F1 |
 | 10.5 M gridded values | the two Zarr stores in `data/cube/` |
 | 30,012 QC-passed levels, 149 casts, 19 instruments | `data/cube/profiles.parquet` |
-| 13 ocean parameters | `GET /catalog` plus the profile parameters |
+| **12** ocean parameters, 3 of them plugin-derived | `GET /catalog` gives 7 gridded (TEMP, SAL, D26, SIG0, SVEL, uo, vo) and `profiles.parquet` gives 7 in-situ (temperature, salinity, oxygen, chlorophyll-a, nitrate, pH, backscattering). Temperature and salinity are on both sides and are one parameter each, so the distinct total is 12. The deck said 13 with no recorded derivation; this one is counted in the script and printed when it runs |
+| **13 sources, 10 kinds, 5 plugins** | `data/sources.yaml` and `services/api/plugins/`; re-read 23 September. The deck said 9 kinds and 4 plugins |
 | 337 current arrows, 26 degC isosurface | the screenshots themselves, taken live |
 
 ---
 
 ## Rebuilding the deck
 
+**The deck has been hand-edited in PowerPoint since the composer last ran, so
+the composer is no longer the authority.** `docs/submission/PixelPaws_SIH2026.pptx`
+is. Two scripts act on it directly:
+
 ```bash
-cd .ppt-build
-../.venv/Scripts/python.exe compose2.py       # writes exports/…pptx
+node tools/capture_deck_assets.mjs                              # re-take the four screenshots
+../.venv/Scripts/python.exe .ppt-build/refresh_23sep.py         # re-apply the 23 Sep edits
+../.venv/Scripts/python.exe .ppt-build/export_pixelpaws_pdf.py  # PDF, with the link check
 ```
 
-Then export the PDF from PowerPoint (File → Export → PDF), or re-run the
-PowerShell COM snippet used during the build.
+The first needs the three services running (`api`, `agent`, `demo`). Skip it
+and the refresh reuses whatever is in `.ppt-build/assets/`, which is right when
+only text changed and wrong the moment the interface moves.
+
+`refresh_23sep.py` is re-runnable: the first run keeps the deck as it was in
+`PixelPaws_SIH2026.BEFORE-REFRESH.pptx`, and every run after that restores that
+copy before re-applying, so editing the script and running it twice cannot apply
+the same change twice. It is also where the screenshots and the counted figures
+come from, so read its docstring before changing a number by hand.
+
+The original composer (`compose.py`, `slide3.py`, `compose2.py`) still builds a
+deck from the untouched template into `exports/`, and is kept for reference and
+for the shape primitives `refresh_23sep.py` borrows its palette from.
 
 Source layout:
 

@@ -248,7 +248,7 @@ export default function StationSheet(p: Props) {
                           : {
                               background: cssFor(mean, p.vmin, p.vmax, p.palette, p.scale, p.reverse),
                               width: `${Math.max(6, normalize(mean, p.vmin, p.vmax, p.scale) * 100)}%`,
-                              outline: "1px solid rgba(22,19,13,.35)",
+                              outline: "1px solid rgba(227,235,240,.35)",
                             }
                       }
                     />

@@ -1,8 +1,16 @@
-/* SagarDrishti, Station Logsheet world.
+/* SagarDrishti, Station Logsheet world, on slate.
    Every token here is a decision recorded in the direction contract in
    layout.tsx. Hue is reserved for the measurement: the plate, the ink and the
-   rulings are achromatic-warm, and the only saturated colours on screen are
-   the field's own colorbar and the single reserved caution ink. */
+   rulings are achromatic-COOL, and the only saturated colours on screen are
+   the field's own colorbar and the single reserved caution ink.
+
+   THE GROUND INVERTED ON 22 SEPTEMBER 2026. The plate was warm manila paper
+   (#c4b89a) carrying near-black ink, and judges reviewing the prototype said
+   the colour was off and that the result did not read as a 3D model. It read
+   as a document, because it was one. The typography, the ruling, the caution
+   discipline and the rule that hue belongs to the measurement are all kept;
+   only the ground and the inks moved, and every contrast ratio below was
+   RE-MEASURED against the new plate rather than carried over. */
 
 @font-face {
   font-family: "Archivo Narrow";
@@ -28,22 +36,36 @@
   /* the water: near-black, because the scene is the ocean below the surface */
   --abyss: #05080c;
 
-  /* the form stock */
-  --plate: #c4b89a;
-  --plate-shade: #b3a686;
+  /* the form stock: cool slate, lifted just clear of the water.
+     #222B36 is only 1.40:1 against --abyss, which is far too little to read as
+     an edge on its own, so .sheet gains an explicit hairline border. The old
+     plate never needed one: light stock on near-black water separated itself.
+     A raster paper texture used to be painted over this; it was an OPAQUE RGB
+     tile, so it would have survived the change and kept the surface manila no
+     matter what this token said. It is gone. */
+  --plate: #222B36;
+  --plate-shade: #1A212A;
 
-  /* form-printing inks, with their measured contrast on the plate */
-  --ink: #16130d;          /* labels and values          9.4:1 */
-  --ink-soft: #4a4335;     /* secondary                  5.0:1 */
-  --ink-faint: #504935;    /* tertiary                   4.6:1 */
-  --rule: #2b6a86;         /* process blue: a RULE, never text */
-  --rule-soft: rgba(43, 106, 134, 0.34);
+  /* inks, with their contrast on the plate measured against #222B36.
+     The ramp now DESCENDS in lightness: on a dark ground "fainter" means
+     darker, where on the manila plate it meant lighter. */
+  --ink: #E3EBF0;          /* labels and values         11.9:1 */
+  --ink-soft: #A9B8C4;     /* secondary                  7.1:1 */
+  --ink-faint: #8493A0;    /* tertiary                   4.5:1 */
+  /* Lightened from #2b6a86, which measured 3.04:1 on manila and only 2.39:1
+     here, well under the 3:1 floor for a non-text mark. Every structural rule on
+     the form is drawn in it. */
+  --rule: #4A94B6;         /* process blue: a RULE, never text   4.2:1 */
+  --rule-soft: rgba(74, 148, 182, 0.34);
 
-  /* THE reserved ink. Two values because one hue cannot be legible on both
-     grounds: #b23a22 is 3.0:1 on the plate, fine for a rule, not for text. */
-  --caution: #b23a22;         /* rules, marks, borders */
-  --caution-ink: #7e2110;     /* caution text on the plate   5.1:1 */
-  --caution-stamp: #e8735a;   /* caution text on the water   6.4:1 */
+  /* THE reserved ink. Still two values, because one hue cannot be legible on
+     both grounds, but they have SWAPPED SIDES. #7e2110 was darkened to gain
+     contrast against light paper; on slate it measures 1.4:1 and is the least
+     legible value in the palette. Caution text on the plate is now a LIGHT
+     tint, and the old plate-legible value is retired. */
+  --caution: #D4553C;         /* rules, marks, borders          3.5:1 */
+  --caution-ink: #F08A72;     /* caution text on the plate      5.9:1 */
+  --caution-stamp: #e8735a;   /* caution text on the water      6.7:1 */
 
   /* readouts sitting directly on the water */
   --stamp: #cfd8dc;
@@ -71,7 +93,7 @@ body {
 
 ::selection {
   background: var(--rule);
-  color: #eef4f7;
+  color: var(--abyss);
 }
 
 :focus-visible {
@@ -122,13 +144,24 @@ button {
   display: flex;
   /* Real form stock, not a hex fill. The tile's mean RGB IS --plate, so it is
      painted directly rather than washed over with a colour that would bury the
-     grain (tools/make_paper_tile.py, with a provenance sidecar). */
+     grain (tools/make_plate_tile.py, with a provenance sidecar).
+
+     THE TILE IS OPAQUE, which is the trap this surface set on 22 September:
+     /textures/manila.png had the OLD plate's mean, so changing the token alone
+     changed nothing here and the palette work looked like a no-op. The tile is
+     now regenerated from the token, and the generator reads globals.css and
+     refuses to run if the two disagree. */
   background-color: var(--plate);
-  background-image: url("/textures/manila.png");
+  background-image: url("/textures/plate.png");
   background-repeat: repeat;
   color: var(--ink);
   border-radius: 0; /* forms are guillotined, not rounded */
-  box-shadow: 6px 8px 22px rgba(0, 0, 0, 0.55), 1px 1px 0 rgba(0, 0, 0, 0.25);
+  /* THE EDGE, which the old sheet did not need. Light stock on near-black
+     water separated itself by luminance; slate on water is 1.40:1 and would
+     have no boundary at all. The shadow alone cannot carry it on a dark
+     ground, so a hairline does the work and the shadow only adds depth. */
+  border: 1px solid #5A6874; /* 3.5:1 on the water: an edge, not a frame */
+  box-shadow: 6px 8px 22px rgba(0, 0, 0, 0.6);
 }
 
 .sheet__body {
@@ -147,10 +180,16 @@ button {
   align-items: center;
   justify-content: space-around;
   padding: 2rem 0;
-  background-color: var(--plate-shade);
-  background-image: url("/textures/manila.png");
-  background-blend-mode: multiply;
-  border-right: 1px solid rgba(22, 19, 13, 0.28);
+  /* Same stock, a step darker. NOT background-blend-mode: multiply, which is
+     what did this on manila: multiplying 26,33,42 by a tile that averages
+     34,43,54 lands at 4,6,9, i.e. black. Multiply darkens proportionally, and
+     on a dark ground there is nothing left to take. A flat wash over the tile
+     hits --plate-shade within a level per channel and keeps the grain. */
+  background-image: linear-gradient(rgba(5, 8, 12, 0.32), rgba(5, 8, 12, 0.32)),
+    url("/textures/plate.png");
+  /* The divider was 28% of the old near-black ink, which separated a darker
+     margin from lighter stock. Inverted: a light hairline on a dark ground. */
+  border-right: 1px solid rgba(227, 235, 240, 0.16);
   /* the printed margin rule */
   box-shadow: inset -3px 0 0 -2px var(--caution);
 }
@@ -159,7 +198,11 @@ button {
   height: 0.5rem;
   border-radius: 50%;
   background: var(--abyss);
-  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.8);
+  /* The rim is new. A near-black disc punched through LIGHT stock reads on its
+     own; against the slate plate it is 1.40:1 and simply disappears, so the
+     hole is given the lit edge a real punch has on the side the light is on. */
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(227, 235, 240, 0.18);
 }
 
 /* --- the cast head --------------------------------------------------------- */
@@ -311,17 +354,17 @@ button {
   color: var(--ink-soft);
 }
 .rack__row:hover {
-  background: rgba(22, 19, 13, 0.07);
+  background: rgba(227, 235, 240, 0.07);
   color: var(--ink);
 }
 .rack__row[aria-selected="true"] {
   border-bottom: 3px double var(--rule);
   color: var(--ink);
-  background: rgba(43, 106, 134, 0.1);
+  background: rgba(74, 148, 182, 0.1);
 }
 /* No data at this level is stated, never coloured. */
 .rack__row[data-empty="true"] {
-  border-bottom: 1px solid rgba(43, 106, 134, 0.14);
+  border-bottom: 1px solid rgba(74, 148, 182, 0.14);
   color: var(--ink-faint);
   cursor: default;
 }
@@ -384,11 +427,17 @@ button {
   border: 0;
   border-radius: 0;
 }
+/* Focus RINGS the pen mark, it does not repaint it. Swapping the fill to
+   --rule was fine on manila, where the blue was darker than the plate; on
+   slate the blue is 4.2:1 where the ink is 11.9:1, so focusing the control
+   used to make its indicator harder to see than leaving it alone. */
 .field:focus-visible::-webkit-slider-thumb {
-  background: var(--rule);
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--rule);
 }
 .field:focus-visible::-moz-range-thumb {
-  background: var(--rule);
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--rule);
 }
 
 /* --- press-and-hold controls ---------------------------------------------- */
@@ -443,7 +492,14 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
-  max-height: calc(100vh - 2.5rem);
+  /* STOPS ABOVE THE SCALE BAR, which shares this corner and paints over it.
+     The column used to run to 2.5rem off the bottom, so with a profile open
+     the last lines of its citation and its "no skill figure" caveat sat under
+     the water-column box and could not be read. The column scrolls, so the
+     text is not lost, but a caveat a reader has to scroll to find is a caveat
+     doing half its job. 11rem is the bar's own height plus its 3rem offset,
+     which is set by Cesium's attribution below it. */
+  max-height: calc(100vh - 11rem);
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -459,7 +515,14 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
-  max-height: calc(100vh - 2.5rem);
+  /* STOPS ABOVE THE SCALE BAR, which shares this corner and paints over it.
+     The column used to run to 2.5rem off the bottom, so with a profile open
+     the last lines of its citation and its "no skill figure" caveat sat under
+     the water-column box and could not be read. The column scrolls, so the
+     text is not lost, but a caveat a reader has to scroll to find is a caveat
+     doing half its job. 11rem is the bar's own height plus its 3rem offset,
+     which is set by Cesium's attribution below it. */
+  max-height: calc(100vh - 11rem);
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -582,8 +645,29 @@ button {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.625rem;
-  /* Clear of the cartouche in the bottom band. */
-  max-height: calc(100vh - 9rem);
+  /* Clear of the foot band, AND SCROLLING RATHER THAN OVERFLOWING. A
+     max-height with the default overflow: visible clips nothing: at 1366 by
+     768 with this column fully open, the layer catalog ran straight through
+     the dock and the provenance cartouche and sat on top of both. 9rem was
+     still not enough: the cartouche wraps to three lines at that width and
+     the dock lifts to 10.5rem on a short screen, so the reserve is 14rem and
+     a little more where the dock has moved. The padding/negative-margin pair
+     keeps the scroll box from cutting the panels' drop shadows off.
+
+     THE TRADE, STATED. This box scrolls but is `pointer-events: none`, and
+     two of its children (.legend, .catalog) are deliberately inert as well,
+     so a wheel over THOSE reaches the globe and zooms it rather than
+     scrolling this column. That is what inert means here and it is the right
+     answer for a read-only panel sitting over the water: the alternative is a
+     panel that swallows clicks on the instrument marks behind it, which is
+     the regression this rule was written for. The column is sized so the
+     default panel set never needs to scroll at either target viewport; when a
+     reader opens everything, the wheel works over HazardWatch and the sensor
+     card, which are the interactive ones. */
+  max-height: calc(100vh - 14rem);
+  overflow-y: auto;
+  padding-right: 1.5rem;
+  margin-right: -1.5rem;
   /* The COLUMN is a layout box, not a surface. Left interactive it swallowed
      clicks in its own gaps and in the empty width beside its narrower
      children: three Argo marks at x 594 to 643 sat under this element and not
@@ -766,6 +850,157 @@ button {
   }
 }
 
+/* --- the volumetric cube -------------------------------------------------
+   Its own canvas above the residual chart. The chart is the argument; the cube
+   is what makes anyone stay to hear it. */
+
+.studio__cube {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* A grid cell, so it takes the height of the row rather than a fixed one.
+     The canvas must never be given a LETTERBOX: an early version spanned the
+     full dialog at a fixed 336 px and rendered a small block adrift in the
+     middle of it, which is the opposite of the impression this panel exists
+     to make. Beside the plot it is close to square at every viewport. */
+  min-width: 0;
+  border: 1px solid var(--rule);
+  background: radial-gradient(ellipse at 50% 40%, #0b141d 0%, #05080c 70%);
+}
+.cube {
+  width: 100%;
+  flex: 1;
+  min-height: 18rem;
+  display: block;
+}
+.cube--failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  text-align: center;
+  color: var(--caution-stamp);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+.studio__cubebar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.3125rem 0.5rem;
+  border-top: 1px solid var(--rule);
+  background: var(--plate);
+}
+.studio__cut {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  flex: 1;
+  font-size: 0.5625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.studio__cut input {
+  flex: 1;
+}
+/* The cut slider carries class="field" in ColumnStudio.tsx. It did not, and
+   on manila a bare native range still read; on slate the UA default is a grey
+   track no lighter than the plate, on the panel's primary control. */
+.studio__cut .num {
+  font-size: 0.625rem;
+  color: var(--ink);
+  min-width: 3.5rem;
+  text-align: right;
+}
+
+/* --- the panel dock: how the hidden panels come back ----------------------
+   The opening frame is the globe, the cartouche and the verification card.
+   Everything else is reachable from here, named, with its state on the
+   control, because a minimal screen with no affordance is not minimal, it is
+   broken. Lives in the footer band, which is empty on that opening frame
+   anyway, so it costs no vertical space. */
+
+.dock {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.3125rem 0.4375rem;
+  /* 0.92, not 0.82. This ground is translucent, so a label's real contrast is
+     against whatever the field is doing underneath it, and the dock sits
+     bottom-centre over the water where the colorbar's bright end lands. At
+     0.82 the 10 px tracked labels fell under the 4.5:1 text floor over a warm
+     patch; at 0.92 the worst case holds. The tour narration already uses this
+     value for the same reason. */
+  background: rgba(5, 8, 12, 0.92);
+  border: 1px solid var(--stamp-soft);
+}
+.dock__tab {
+  border: 1px solid rgba(127, 143, 153, 0.45);
+  background: transparent;
+  color: var(--stamp-soft);
+  font-family: "Archivo Narrow", sans-serif;
+  font-size: 0.625rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 0.1875rem 0.4375rem;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.dock__tab:hover {
+  color: var(--stamp);
+  border-color: var(--stamp);
+}
+/* Pressed is INVERTED, not tinted: hue on this surface belongs to the
+   measurement, and a coloured active state would compete with the colorbar. */
+.dock__tab[aria-pressed="true"] {
+  background: var(--stamp);
+  border-color: var(--stamp);
+  color: var(--abyss);
+}
+.dock__tab--chrome {
+  margin-left: 0.375rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+}
+.dock__key {
+  font-family: "Courier Prime", monospace;
+  font-size: 0.5625rem;
+  border: 1px solid currentColor;
+  padding: 0 0.1875rem;
+  opacity: 0.75;
+}
+
+/* --- recentre: the cure for "the scene gets lost" -------------------------
+   Sits with the scale bar, bottom right, because that corner is already where
+   this surface puts orientation. */
+
+/* BELOW the right column's floor, not on it. .panel-right stops 11rem off the
+   bottom and this button used to sit at 9.5rem with a z-index above it, so it
+   landed on the last line of the profile's citation: the strip that column's
+   max-height was written to protect. 11.75rem clears it. */
+.recentre {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 11.75rem;
+  z-index: 4;
+  border: 1px solid var(--stamp-soft);
+  background: rgba(5, 8, 12, 0.82);
+  color: var(--stamp-soft);
+  font-family: "Archivo Narrow", sans-serif;
+  font-size: 0.625rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+.recentre:hover {
+  color: var(--stamp);
+  border-color: var(--stamp);
+}
+
 /* --- the water column studio ---------------------------------------------
    A form clipped over the water, so it is plate stock like the station sheet
    and NOT another translucent readout: this one is read closely, at length,
@@ -784,9 +1019,63 @@ button {
   background: rgba(5, 8, 12, 0.72);
   padding: 2rem;
 }
+
+/* DURING A TOUR THE DIALOG GIVES THE FOOT BAND BACK.
+   A guided tour can raise this dialog (`stage` in storyboards.py), and the
+   tour's narration lives in the foot band. A modal over it would leave a
+   presenter reading a step whose words are behind the cube, in the one take
+   that gets submitted. Out of a tour the modal keeps the whole screen, which
+   is what a modal is for and why the dock is not floated over it: this dialog
+   has its own Close and answers Escape. */
+body[data-tour="running"] .studio {
+  padding: 1.5rem 2rem 20rem;
+}
+/* THE ASK BOX STANDS DOWN while a modal is up.
+   A tour opens every panel for its duration, which includes Samudra Sahayak,
+   and this band outranks the dialog for the length of a take: the assistant's
+   input sat across the cube's cutaway control in the one beat that talks about
+   cutting the cube away. It is not part of a hands-off replay and no step
+   narrates it. Out of a tour this rule never fires, because the band is behind
+   the scrim anyway. */
+body[data-tour="running"]:has(.studio) .ask {
+  display: none;
+}
+/* Short screens cannot give up 20rem AND hold a 28rem grid, so the grid
+   yields instead of the narration. 1366 by 768 is a robustness target, not
+   the recording target: VIDEO-RECORDING.md records at 1920 by 1080. */
+@media (max-height: 900px) {
+  /* 25.5rem measured, not guessed: at 1366 by 768 the tour panel plus the dock
+     occupy from y 359 to the bottom even with the evidence list stood down
+     below, so anything less and the caption sits on the cube. That leaves the
+     dialog 344 px, which the grid below is allowed to compress into. */
+  body[data-tour="running"] .studio {
+    padding: 1rem 1.5rem 25.5rem;
+  }
+  body[data-tour="running"] .studio__body {
+    min-height: 0;
+  }
+  body[data-tour="running"] .cube {
+    min-height: 11rem;
+  }
+  /* AND THE EVIDENCE LIST STANDS DOWN while a modal is up on a short screen.
+     Measured at 1366 by 768: the tour panel is about 330 px with its evidence
+     and about 180 px without, and 768 px cannot hold a 3D dialog plus 330 px
+     of caption without one covering the other. Something has to give and this
+     is the right thing: the narration is what a presenter reads aloud and what
+     a viewer follows, the evidence line is the citation under it, and it is
+     still in the tour file and still on screen for every other beat. Scoped
+     with :has() so a tour with no modal up keeps all of it. 1920 by 1080, the
+     viewport VIDEO-RECORDING.md records at, never reaches this rule. */
+  body[data-tour="running"]:has(.studio) .tour__evidence {
+    display: none;
+  }
+}
 .studio__sheet {
   flex-direction: column;
-  width: min(72rem, 100%);
+  /* 84rem, not 72rem. The volume is a grid cell now, so the dialog's width is
+     the cube's width: at 72rem on a 1920 screen the cube came out 363 px with
+     a third of the display left as bare scrim around the sheet. */
+  width: min(84rem, 100%);
   max-height: 100%;
   overflow: auto;
   padding: 1rem 1.25rem 1.25rem;
@@ -817,12 +1106,16 @@ button {
   flex-shrink: 0;
 }
 /* strip, bands, plot, readout */
+/* FIVE COLUMNS: the model column, the depth bands, the residual plot, the
+   volume, and the readout. The volume used to sit above this grid at a fixed
+   34rem in a 72rem dialog, which left most of the width empty on both sides of
+   the thing the panel is for. */
 .studio__body {
   display: grid;
-  grid-template-columns: 2.25rem 7.5rem minmax(0, 1fr) 15rem;
+  grid-template-columns: 2.25rem 7.5rem minmax(0, 1fr) minmax(0, 1.15fr) 14rem;
   gap: 0.75rem;
   align-items: stretch;
-  min-height: 26rem;
+  min-height: 28rem;
 }
 .studio__strip {
   display: flex;
@@ -876,10 +1169,17 @@ button {
   font-weight: 700;
 }
 /* The residual is the point of the view, so it is the one filled area, in
-   the reserved caution ink at low alpha. Nothing else on this panel is
-   filled, which is what makes the gap read as the subject. */
+   the reserved caution ink. Nothing else on this panel is filled, which is
+   what makes the gap read as the subject.
+
+   The alpha is much higher than the manila version's 26%, and the hue is the
+   plate-legible light tint rather than the rule value. 26% of a DARK red over
+   LIGHT stock was a 1.25:1 wash that worked because it was darker than its
+   ground; over slate the same recipe composites to #573838, which is 1.38:1
+   and unfindable. This lands at 3.1:1, above the floor a non-text mark needs
+   and still visibly a wash rather than a solid. */
 .studio__resid {
-  fill: rgba(178, 58, 34, 0.26);
+  fill: rgba(240, 138, 114, 0.62);
   stroke: none;
 }
 .studio__obs {
@@ -933,7 +1233,7 @@ button {
 }
 .studio__swatch--res {
   height: 0.5rem;
-  background: rgba(178, 58, 34, 0.26);
+  background: rgba(240, 138, 114, 0.62);
 }
 .studio__dl {
   display: grid;
@@ -987,6 +1287,25 @@ button {
   font-size: 0.5rem;
   line-height: 1.35;
   color: var(--ink-faint);
+}
+
+/* Below this the five-column stage cannot hold a readable plot AND a cube
+   that is not a letterbox, so the volume goes back above the grid at the
+   width it had when it was the only thing in the row. */
+@media (max-width: 1180px) {
+  .studio__body {
+    grid-template-columns: 2.25rem 7.5rem minmax(0, 1fr) 14rem;
+  }
+  .studio__cube {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    max-width: 34rem;
+    margin: 0 auto 0.75rem;
+  }
+  .cube {
+    height: 18rem;
+    flex: 0 0 auto;
+  }
 }
 
 @media (max-width: 1100px) {
@@ -1180,13 +1499,13 @@ button {
   color: var(--ink-soft);
 }
 .cbar__ink:hover {
-  background: rgba(22, 19, 13, 0.07);
+  background: rgba(227, 235, 240, 0.07);
   color: var(--ink);
 }
 .cbar__ink[aria-pressed="true"] {
   border-bottom: 3px double var(--rule);
   color: var(--ink);
-  background: rgba(43, 106, 134, 0.1);
+  background: rgba(74, 148, 182, 0.1);
 }
 .cbar__inkramp {
   height: 0.4375rem;
@@ -1206,7 +1525,8 @@ button {
   white-space: nowrap;
 }
 
-/* Errata are printed in the reserved ink, in the plate-legible value. */
+/* Errata are printed in the reserved ink, in the plate-legible value, which
+   since the ground inverted is the LIGHT tint rather than the dark one. */
 .cbar__errata {
   margin: 0.4375rem 0 0;
   padding-top: 0.3125rem;
@@ -1320,7 +1640,7 @@ button {
 }
 .verdict__toggle:hover {
   color: var(--ink);
-  background: rgba(22, 19, 13, 0.07);
+  background: rgba(227, 235, 240, 0.07);
 }
 
 /* --- error by depth: the rack's grammar, applied to residuals -------------- */
@@ -1364,7 +1684,7 @@ button {
    would read as a perfect band. */
 .scoretable__row[data-empty="true"] {
   color: var(--ink-faint);
-  border-bottom: 1px solid rgba(43, 106, 134, 0.14);
+  border-bottom: 1px solid rgba(74, 148, 182, 0.14);
 }
 /* The band the model is worst in. Dashed reserved ink, the same grammar the
    errata block uses: this is the line a forecaster has to know about. */
@@ -1384,7 +1704,10 @@ button {
   background: var(--ink-soft);
 }
 .scoretable__row[data-worst="true"] .scoretable__bar > span {
-  background: var(--caution);
+  /* The PLATE-legible caution value, not --caution. --caution is a rule-and-
+     border weight: at 3.5:1 it would leave the one bar that exists to be
+     noticed quieter than the --ink-soft bars it is supposed to outrank. */
+  background: var(--caution-ink);
 }
 
 .scoretable__read {
@@ -1452,7 +1775,7 @@ button {
 }
 
 /* --- HazardWatch -----------------------------------------------------------
-   On the water, not on a manila sheet, in the same instrument-box treatment
+   On the water, not on a station sheet, in the same instrument-box treatment
    the scale bar and the station legend use. That separation is the point: a
    sheet is a record of a cast, and a warning is a statement someone made about
    the near future.
@@ -1812,6 +2135,12 @@ button {
      globe would eat orbit drags. Only the children take the pointer. */
   pointer-events: none;
 }
+/* ABOVE THE STUDIO (z-index 40) ONLY WHILE A TOUR IS RUNNING. See the note on
+   body[data-tour="running"] .studio: the narration has to outrank the modal
+   for the length of a take, and nothing else in this band does. */
+body[data-tour="running"] .stage-foot {
+  z-index: 50;
+}
 .stage-foot > * {
   pointer-events: auto;
 }
@@ -2004,6 +2333,36 @@ button {
   font-size: 0.6875rem;
   line-height: 1.35;
   color: var(--caution-stamp);
+}
+
+/* SHORT SCREENS: the dock and the cartouche were sharing the bottom band.
+   At 1366 by 768 the cartouche wraps to three lines, which lifts its top edge
+   into the dock's row, and the dock is the one control on screen a judge must
+   be able to find. The dock moves up; the cartouche never does, because it is
+   the provenance line and it stays beside the data it describes. */
+@media (max-height: 820px) {
+  .stage-foot {
+    bottom: 10.5rem;
+  }
+  /* The dock moved up, so the column's floor moves with it. */
+  .panel-mid {
+    max-height: calc(100vh - 16.5rem);
+  }
+  .recentre {
+    bottom: 14.75rem;
+  }
+}
+
+/* The foot band is centred on the VIEWPORT, and the side columns are not: the
+   sheet is 21rem on the left and the profile column 25rem on the right. At
+   1920 there is room for all three; below about 1500 the centred 44rem band
+   reaches under the right column, and the dock outranks it, so a tab landed on
+   the profile's citation. Narrow the band to the water that is actually free
+   rather than moving anything. */
+@media (max-width: 1500px) {
+  .stage-foot {
+    width: min(44rem, calc(100vw - var(--sheet-w) - 27rem - 4rem));
+  }
 }
 
 @media (max-width: 900px) {

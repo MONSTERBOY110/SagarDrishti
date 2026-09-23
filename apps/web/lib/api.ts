@@ -336,6 +336,10 @@ export interface TourStep {
   /** seconds this step holds before the player advances */
   hold: number;
   patch: Record<string, unknown>;
+  /** A surface to raise that is NOT scene state. Only "studio" today, and the
+   *  server refuses any other value rather than letting a take record a step
+   *  that does nothing. See STAGEABLE in services/api/app/storyboards.py. */
+  stage?: string;
   evidence: string[];
 }
 

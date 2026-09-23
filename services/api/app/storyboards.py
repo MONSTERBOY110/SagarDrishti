@@ -99,6 +99,20 @@ _RANGES: dict[str, tuple[float, float, str]] = {
     "focusDepth": (0.0, 11000.0, "metres below the surface"),
 }
 
+#: What a step may raise besides the scene itself.
+#:
+#: `patch` is the SCENE. This is the STAGE: a surface that is not scene state
+#: and that the agent deliberately cannot touch (apps/web/lib/panels.ts says
+#: why). It exists for exactly one reason. The submission video is a replay of
+#: `the-whole-story`, and the volumetric cube, which is the answer to the one
+#: thing judges said was missing, lives in a modal that no scene key opens. A
+#: tour that cannot raise it is a video that does not show the feature.
+#:
+#: Validated rather than passed through, for the same reason `patch` is: a step
+#: that asks for a stage the client does not have would do nothing at all,
+#: silently, in the take you already submitted.
+STAGEABLE = frozenset({"studio"})
+
 #: Numerals that carry no claim and would only add noise to the guard: a date
 #: inside a patched timestamp, an ordinal in "the tenth of July", a spelled
 #: number. Digits are what the rule is about.
@@ -209,6 +223,26 @@ def validate_tour(raw: dict, *, where: str = "") -> Tour:
                         "is not clamped, it is DISPLAYED: opacity 72 rather than 0.72 "
                         "renders as '7200%' on the sheet, in front of a judge, and "
                         "nothing else on screen looks wrong enough to notice."
+                    )
+
+        stage = step.get("stage")
+        if stage is not None:
+            if not isinstance(stage, str) or stage not in STAGEABLE:
+                raise TourError(
+                    f"{at}: stage {stage!r} is not one this client can raise. "
+                    f"Known stages: {', '.join(sorted(STAGEABLE))}"
+                )
+            if stage == "studio":
+                # The studio is opened FOR a cast; with none selected it would
+                # raise an empty modal over the scene, on stage, for the length
+                # of the hold. Requiring the selection on the same step also
+                # means a reader of the tour file can see what is in the cube.
+                sel = patch.get("selection")
+                if not isinstance(sel, str) or not sel:
+                    raise TourError(
+                        f"{at}: stage 'studio' needs this step to patch a "
+                        f"selection. The water column studio opens for the cast "
+                        f"on screen, and with none it is an empty box."
                     )
 
         evidence = step.get("evidence", [])

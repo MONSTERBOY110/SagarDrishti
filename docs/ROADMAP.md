@@ -54,7 +54,7 @@ All four instrument classes the PS names are now live. The profile table went
 from 25 casts and 16,390 levels to **149 casts and 30,012 levels**, and F2 moved
 from "partly met" to met.
 
-Tests: 485 data plane, 71 agent, 11 browser, **567** total, all green.
+Tests: 512 data plane, 71 agent, 12 browser, **595** total, all green (re-counted 23 September; it was 485 / 71 / 11 = 567).
 
 ## Phase 0 - Team & repo - ✅ DONE Sep 7 (repo D:\Projects\SagarDrishti, docs moved, PRIOR-ART.md added; mentor onboarded)
 - [x] Repo created; doc pack in `docs/`; prior-art & literature review done (docs/PRIOR-ART.md)

@@ -80,24 +80,89 @@ interface Props {
 }
 
 const ABYSS = "#05080c";
+
+/* THE MARK PALETTE, which lives on the WATER and not on the plate.
+   A station mark is a light body with a near-black edge, and the edge is not
+   decoration: the mark has to stay legible when it lands on the brightest
+   patch of the colorbar, and only a dark outline does that. The body used to
+   be the manila plate colour; the plate is now dark slate and would vanish
+   into the water, so the body follows the ink instead. Hand copies of the
+   globals.css tokens, because a canvas cannot read a custom property. */
+const MARK_BODY = "#E3EBF0"; /* --ink */
+const MARK_EDGE = ABYSS;
+const MARK_ARCHIVE = "#7f8f99"; /* --stamp-soft: the not-live value */
 /** The Bay of Bengal opening view.
  *
  * Framed with lookAt on a point PART WAY DOWN the column rather than on the
  * sea surface, so the stack sits in the middle of the frame instead of hanging
- * off the bottom of it; the transform is released immediately afterwards so the
- * user still has free orbit. A setView with a pitched orientation puts most of
- * the viewport in empty space, which is the mistake this replaces. */
+ * off the bottom of it. A setView with a pitched orientation puts most of the
+ * viewport in empty space, which is the mistake this replaces. */
 const HOME = {
   lon: 87.0,
   lat: 15.0,
-  /** metres below the surface, roughly mid-column at the default exaggeration */
-  centreDepth: -190_000,
+  /** ON THE SURFACE, and that is a correctness requirement rather than a
+   *  framing choice.
+   *
+   *  It used to be 190 km down, which is the middle of the column once 2000 m
+   *  of water is exaggerated 200 times, and it framed the stack beautifully.
+   *  It also put the camera's whole frame of reference underground: Cesium
+   *  measures `minimumZoomDistance` from the transform origin, so a 120 km
+   *  floor left the camera 70 km BELOW the sea floor at full zoom, inside the
+   *  Earth, with the water behind it. A browser test found that at 151 km
+   *  before collision detection was turned on and at 70 km after. No value of
+   *  the zoom floor fixes it, because at a shallow pitch the camera barely
+   *  rises from the origin at all.
+   *
+   *  With the origin at the surface, a camera at ANY range and ANY pitch in
+   *  the upper hemisphere is above the ellipsoid, so one bound holds
+   *  everywhere. The column is framed by pitch and range instead. */
+  centreDepth: 0,
   /** Low, because a slice stack seen from above is one opaque lid; the
-   *  stratification only reads from the side. */
-  pitchDeg: -18,
+   *  stratification only reads from the side. Lowered further when the origin
+   *  came up to the surface: the column hangs BELOW the point the camera is
+   *  aimed at, so a shallower angle is what brings it back into the middle of
+   *  the frame. */
+  pitchDeg: -20,
   /** Far enough out that the stack covers part of the viewport instead of all
-   *  of it - overdraw is the dominant cost in this scene. */
-  range: 3_000_000,
+   *  of it: overdraw is the dominant cost in this scene. Raised from 3.0 Mm
+   *  when the aim point came up to the surface, because the column then hangs
+   *  BELOW that point instead of straddling it and ran off the bottom of the
+   *  frame. Measured at 3.9 Mm: the warm surface, the gradient and the blue
+   *  deep water all sit inside the viewport with the limb behind them. */
+  range: 3_900_000,
+};
+
+/** How close and how far the camera may get to the water.
+ *
+ * WHY THIS EXISTS. Judges reported that the scene "gets lost" and that zooming
+ * and rotating felt bad. It was not a feel problem, it was a frame-of-reference
+ * problem: the opening shot used lookAt and then immediately released the
+ * transform with `lookAtTransform(Matrix4.IDENTITY)`, which hands the camera
+ * back to Cesium's default controller. That controller orbits the CENTRE OF THE
+ * PLANET. At basin scale, with collision detection off and no zoom bounds, a
+ * drag rotates the whole Earth under you and a scroll flies straight through
+ * it, so the box of water you were looking at leaves the screen and there is no
+ * way back.
+ *
+ * Holding the transform on the data box instead makes every drag an orbit AROUND
+ * THE WATER and every scroll a dolly towards it, which is the Google Earth
+ * behaviour that was asked for. The bounds then stop the two remaining ways to
+ * lose it: pushing through the far side, and retreating until the box is a dot.
+ */
+const CAMERA = {
+  /** Closer than this and the near plane starts clipping the slice stack. */
+  minZoom: 120_000,
+  /** Far enough to see the whole Bay in context, not so far that the data box
+   *  becomes a speck with nothing to grab. */
+  maxZoom: 14_000_000,
+  /** Cesium's defaults are 0.9, which on a scene this size reads as drift.
+   *  Lower is crisper: the motion stops close to when the hand stops. */
+  inertiaSpin: 0.55,
+  inertiaTranslate: 0.55,
+  inertiaZoom: 0.6,
+  /** Seconds for the Recentre flight. Long enough to read as a move rather
+   *  than a cut, short enough not to stall a demo. */
+  recentreSeconds: 1.2,
 };
 
 export default function OceanGlobe(props: Props) {
@@ -239,18 +304,76 @@ export default function OceanGlobe(props: Props) {
         26.0,
       );
       scene.globe.depthTestAgainstTerrain = false;
-      scene.screenSpaceCameraController.enableCollisionDetection = false;
+      /* COLLISION DETECTION IS ON, and it was off until a browser test flew
+         the camera 151 km underground with the mouse wheel.
+         It was disabled alongside globe translucency, which is the usual
+         pairing in Cesium's own samples: with a translucent globe you are
+         meant to be able to go inside it. This scene never needs to. The water
+         column is drawn BELOW the surface and read THROUGH the translucent
+         globe from outside, so the only thing the camera gains underground is
+         a view of the inside of the Earth with the data behind it, which is
+         precisely the "it gets lost" the review reported. `lookAt` frames the
+         shot on a point 190 km down (the middle of a 200x exaggerated column),
+         so a 120 km minimum zoom still leaves the camera 150 km below the sea
+         floor at the default pitch: the bound is measured from the transform
+         origin, and the origin is underground. This clamps the camera itself,
+         which is the only guard that holds at every pitch. */
+      scene.screenSpaceCameraController.enableCollisionDetection = true;
 
-      viewer.camera.lookAt(
-        Cesium.Cartesian3.fromDegrees(HOME.lon, HOME.lat, HOME.centreDepth),
-        new Cesium.HeadingPitchRange(
-          0,
-          Cesium.Math.toRadians(HOME.pitchDeg),
-          HOME.range,
-        ),
-      );
-      // Release the reference frame or the camera stays welded to that point.
-      viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      /* Orbit and zoom about the WATER, not the planet. See CAMERA above for
+         why the transform is now held rather than released. */
+      const ctl = scene.screenSpaceCameraController;
+      ctl.minimumZoomDistance = CAMERA.minZoom;
+      ctl.maximumZoomDistance = CAMERA.maxZoom;
+      ctl.inertiaSpin = CAMERA.inertiaSpin;
+      ctl.inertiaTranslate = CAMERA.inertiaTranslate;
+      ctl.inertiaZoom = CAMERA.inertiaZoom;
+
+      /* THE OPENING RANGE FOLLOWS THE VIEWPORT HEIGHT.
+         A fixed range frames the column for one screen and no other. Measured
+         at 1920 by 1080 the column clears every panel and none of the 149
+         marks is under one; at 1366 by 768 the same range put sixteen of them
+         behind the verification card, because the card is a third of a 1080 px
+         screen and nearly half a 768 px one. Scaling the range by how short
+         the viewport is keeps the column about the same size ON SCREEN, which
+         is what the framing was actually chosen for. Clamped, so a very tall
+         or very short window does not swing it absurdly. */
+      const homeRange = () => {
+        const h = viewer.scene.canvas.clientHeight || 1080;
+        const k = Math.min(1.6, Math.max(1, 1080 / Math.max(600, h)));
+        return HOME.range * k;
+      };
+
+      const home = () =>
+        viewer.camera.lookAt(
+          Cesium.Cartesian3.fromDegrees(HOME.lon, HOME.lat, HOME.centreDepth),
+          new Cesium.HeadingPitchRange(
+            0,
+            Cesium.Math.toRadians(HOME.pitchDeg),
+            homeRange(),
+          ),
+        );
+      home();
+
+      /* Published so a control, a guided tour or the agent can all put the
+         camera back the same way, rather than each computing its own idea of
+         where home is. */
+      (window as unknown as Record<string, unknown>).__sagarRecentre = () => {
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(
+            HOME.lon,
+            HOME.lat,
+            homeRange(),
+          ),
+          orientation: {
+            heading: 0,
+            pitch: Cesium.Math.toRadians(HOME.pitchDeg),
+            roll: 0,
+          },
+          duration: CAMERA.recentreSeconds,
+          complete: home,
+        });
+      };
 
       cesiumRef.current = {
         viewer, Cesium, slices: [], floats: [], hazards: [], arrows: [], nodes: [],
@@ -786,14 +909,14 @@ export default function OceanGlobe(props: Props) {
       Unknown: 0.08,
     };
     // TWO values of the one reserved ink, and using the right one matters.
-    // globals.css defines --caution (#b23a22) for rules and borders ON THE
-    // MANILA PLATE, and --caution-stamp (#e8735a) as the value that stays
-    // legible ON THE WATER at 6.4:1. This layer is on the water. The first
+    // globals.css defines --caution (#D4553C) for rules and borders ON THE
+    // PLATE, and --caution-stamp (#e8735a) as the value that stays
+    // legible ON THE WATER at 6.7:1. This layer is on the water. The first
     // version used the plate value and the warning outlines were nearly
     // invisible over a bright field, which for a hazard layer is not a
     // cosmetic miss.
     // ONE value, the on-water one, for both the stroke and the wash. The plate
-    // value (#b23a22) is a dark red, and a dark red at fifteen per cent over
+    // value was a dark red, and a dark red at fifteen per cent over
     // near-black water adds nothing a viewer can see: the fill was invisible
     // until this changed.
     const CAUTION = Cesium.Color.fromCssColorString("#e8735a");
@@ -1000,7 +1123,7 @@ export default function OceanGlobe(props: Props) {
   );
 }
 
-/** A hydrographic station mark: an ink-outlined manila figure with a centre
+/** A hydrographic station mark: a dark-outlined light figure with a centre
  *  tick, drawn rather than borrowed from an icon font, in the sheet's own ink.
  *
  *  INSTRUMENT CLASS IS CARRIED BY SILHOUETTE, NOT COLOUR. The PS asks for Argo
@@ -1029,16 +1152,16 @@ export function stationMark(
   ctx.translate(s / 2, s / 2);
 
   if (selected) {
-    ctx.strokeStyle = "#16130d";
+    ctx.strokeStyle = MARK_EDGE;
     ctx.lineWidth = 2;
     ctx.strokeRect(-17, -17, 34, 34);
-    ctx.strokeStyle = "#c4b89a";
+    ctx.strokeStyle = MARK_BODY;
     ctx.lineWidth = 1;
     ctx.strokeRect(-15, -15, 30, 30);
   }
 
-  ctx.fillStyle = "#c4b89a";
-  ctx.strokeStyle = "#16130d";
+  ctx.fillStyle = MARK_BODY;
+  ctx.strokeStyle = MARK_EDGE;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
   switch (kind) {
@@ -1098,7 +1221,7 @@ export function stationMark(
       // and it borrows the same convention a hollow symbol carries on a
       // scientific plot.
       ctx.fillStyle = ABYSS;
-      ctx.strokeStyle = "#c4b89a";
+      ctx.strokeStyle = MARK_BODY;
       ctx.arc(0, 0, 9.5, 0, Math.PI * 2);
       break;
     default:
@@ -1110,7 +1233,7 @@ export function stationMark(
 
   // The centre tick, in whatever the outline was drawn in. That is deliberate
   // rather than incidental: on the hollow mark the fill is the dark of the
-  // abyss, so an ink tick would be invisible and the manila one is the only
+  // abyss, so a dark tick would be invisible and the light body is the only
   // one that reads.
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -1136,7 +1259,7 @@ export function stationMark(
    * water years before the model field under it. The ring says so without
    * touching the mark, so the glyph still reads as a glider and the reader
    * still learns it is not from now. Dashed, because dashed already means
-   * "not the live thing" everywhere in this product; manila rather than the
+   * "not the live thing" everywhere in this product; muted rather than the
    * caution coral, because being archive is not a warning. */
   if (archive) {
     // SOLID, and pushed out to the edge of the box. The first version of this
@@ -1150,7 +1273,20 @@ export function stationMark(
     // it was learned twice. What survives 15 px is a change to the
     // SILHOUETTE, not a texture inside it. A solid ring at the rim of the box
     // adds an unmistakable halo while leaving the dart a dart.
-    ctx.strokeStyle = "#a89880";
+    // BACKED WITH THE EDGE, like the mark body is. The rule at the top of
+    // this function is that a mark carries a dark outline because it has to
+    // stay legible when it lands on the brightest patch of the colorbar, and
+    // these two rings were the one thing drawn without one: a muted grey ring
+    // over a warm patch of thermal is about 1.1:1, which is no ring at all.
+    // These rings carry the two facts a reader most needs from a glance,
+    // "this is not from now" and "this one tripped", so they are exactly the
+    // marks that may not disappear. One extra stroke each.
+    ctx.strokeStyle = MARK_EDGE;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 18.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = MARK_ARCHIVE;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(0, 0, 18.5, 0, Math.PI * 2);
@@ -1158,6 +1294,14 @@ export function stationMark(
   }
 
   if (alarm) {
+    // Same treatment, and the dash is drawn in the caution ink OVER a solid
+    // dark backing, so the gaps in the dash read against the edge rather than
+    // against whatever the field happens to be doing.
+    ctx.strokeStyle = MARK_EDGE;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 17, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.setLineDash([5, 4]);
     ctx.strokeStyle = "#e8735a";
     ctx.lineWidth = 3;

@@ -29,6 +29,30 @@ jobs:
       - name: No em or en dashes
         run: python tools/check_dashes.py
 
+      # Every colour token in globals.css states a measured contrast ratio in
+      # its own comment, and a stated measurement nobody re-runs is a claim.
+      # The 22 September palette inversion left `--caution-ink` at 1.4:1 in a
+      # draft, which is the ink every caveat in this product is printed in; a
+      # human caught it. This is the part of that reading that scales.
+      - name: The stated contrast ratios are the real ones
+        run: python tools/check_contrast.py
+
+      # The station-sheet substrate is an OPAQUE raster painted over --plate,
+      # so the tile silently overrides whatever the stylesheet says. The
+      # generator reads --plate out of globals.css and refuses to run if the
+      # two disagree, and until this job existed that refusal only fired for
+      # whoever happened to re-run the script by hand. The docstring claimed
+      # "the build fails if they drift", which was not true of anything.
+      #
+      # Regenerating into a temp path and diffing also proves the provenance
+      # sidecar's other claim, that the same seed reproduces the file byte for
+      # byte, which is the whole argument that the asset is auditable.
+      - name: The form stock matches the plate token, byte for byte
+        run: |
+          pip install numpy pillow
+          python tools/make_plate_tile.py
+          git diff --exit-code -- apps/web/public/textures/
+
   data-plane:
     name: data plane (pytest)
     runs-on: ubuntu-latest

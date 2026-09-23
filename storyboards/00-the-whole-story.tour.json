@@ -96,6 +96,22 @@
       ]
     },
     {
+      "narration": "Open that same cast in the water column studio and the water becomes a volume, ray marched on the graphics card rather than stacked as pictures. It spins, and the slider cuts it away by depth so you can see the thermocline from inside. Beside it is that cast again as a difference: what the instrument measured, what the model said, and the gap shaded between them. A cube on its own is a prettier picture of the same field. A cube next to its own error is a claim.",
+      "hold": 13,
+      "patch": {
+        "selection": "2903831_20260728T141348",
+        "isosurfaceOn": false,
+        "currentsOn": false
+      },
+      "stage": "studio",
+      "evidence": [
+        "GPU ray-marched volume: a Data3DTexture sampled in a GLSL3 fragment shader, front to back, with early ray termination. TRD M3 strategy (c)",
+        "The colour ramp is built by the same rgbFor() the globe and the profile chart use, at the same vmin and vmax, so the cube cannot disagree with the colorbar about what a colour means",
+        "Cells the analysis has no value for carry a validity channel and are never coloured, so a gap stays a gap instead of becoming cold water",
+        "The shaded band is this cast against the model column; the Class-4 figure beside it is every cast in this box at that depth, and the panel says which is which"
+      ]
+    },
+    {
       "narration": "And here is the part I would ask you to remember. Every ocean viewer in the world draws the model. This one also prints how wrong the model is, as a number, checked against the real instruments in the water, on the same screen as the field it is judging.",
       "hold": 13,
       "patch": {

@@ -102,10 +102,14 @@ interface Props {
   onClose: () => void;
 }
 
-const PLATE = "#c4b89a";
-const INK = "#16130d";
-const INK_SOFT = "#4a4335";
-const RULE = "rgba(43,106,134,.34)";
+/* ECharts draws into a canvas, so it cannot read a CSS custom property. These
+   four are therefore a HAND COPY of the globals.css tokens, and they are the
+   reason a palette change has to be swept for rather than edited in one place:
+   the chart would have gone on drawing the old plate under the new panel. */
+const PLATE = "#222B36";
+const INK = "#E3EBF0";
+const INK_SOFT = "#A9B8C4";
+const RULE = "rgba(74,148,182,.34)";
 const MONO = '"Courier Prime", ui-monospace, monospace';
 const SANS = '"Archivo Narrow", system-ui, sans-serif';
 
@@ -434,8 +438,11 @@ export default function ProfilePanel(p: Props) {
             fontSize: "0.625rem",
             lineHeight: 1.45,
             color: "var(--ink-soft)",
-            borderLeft: "2px solid #8a7f68",
-            background: "rgba(138, 127, 104, 0.08)",
+            /* --stamp-soft, the value this product uses for "not the live
+               thing" (the archive ring on the globe mark is the same one).
+               These were warm greys picked to sit in the manila family. */
+            borderLeft: "2px solid #7f8f99",
+            background: "rgba(127, 143, 153, 0.1)",
           }}
         >
           <strong style={{ letterSpacing: "0.04em" }}>ARCHIVE OBSERVATION</strong>
