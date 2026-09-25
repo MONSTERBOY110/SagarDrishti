@@ -1,38 +1,28 @@
-# OFFLINE=1 overlay (TRD M6 / PRD F11): the air-gapped demo posture.
-#   docker compose -f docker-compose.yml -f docker-compose.offline.yml up
+# The air-gapped posture, in containers (PRD F11).
 #
-# Swaps per TRD M6: sources -> local zarr cube; PostGIS -> SQLite; LLM -> local
-# Ollama; STT/TTS -> local ONNX; Cesium assets -> already local (ADR-0001).
-# STATUS: AUTHORED, NOT YET EXECUTED (ADR-0004).
+#   docker compose -f docker-compose.yml -f docker-compose.offline.yml up --build
+#
+# WHAT THIS PROVES AND WHAT IT DOES NOT. The data plane is run with NO NETWORK
+# AT ALL and the check below still has to pass, which shows the service needs
+# nothing outside the machine to answer. It cannot do the same for the browser's
+# side, because a container on `network_mode: none` cannot publish a port, so
+# the browser reaches the web and agent containers over localhost as normal.
+# The browser's half of the claim is proven where it always has been: every
+# test in e2e/demo-path.spec.ts fails if a single request leaves the machine.
+#
+# The earlier draft of this file named an Ollama service and local ONNX speech
+# engines. None of that runs: the planner is rule-based and prints
+# `planner: rules` under every answer. They were removed rather than left in as
+# a description of a system that does not exist.
 
 services:
-  api:
+  api-airgap:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    network_mode: none
     environment:
       OFFLINE: "1"
-      SAGAR_DB: sqlite:////srv/sagardrishti/data/cube/catalog.sqlite
-    network_mode: none          # proves the API never needs the network
-
-  agent:
-    environment:
-      OFFLINE: "1"
-      LLM_PROVIDER: ollama
-      OLLAMA_BASE: http://ollama:11434
-      STT_ENGINE: indicconformer-onnx
-      TTS_ENGINE: indictts-onnx
-
-  web:
-    environment:
-      NEXT_PUBLIC_OFFLINE: "1"
-
-  db:
-    profiles: ["online-only"]   # SQLite replaces PostGIS offline
-
-  ollama:
-    image: ollama/ollama:latest
     volumes:
-      - ollama:/root/.ollama
-    ports:
-      - "11434:11434"
-
-volumes:
-  ollama:
+      - ./data:/srv/sagardrishti/data:ro
+    profiles: ["airgap"]

@@ -39,6 +39,15 @@ const ready = async (page) => {
   await page.waitForTimeout(7000);
 };
 
+/* The side-on column view. Since 25 September the app OPENS on the whole
+   globe from straight above, where the Bay is a small box; the deck's scene
+   pictures are about the volume, so they are taken from the view a guided
+   tour flies to, which is the old opening frame. */
+const columnView = async (page) => {
+  await page.evaluate(() => window.__sagarColumnView?.());
+  await page.waitForTimeout(5000);
+};
+
 const launch = () =>
   chromium.launch({ args: ["--use-gl=angle", "--enable-unsafe-swiftshader"] });
 
@@ -51,6 +60,7 @@ const launch = () =>
   });
   await page.goto(URL, { waitUntil: "networkidle", timeout: 120_000 });
   await ready(page);
+  await columnView(page);
 
   /* The pure-globe shot, CLIPPED TO THE WATER. The dock stays on screen in
      this mode on purpose (a screen with no way back is broken, not minimal),

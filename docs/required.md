@@ -467,3 +467,20 @@ Three things about voice need your answer before code:
 3. **Devanagari, Telugu and Tamil glyphs.** Both our typefaces are latin only,
    so Indian-language text would render as empty boxes in an air-gapped demo.
    This has to land before any multilingual text, not after.
+
+
+### 16. Bhashini key: submitted, waiting on their approval (25 September)
+
+The API key request for app `sagardrishti` went in on 25 September (ASR, NMT,
+TTS; English, Hindi, Tamil, Telugu; web, server-side only; the deck PDF
+attached). Step 3 asked us to pick a Bhashini manager to review it, from three
+names with nothing to tell them apart, so I picked the first (Swati Sharma) and
+added a one-line remark that submissions close 30 September. The portal said
+"Request Submitted Successfully! Once approved, you will receive the key in
+your dashboard."
+
+**What I need from you:** when the dashboard shows the request as Approved,
+tell me (or open the portal in the Playwright browser again and I will read it
+from there). The key goes into `.env` only, as `BHASHINI_USER_ID` and
+`BHASHINI_API_KEY`. Until then the voice code is built and tested against a
+stubbed client, and the demo uses the offline path.

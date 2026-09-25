@@ -32,6 +32,33 @@
   font-display: block;
 }
 
+/* Indian scripts for the voice answers (PRD F10), under ONE family name with
+   a unicode-range each, so a latin-only page never downloads them and an
+   air-gapped demo never draws a Hindi, Telugu or Tamil answer as empty boxes.
+   Appended to both stacks below, after the latin face, so it only ever
+   supplies the glyphs the latin face does not have. */
+@font-face {
+  font-family: "Sagar Indic";
+  src: url("/fonts/noto-sans-devanagari.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+  unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F0, U+25CC, U+A830-A839, U+A8E0-A8FF;
+}
+@font-face {
+  font-family: "Sagar Indic";
+  src: url("/fonts/noto-sans-telugu.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+  unicode-range: U+0951-0952, U+0964-0965, U+0C00-0C7F, U+1CDA, U+1CF2, U+200C-200D, U+25CC;
+}
+@font-face {
+  font-family: "Sagar Indic";
+  src: url("/fonts/noto-sans-tamil.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+  unicode-range: U+0964-0965, U+0B82-0BFA, U+200C-200D, U+20B9, U+25CC;
+}
+
 :root {
   /* the water: near-black, because the scene is the ocean below the surface */
   --abyss: #05080c;
@@ -85,7 +112,7 @@ body {
   height: 100%;
   background: var(--abyss);
   color: var(--stamp);
-  font-family: "Archivo Narrow", system-ui, sans-serif;
+  font-family: "Archivo Narrow", "Sagar Indic", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -134,7 +161,7 @@ button {
    sheet the typewriter is what was ENTERED; printed matter is the form's own
    face, which is why prose never carries this class. */
 .num {
-  font-family: "Courier Prime", ui-monospace, monospace;
+  font-family: "Courier Prime", "Sagar Indic", ui-monospace, monospace;
   font-variant-numeric: tabular-nums lining-nums;
 }
 
@@ -571,7 +598,7 @@ button {
 .cartouche__flag {
   padding: 0 0.25rem;
   border: 1px solid var(--stamp-soft);
-  font-family: "Courier Prime", ui-monospace, monospace;
+  font-family: "Courier Prime", "Sagar Indic", ui-monospace, monospace;
   font-size: 0.625rem;
   font-weight: 400;
   letter-spacing: 0;
@@ -1036,8 +1063,11 @@ body[data-tour="running"] .studio {
    input sat across the cube's cutaway control in the one beat that talks about
    cutting the cube away. It is not part of a hands-off replay and no step
    narrates it. Out of a tour this rule never fires, because the band is behind
-   the scrim anyway. */
-body[data-tour="running"]:has(.studio) .ask {
+   the scrim anyway.
+   WIDENED TO THE WHOLE TOUR on 25 September: the same panel sat in the middle
+   of the frame over the water column on every step of the demo video, and
+   nothing in any tour asks it anything. */
+body[data-tour="running"] .ask {
   display: none;
 }
 /* Short screens cannot give up 20rem AND hold a 28rem grid, so the grid
@@ -2537,6 +2567,85 @@ body[data-tour="running"] .stage-foot {
   font-size: 0.5625rem;
   line-height: 1.35;
   color: var(--stamp-soft);
+}
+
+/* Voice (PRD F10): a language, a push-to-talk key and a read-aloud switch,
+   in one ruled row under the question. When the agent reports that speech
+   cannot run here, the reason is printed under the row in words. */
+.ask__voice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.375rem;
+  font-size: 0.625rem;
+  color: var(--stamp-soft);
+}
+.ask__lang select {
+  padding: 0.0625rem 0.25rem;
+  background: rgba(5, 8, 12, 0.9);
+  border: 1px solid var(--stamp-soft);
+  border-radius: 0;
+  color: var(--stamp);
+  font: inherit;
+  font-size: 0.6875rem;
+}
+.ask__mic {
+  padding: 0.0625rem 0.5rem;
+  background: none;
+  border: 1px solid var(--stamp-soft);
+  color: var(--stamp);
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.ask__mic[aria-pressed="true"] {
+  border-color: var(--caution-stamp);
+  color: var(--caution-stamp);
+}
+.ask__mic:disabled {
+  border-style: dotted;
+  color: var(--stamp-soft);
+  cursor: not-allowed;
+}
+.ask__aloud {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+.ask__voicenote {
+  margin: 0.25rem 0 0;
+  font-size: 0.625rem;
+  line-height: 1.35;
+  color: var(--stamp-soft);
+}
+.ask__heard {
+  margin: 0.3125rem 0 0;
+  font-size: 0.75rem;
+}
+.ask__mt {
+  margin-top: 0.375rem;
+  padding-left: 0.4375rem;
+  border-left: 2px solid var(--stamp-soft);
+}
+.ask__mttext {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.ask__mtlabel {
+  margin: 0.1875rem 0 0;
+  font-size: 0.5625rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--stamp-soft);
+}
+.ask__heard .ask__mtlabel {
+  margin: 0;
 }
 
 @media (max-width: 900px) {

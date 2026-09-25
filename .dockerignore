@@ -1,0 +1,28 @@
+# What the build context must NOT carry.
+#
+# `.env` FIRST, and it is load-bearing rather than tidy: it is the only file in
+# the repository that holds a credential (the Copernicus Marine login, and the
+# Bhashini key once it exists). A `COPY . .` anywhere, now or in a future edit,
+# would bake it into an image layer that outlives every later change to it.
+.env
+.env.*
+
+# Rebuilt inside the image, or not needed in it at all.
+**/node_modules
+**/.next
+.venv
+**/__pycache__
+**/.pytest_cache
+apps/web/public/cesium
+
+# Large, gitignored, and mounted at runtime rather than baked in.
+data
+
+# Local artefacts.
+test-results
+playwright-report
+docs/evidence
+docs/submission
+.ppt-build
+.git
+.remember

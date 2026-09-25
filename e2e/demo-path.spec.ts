@@ -26,7 +26,7 @@ const PROBE = "/?probe=1";
  *  one test posts to it directly: SagarNode's whole claim is that a device
  *  nobody had heard of can post to /ingest and appear on the globe, and the
  *  cheapest honest device to be is an HTTP client. */
-const API = "http://127.0.0.1:8100";
+const API = process.env.SAGAR_E2E_API ?? "http://127.0.0.1:8100";
 
 interface Watchers {
   consoleErrors: string[];
@@ -1049,6 +1049,20 @@ test.describe("SagarDrishti demo path", () => {
     const ask = page.locator('[aria-label="Ask Samudra Sahayak"]');
     await expect(ask).toBeVisible({ timeout: 30_000 });
 
+    // --- voice, offline: stated, not broken (PRD F10) ------------------------
+    // Speech runs through Bhashini from the agent SERVER, so an offline build
+    // cannot listen. The microphone must say that in words rather than sit
+    // there as a button that does nothing, and the other languages must not
+    // be offered as if they worked.
+    const mic = ask.locator(".ask__mic");
+    await expect(mic).toBeVisible();
+    await expect(mic).toBeDisabled();
+    await expect(ask.locator('.ask__voicenote[data-reason="offline"]')).toContainText(
+      /needs the network/i,
+    );
+    await expect(ask.locator('.ask__lang option[value="hi"]')).toHaveAttribute("disabled", "");
+    await expect(ask.locator('.ask__lang option[value="en"]')).not.toHaveAttribute("disabled");
+
     // --- an answer built from a tool ----------------------------------------
     await ask.getByRole("button", { name: "How good is the model?" }).click();
     const text = ask.locator(".ask__text");
@@ -1482,8 +1496,13 @@ test.describe("SagarDrishti demo path", () => {
     await page.getByRole("button", { name: "Recentre", exact: true }).click();
     await page.waitForTimeout(2500);
     const back = await camera();
-    expect(Math.abs(back.lon - home.lon), "Recentre must return to the box").toBeLessThan(6);
-    expect(Math.abs(back.lat - home.lat), "Recentre must return to the box").toBeLessThan(6);
+    /* Back OVER THE BOX (87 E, 15 N), not back to wherever the camera was
+       when `home` was read. Since 25 September the opening frame looks
+       straight down on the whole globe and a tour flies down to a side-on
+       column view, so after the tour above `home` is that column view and
+       Recentre rightly returns to the opening frame instead. */
+    expect(Math.abs(back.lon - 87), "Recentre must return to the box").toBeLessThan(6);
+    expect(Math.abs(back.lat - 15), "Recentre must return to the box").toBeLessThan(6);
     expect(back.h, "Recentre must pull back out").toBeGreaterThan(close.h);
 
     expect(w.offOrigin, "PRD F11: none of this may reach the network").toEqual([]);

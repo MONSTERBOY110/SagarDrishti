@@ -23,12 +23,38 @@
  * probes it once and renders nothing at all if it is absent. That is the
  * property demonstrated rather than described: stop one process and the tool
  * carries on, minus one panel, with no broken control left behind.
+ *
+ * IT CAN LISTEN AND SPEAK (PRD F10), WITHOUT MOVING THE AUTHORITY. Speech goes
+ * through our agent server to Bhashini, never from the browser. A spoken Hindi,
+ * Telugu or Tamil question is transcribed, shown, and translated to English for
+ * the planner; the English answer is still the one the guard checked, and the
+ * translation is printed beside it labelled as machine translation. Offline,
+ * the microphone says why it cannot listen, and English answers are read aloud
+ * by the computer's own voice, which needs no network.
  */
 
 import { useEffect, useRef, useState } from "react";
 
 import { agent, type AgentAnswer } from "@/lib/agent";
 import { useScene } from "@/lib/scene";
+import {
+  canSpeakLocally,
+  playWav,
+  speakLocally,
+  startRecording,
+  stopSpeaking,
+  voice,
+  type Spoken,
+  type VoiceLang,
+  type VoiceStatus,
+} from "@/lib/voice";
+
+const LANG_NAMES: Record<VoiceLang, string> = {
+  en: "English",
+  hi: "हिन्दी",
+  te: "తెలుగు",
+  ta: "தமிழ்",
+};
 
 /** Questions worth putting in front of someone who has never seen this.
  *
@@ -50,6 +76,16 @@ export default function AskPanel() {
   const [showTrace, setShowTrace] = useState(false);
   const box = useRef<HTMLInputElement>(null);
 
+  // Voice (PRD F10). `vs` is what the agent server says about speech here.
+  const [vs, setVs] = useState<VoiceStatus | null>(null);
+  const [lang, setLang] = useState<VoiceLang>("en");
+  const [aloud, setAloud] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [heard, setHeard] = useState<{ transcript: string; english: string } | null>(null);
+  const [spoken, setSpoken] = useState<Spoken | null>(null);
+  const [voiceNote, setVoiceNote] = useState("");
+  const stopRec = useRef<null | (() => Promise<string>)>(null);
+
   useEffect(() => {
     let live = true;
     agent
@@ -70,14 +106,85 @@ export default function AskPanel() {
     };
   }, []);
 
-  async function send(q: string) {
+  useEffect(() => {
+    if (up !== true) return;
+    let live = true;
+    voice
+      .status()
+      .then((v) => live && setVs(v))
+      .catch(() => live && setVs(null));
+    return () => {
+      live = false;
+      stopSpeaking();
+    };
+  }, [up]);
+
+  const remote = vs?.available === true;
+
+  /** After an answer: translate and speak it if asked, never replacing the
+   *  English. Failures are printed, not swallowed. */
+  async function voiceAnswer(a: AgentAnswer) {
+    setSpoken(null);
+    setVoiceNote("");
+    if (a.refused && a.planner === "unavailable") return;
+    if (lang === "en") {
+      if (aloud) speakLocally(a.answer);
+      return;
+    }
+    if (!remote) return;
+    try {
+      const s = await voice.speak(a.answer, lang);
+      setSpoken(s);
+      if (aloud && s.audio) await playWav(s.audio);
+    } catch (e) {
+      setVoiceNote(`Translation failed: ${(e as Error).message}`);
+    }
+  }
+
+  async function toggleMic() {
+    if (!remote || busy) return;
+    if (!recording) {
+      try {
+        stopRec.current = await startRecording();
+        setRecording(true);
+        setVoiceNote("Listening. Press again to stop.");
+      } catch (e) {
+        setVoiceNote(`The microphone could not start: ${(e as Error).message}`);
+      }
+      return;
+    }
+    setRecording(false);
+    const stop = stopRec.current;
+    stopRec.current = null;
+    if (!stop) return;
+    setVoiceNote("Transcribing through Bhashini");
+    try {
+      const wav = await stop();
+      const h = await voice.asr(wav, lang);
+      setHeard({ transcript: h.transcript, english: h.english });
+      setVoiceNote("");
+      if (!h.english) {
+        setVoiceNote("Nothing was heard. Try again, a little closer to the microphone.");
+        return;
+      }
+      if (box.current) box.current.value = h.english;
+      send(h.english, true);
+    } catch (e) {
+      setVoiceNote(`Speech input failed: ${(e as Error).message}`);
+    }
+  }
+
+  async function send(q: string, fromVoice = false) {
     const asked = q.trim();
     if (!asked || busy) return;
     setBusy(true);
     setQuestion(asked);
+    if (!fromVoice) setHeard(null);
+    stopSpeaking();
     try {
       const a = await agent.ask(asked);
       setAnswer(a);
+      void voiceAnswer(a);
       // The agent's ONLY channel to the view: a patch, applied through the
       // same store a person's clicks go through. It cannot draw.
       if (a.patch && Object.keys(a.patch).length > 0) {
@@ -129,6 +236,50 @@ export default function AskPanel() {
         </button>
       </form>
 
+      <div className="ask__voice" data-voice={remote ? "on" : "off"}>
+        <label className="ask__lang">
+          <span className="sr-only">Answer language</span>
+          <select
+            value={lang}
+            onChange={(e) => setLang(e.target.value as VoiceLang)}
+            aria-label="Answer language"
+          >
+            {(Object.keys(LANG_NAMES) as VoiceLang[]).map((l) => (
+              <option key={l} value={l} disabled={l !== "en" && !remote} lang={l}>
+                {LANG_NAMES[l]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="ask__mic"
+          aria-pressed={recording}
+          disabled={!remote || busy}
+          onClick={toggleMic}
+          title={remote ? "Push to talk" : vs?.message}
+        >
+          {recording ? "Stop" : "Speak"}
+        </button>
+        {(canSpeakLocally() || remote) && (
+          <label className="ask__aloud">
+            <input type="checkbox" checked={aloud} onChange={(e) => setAloud(e.target.checked)} />
+            Read answers aloud
+          </label>
+        )}
+      </div>
+      {!remote && vs && (
+        <p className="ask__voicenote" data-reason={vs.reason}>
+          {vs.message}
+        </p>
+      )}
+      {voiceNote && <p className="ask__voicenote">{voiceNote}</p>}
+      {heard && (
+        <p className="ask__heard">
+          <span className="ask__mtlabel">Heard</span> <span lang={lang}>{heard.transcript}</span>
+        </p>
+      )}
+
       {!answer && (
         <ul className="ask__suggest">
           {SUGGESTIONS.map((s) => (
@@ -152,6 +303,18 @@ export default function AskPanel() {
           <p className="ask__text" data-refused={answer.refused ? "true" : undefined}>
             {answer.answer}
           </p>
+
+          {spoken && spoken.machine_translation && (
+            <div className="ask__mt">
+              <p className="ask__mttext" lang={spoken.language}>
+                {spoken.text}
+              </p>
+              <p className="ask__mtlabel">
+                Machine translation through Bhashini. The English above is the answer the numbers were
+                checked against.
+              </p>
+            </div>
+          )}
 
           <div className="ask__meta">
             {/* Printed verbatim. An audience must not be left to assume a

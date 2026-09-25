@@ -88,6 +88,83 @@ Three.js or Cesium.js"**. Both are named, neither is mandated. Using Cesium for
 geodesy and Three.js for volumetrics is inside the specification, and is a
 better answer to a judge than a defence of why we only have one.
 
+### 1.5 The second sweep, 25 September: the field is about ninety repos
+
+GitHub's REST API, unauthenticated (code search needs a login, so repo and
+README search only): about ninety public repos mention SIH26067 or INCOIS 3D,
+106 READMEs were downloaded and the strongest read by hand. A scraped count
+(github.com/AryanSahu321/sih, 24 September) puts SIH26067 at **36 submitted
+ideas**. **No SIH26067 video or post was found** on YouTube, LinkedIn or
+Instagram in seven searches, so the video field is still empty.
+
+**Name collision.** `RutuRaj-1/Sagar_Drishti` ("SAGAR-DRISHTI (Ocean Vision)")
+is a real SIH26067 entry, and `SohamKamathi18/SagarDrishti` carries an SIH26067
+description. A reviewer who searches our name finds them. Our deck leads with
+PixelPaws and the PS number, which is the right defence; do not rename now.
+
+| Repo | What makes it a threat | What it lacks that we have |
+|---|---|---|
+| [Kukyos/VVater](https://github.com/Kukyos/VVater) (pushed 25 Sep, live) | Cesium voxel ray-march, CMEMS 1993 to forecast, 3D residual layer, uncertainty fade; an assistant that checks its numbers and moves the view | CAP, hardware, Class-4 refusal accounting, voice, Docker |
+| [Biprodeep12/oceanyo](https://github.com/Biprodeep12/oceanyo) | Ray-marched volume, **WMS 1.3.0 + WCS 2.0.1** + OPeNDAP, tool-call-only NLQ with local Ollama, Docker, centred RMSE | CAP, hardware, tours, voice |
+| [shanshantanusingh113-max/samudra-sih26](https://github.com/shanshantanusingh113-max/samudra-sih26) | Ray-marched volume, **377 pytest + 13 app-driving probes**, a per-PS-clause Met / Partly / Refused table | Agent, CAP, Docker, WCS |
+| [SUBASH-R-007/OCEAN-3D](https://github.com/SUBASH-R-007/OCEAN-3D) | vtk.js volume, 16 ERDDAP products, **exclusions accounting**, WMS + WCS 1.0.0, compose plus a read-only variant | Agent, CAP, hardware |
+| [RutuRaj-1/Sagar_Drishti](https://github.com/RutuRaj-1/Sagar_Drishti) | Same name; CMEMS 4D volume; **a six-stop tour with voice narration**, Groq chatbots | OGC (a TODO), guard, CAP, Docker |
+| [adizzsk23/ocean3D](https://github.com/adizzsk23/ocean3D) | English / Tamil / Hindi UI; an HTTP+CSV ingest contract for ESP32 (no firmware) | OGC, agent, hardware that exists |
+| [Faisaldarjee/Lehar-AI](https://github.com/Faisaldarjee/Lehar-AI) | Web Speech STT/TTS in hi / ta / te (browser, not Bhashini) | Volume, verification, OGC |
+
+Known repos: OceanScope and incois-3d-ocean-viz have not pushed since 12 and 9
+September. ATLANTIS pushed on 25 September, UI polish only.
+
+**Still ours alone, checked against every README read:**
+
+- **CAP v1.2 from NDMA SACHET.** Nobody mentions CAP or SACHET.
+- **Hardware.** Nobody has built any; one team documents an ingest contract.
+- **Bhashini.** Nobody uses it. The one voice-in-Indian-languages entry uses
+  the browser's Web Speech, which sends audio to Google and is not offline.
+- **A compose stack verified by a browser suite.** Many have Docker; none says
+  it was tested beyond `up`.
+- **The Class-4 framing** and the refusal count. SUBASH has exclusions, oceanyo
+  has Taylor statistics; nobody names Class-4 or co-locates at each cast.
+
+**What is no longer ours alone:** the guarded agent (VVater checks numbers,
+oceanyo's model only emits tool calls), guided tours (three teams), and WCS
+(two teams). The pitch should stop implying those are unique and lead with the
+five above.
+
+**Two PS-shaped things a competitor shows that a reviewer will compare:**
+a per-clause capability table (we have one in `P0-STATUS.md`; the deck should
+point at it), and derived operational quantities (cyclone heat potential,
+marine heatwaves). We ship D26, sound speed and sigma-0 as plugin-derived
+fields, which answers the same question; the deck already says "3 by plugins".
+
+
+### 1.6 Their live demos, opened on 25 September evening
+
+Five competitors publish a live URL. Each was opened in a clean browser at
+1600x900 and given twelve seconds, which is roughly what a reviewer gives it.
+
+| Site | What a reviewer sees |
+|---|---|
+| sih-2-2.vercel.app (INCOIS 3D Ocean, SIH26067) | **The most polished.** Whole globe, India centred, "ARABIAN SEA" and "BAY OF BENGAL" lettered on the water, the EEZ line, region buttons (Full Globe, Indian Basin, Arabian Sea, Bay of Bengal), a palette picker, opacity and exaggeration, a Play bar |
+| sagar-view.antideploy.com (SAGAR VIEW) | Whole globe with city lights and cyclone tracks, a navigation guide, an "AI Ocean Guide" button, and a red **"Request failed with status code 503"** banner on load |
+| v-vater.vercel.app (VVater) | Panels load, the viewport is **black**: "TypeError: Failed to fetch". Its backend is not running |
+| sih-67.vercel.app | Stuck on "Loading GLORYS tile" |
+| rak2315.github.io (samudra-sih26) | GitHub Pages 404: the site is gone |
+
+**What we took from it:** every strong entry OPENS on the whole globe with
+India in the middle, and ours opened on a low oblique close-up that did not
+say where on Earth it was. On the lead's instruction the opening frame is now
+the whole globe from straight above, centred on the Bay of Bengal box; a
+guided tour flies down to the old side-on column view, where the
+stratification reads.
+
+**What we did not take:** lettering sea names on the water and drawing the
+EEZ. The EEZ is still blocked on a source we can cite (`required.md` 11).
+
+**What is worth saying out loud:** of five live competitor demos, three failed
+to show data on first load. Ours runs air-gapped from one `docker compose up`,
+and the browser suite fails the build if it does not.
+
 ---
 
 ## 2. The field model: what the other thirty will look like

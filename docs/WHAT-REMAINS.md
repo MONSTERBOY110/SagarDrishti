@@ -7,7 +7,35 @@ than unfinished work, it says so.
 
 ---
 
-## The short answer
+## Update, 25 September: what tonight closed
+
+- **F5 Docker: Met.** Three Dockerfiles written (there were none), compose
+  rewritten to the three services the app actually has, and the full browser
+  suite passes against the containers (`./tasks.ps1 docker`). The air-gapped
+  API container answers with no network at all. Evidence in `P0-STATUS.md` F5.
+  **All seven PS requirements now have evidence; F1 keeps its one deliberate
+  refusal (gridded chlorophyll), explained below.**
+- **Voice (F10, P1): built, key pending.** `services/agent/app/voice.py` calls
+  Bhashini's ULCA pipeline (ASR, translation, TTS) from the agent SERVER only,
+  so the key never reaches a browser and the off-origin guard still holds. The
+  ask panel has a language picker (English, Hindi, Telugu, Tamil), push to
+  talk, and a read-aloud switch. The English answer stays the one the guard
+  checked; a translation is printed beside it, labelled as machine
+  translation. Offline, the microphone says in words why it cannot listen, and
+  English answers are read aloud by the OS voice with no network. Noto Sans
+  Devanagari, Telugu and Tamil are vendored (OFL), so Indian text renders
+  offline. Tests: 12 new agent tests against a stubbed Bhashini (83 total), and
+  the browser suite checks the offline degradation.
+  **Still open: the live round trip.** The key request is with Bhashini for
+  approval (`required.md` 16). When it lands: key into `.env`, run with
+  `OFFLINE=0`, speak one Hindi question end to end, and record it.
+- **Demo video**: `tools/record_demo.mjs` records the running build (real GPU,
+  1080p, H.264, silent) with a timing sheet for the voiceover, into
+  `docs/submission/video/`.
+
+---
+
+## The short answer (23 September)
 
 **One P0 item is actionable: Docker.** That is the whole of the PS's own list
 that is still open, and it is open because Docker is not installed on this

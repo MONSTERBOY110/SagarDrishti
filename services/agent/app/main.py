@@ -35,7 +35,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import planner, tools
+from . import planner, tools, voice
 
 app = FastAPI(
     title="Samudra Sahayak (SagarDrishti agent plane)",
@@ -126,3 +126,80 @@ def ask(body: Ask) -> dict:
     if not body.question.strip():
         raise HTTPException(400, "ask something")
     return planner.plan(body.question).as_dict()
+
+
+# ---- voice (PRD F10) -----------------------------------------------------
+#
+# Server side ONLY, so the Bhashini key never reaches a browser. The English
+# answer from /ask stays the authority: the guard checks it, and a translation
+# is returned beside it labelled as machine translation. See app/voice.py.
+
+_voice: voice.Bhashini | None = None
+
+
+def _bhashini() -> voice.Bhashini:
+    global _voice
+    if _voice is None:
+        _voice = voice.Bhashini()
+    return _voice
+
+
+def _unavailable(exc: voice.VoiceUnavailable) -> HTTPException:
+    # 503 for "cannot here", 400 for "asked for something unsupported".
+    code = 400 if exc.reason == "language" else 503
+    return HTTPException(code, {"reason": exc.reason, "message": str(exc)})
+
+
+class Heard(BaseModel):
+    audio: str = Field(..., max_length=4_000_000, description="16 kHz mono WAV, base64")
+    language: str = Field("hi", max_length=5)
+
+
+class Speak(BaseModel):
+    text: str = Field(..., max_length=1200, description="the English answer from /ask")
+    language: str = Field("hi", max_length=5)
+    audio: bool = True
+
+
+@app.get("/voice/status", tags=["voice"])
+def voice_status() -> dict:
+    """Whether speech can run on this server, and if not, why, in words."""
+    return _bhashini().status()
+
+
+@app.post("/voice/asr", tags=["voice"])
+def voice_asr(body: Heard) -> dict:
+    """Speech in, the transcript AND its English, because the planner reads
+    English. Both are returned so the person can see what was heard."""
+    b = _bhashini()
+    try:
+        heard = b.asr(body.audio, body.language)
+        english = b.translate(heard, body.language, "en") if heard else ""
+    except voice.VoiceUnavailable as exc:
+        raise _unavailable(exc) from exc
+    return {
+        "language": body.language,
+        "transcript": heard,
+        "english": english,
+        "machine_translation": body.language != "en",
+    }
+
+
+@app.post("/voice/speak", tags=["voice"])
+def voice_speak(body: Speak) -> dict:
+    """An English answer, translated and spoken. The English is not changed and
+    is what the numbers were checked in; the translation is labelled."""
+    b = _bhashini()
+    try:
+        text = b.translate(body.text, "en", body.language)
+        audio = b.tts(text, body.language) if body.audio else ""
+    except voice.VoiceUnavailable as exc:
+        raise _unavailable(exc) from exc
+    return {
+        "language": body.language,
+        "english": body.text,
+        "text": text,
+        "machine_translation": body.language != "en",
+        "audio": audio,
+        "audio_format": "wav" if audio else "",
+    }

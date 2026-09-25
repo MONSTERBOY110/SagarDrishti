@@ -1,62 +1,66 @@
-# SagarDrishti - "deployable on INCOIS infrastructure without client-side
-# dependencies" (PS requirement F5 / TRD §8).
+# SagarDrishti on one machine: "deployable on INCOIS infrastructure without
+# client-side dependencies" (PS requirement F5, TRD section 8).
 #
-# STATUS: AUTHORED, NOT YET EXECUTED. Docker is not installed on the current
-# build machine (ADR-0004), so Phase 1 spikes run natively:
-#     uvicorn app.main:app --reload        (services/api)
-#     pnpm web:dev                         (apps/web)
-# This file is kept in the tree because F5 is a screening claim and reviewers
-# read compose files. Verify it before making the claim on stage.
+#   docker compose up --build        then open http://localhost:3000
+#
+# VERIFIED, NOT JUST AUTHORED, as of 25 September 2026: the full browser suite
+# runs against these three containers (`./tasks.ps1 docker`). Until that day
+# this file was written and had never run, and it could not have: none of the
+# three services had a Dockerfile, so `compose up` failed on its first line.
+#
+# THREE SERVICES, BECAUSE THE APP HAS THREE. The earlier draft also declared
+# PostGIS and Mosquitto. Neither is used: the data plane reads a local Zarr and
+# Parquet cube, and the SagarNode station that shipped posts over HTTP to
+# /ingest/sagarnode because campus WiFi blocks the MQTT port. A compose file
+# that starts a database nobody queries is a claim about the architecture that
+# is not true, and it is the file a reviewer who does infrastructure opens.
 
 services:
   api:
-    build: ./services/api
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
     environment:
       OFFLINE: "1"
-      SAGAR_ROOT: /srv/sagardrishti
     volumes:
+      # The analysis, the source registry and the warnings, READ-ONLY: a
+      # deployment swaps these for its own without rebuilding anything.
       - ./data:/srv/sagardrishti/data:ro
+      # The one writable path. The SagarNode station appends its readings to a
+      # log in the cube directory, which is runtime state written by a device.
+      - ./data/cube:/srv/sagardrishti/data/cube
     ports:
       - "8000:8000"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   agent:
-    build: ./services/agent
-    depends_on: [api]
+    build:
+      context: .
+      dockerfile: services/agent/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
     environment:
+      # The agent reaches the data plane by its service name on the compose
+      # network, exactly as it would reach it across a real one.
+      SAGAR_API_BASE: http://api:8000
+      # Voice (PRD F10) is off here, and says so in the ask panel. To turn it
+      # on, set OFFLINE to "0" and pass BHASHINI_USER_ID and BHASHINI_API_KEY
+      # through `env_file: .env`, never by baking them into the image (.env is
+      # in .dockerignore for exactly that reason).
       OFFLINE: "1"
-      API_BASE: http://api:8000
-      LLM_PROVIDER: ollama        # provider adapter, TRD §6.2
     ports:
-      - "8100:8100"
+      - "8010:8010"
 
   web:
-    build: ./apps/web
-    depends_on: [api]
-    environment:
-      NEXT_PUBLIC_API_BASE: http://localhost:8000
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # What the BROWSER calls, so host ports, not service names.
+        NEXT_PUBLIC_API_BASE: http://127.0.0.1:8000
+        NEXT_PUBLIC_AGENT_BASE: http://127.0.0.1:8010
+    depends_on:
+      api:
+        condition: service_healthy
     ports:
       - "3000:3000"
-
-  db:
-    image: postgis/postgis:16-3.4
-    environment:
-      POSTGRES_DB: sagardrishti
-      POSTGRES_USER: sagar
-      POSTGRES_PASSWORD: sagar
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-
-  mqtt:
-    # SagarNode telemetry (TRD M9). HTTP POST fallback exists because campus
-    # WiFi commonly blocks 8883.
-    image: eclipse-mosquitto:2
-    ports:
-      - "1883:1883"
-    volumes:
-      - ./firmware/sagarnode/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-
-volumes:
-  pgdata:

@@ -12,6 +12,8 @@
 #   ./tasks.ps1 build     production build of the web client
 #   ./tasks.ps1 serve     serve the production build on :3000 (frees the port)
 #   ./tasks.ps1 demo      build AND serve, which is the one to use
+#   ./tasks.ps1 docker    build the three containers, run the full browser suite
+#                         against them, then prove the data plane needs no network
 #
 # Use `demo` rather than build-then-serve by hand. `next start` reads the build
 # manifest once at boot, so a server left running across a rebuild serves stale
@@ -23,7 +25,7 @@
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'fetch', 'api', 'agent', 'web', 'test', 'offline', 'build', 'serve', 'demo', 'e2e')]
+    [ValidateSet('setup', 'fetch', 'api', 'agent', 'web', 'test', 'offline', 'build', 'serve', 'demo', 'e2e', 'docker')]
     [string]$Task = 'test'
 )
 
@@ -98,6 +100,41 @@ switch ($Task) {
         Assert-Venv
         pnpm web:build
         pnpm exec playwright test
+    }
+    'docker' {
+        # F5, "deployable on INCOIS infrastructure", checked rather than asserted.
+        # The native servers hold the same ports, so they go first.
+        foreach ($port in 3000, 8000, 8010) { Free-Port $port }
+        docker compose up -d --build
+        if ($LASTEXITCODE -ne 0) { throw 'docker compose up failed' }
+        # Wait on the healthchecks the Dockerfiles declare, not on a sleep.
+        $deadline = (Get-Date).AddMinutes(5)
+        do {
+            Start-Sleep -Seconds 5
+            $states = docker compose ps --format '{{.Service}}={{.Health}}'
+            $healthy = ($states | Where-Object { $_ -match '=healthy$' }).Count
+        } until ($healthy -ge 3 -or (Get-Date) -gt $deadline)
+        if ($healthy -lt 3) { docker compose ps; throw 'containers did not become healthy' }
+
+        # The same twelve tests the native build passes, against the containers.
+        $env:SAGAR_E2E_EXTERNAL = '1'
+        $env:CI = '1'
+        pnpm exec playwright test
+        if ($LASTEXITCODE -ne 0) { throw 'the browser suite failed against the containers' }
+
+        # And the data plane with NO network at all: it must still answer, and
+        # a request to the internet must fail.
+        $o = @('-f', 'docker-compose.yml', '-f', 'docker-compose.offline.yml', '--profile', 'airgap')
+        docker compose @o up -d api-airgap
+        Start-Sleep -Seconds 25
+        docker compose @o exec api-airgap python -c "import urllib.request,json; h=json.load(urllib.request.urlopen('http://127.0.0.1:8000/healthz')); assert h['status']=='ok'; s=json.load(urllib.request.urlopen('http://127.0.0.1:8000/scorecard/incois_vam_argo/TEMP?observed=temp')); print('air-gapped scorecard: rmse', s['overall']['rmse'], 'over', s['overall']['n'], 'pairs')
+try:
+    urllib.request.urlopen('https://example.com', timeout=5); raise SystemExit('the air-gapped container reached the internet')
+except OSError: print('egress blocked, as it must be')"
+        $ok = $LASTEXITCODE
+        docker compose @o rm -sf api-airgap | Out-Null
+        if ($ok -ne 0) { throw 'the air-gap check failed' }
+        Write-Output 'docker: 12 browser tests passed against the containers; data plane answers with no network'
     }
     'serve' {
         # next start refuses to bind if a previous server is still holding the

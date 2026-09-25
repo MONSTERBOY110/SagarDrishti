@@ -136,6 +136,10 @@ export default function StoryPlayer() {
          describe panels that are not on screen. So a tour takes the whole
          chrome for its duration and hands it back on stop. */
       usePanels.getState().beginTour();
+      /* The opening frame is the whole globe from straight above, which says
+         WHERE; every tour is about the water column, which only reads from
+         the side. So a tour starts by flying down to the column view. */
+      (window as unknown as { __sagarColumnView?: () => void }).__sagarColumnView?.();
       setActive(tour);
       setRunning(true);
       goto(tour, 0);

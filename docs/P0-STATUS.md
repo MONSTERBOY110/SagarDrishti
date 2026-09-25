@@ -35,14 +35,15 @@ forever, only that the PS's sentence is satisfied and proven.
 | F2 | Instrument data overlay | **Met** | All four instrument classes the PS names are live and drawn as different marks: Argo floats, BGC floats, a glider and shipboard CTD casts, plus a RAMA moored buoy. 149 casts from 19 instruments, 30,012 QC-passed levels. The glider and the CTD casts predate the model field and are marked, dated and refused by the verification rather than left to pass for current. |
 | F3 | Multi-format data ingestion | **Met** | None. |
 | F4 | Customizable colorbar and variable controls | **Met** | None. |
-| F5 | Web-based, scalable architecture | **Partly met** | The Docker path is authored and never executed, because Docker is not installed here. |
+| F5 | Web-based, scalable architecture | **Met** | Verified 2026-09-25: three containers (`docker compose up --build`), all 12 browser tests passing against them, and the data plane answering the full verification card with its network disabled. `./tasks.ps1 docker` re-runs all of it. |
 | F6 | Extensible design | **Met** | Both extension points have running examples: THREE derived products (D26, SIG0 density via TEOS-10, and sound speed, the last added 21 September), all served through WMS and WCS, and a `mooring` source reader on real RAMA buoy data. The PS's "additional sensors" clause also has a live device path: SagarNode posts to `/ingest/sagarnode` and appears on the globe, with `curl` as a sufficient device. |
 | F7 | Open standards (OGC WMS/WCS, CF) | **Met** | None. Stored variables and plugin-derived products are both served. |
 
-Five of seven have no gap. Two have a named gap: one blocked on the team lead
-(Docker) and one blocked on data availability (a glider or CTD file). The
-chlorophyll field is a deliberate refusal rather than missing work. The order
-is at the bottom of this file.
+Six of seven have no gap. The seventh, F1, is short one GRIDDED field, and
+that is a deliberate refusal rather than missing work: the INCOIS chlorophyll
+series ends in 2020 and cannot share a 2026 time scrubber without the interface
+making a false statement. F5 closed on 2026-09-25 when Docker was installed and
+the stack was run for the first time; the glider and CTD gap closed earlier.
 
 ## Test and check counts behind these verdicts
 
@@ -52,7 +53,7 @@ services/api      512 tests   (argo 20, cap 47, cf 20, colormap 10, currents 16,
                                isosurface 27, offline 3, ogc 63, plugins 71,
                                sagarnode 27, scorecard 24, sound speed 16,
                                storyboards 36, text profiles 66)
-services/agent     71 tests   (guard 13, planner 56, scene-key drift 2)
+services/agent     83 tests   (guard 13, planner 56, scene-key drift 2, voice 12)
 e2e                12 tests   production build, real browser, off-origin guard
 ```
 
@@ -698,11 +699,44 @@ install of any kind: Cesium and its imagery are served from our own origin, and
 an e2e test fails the build if the page requests anything off-origin, which is
 also what makes the air-gapped demo true rather than hoped for.
 
-**Gap: the Docker path has never been executed.** `docker-compose.yml` and
-`docker-compose.offline.yml` are written per TRD §8 and both say so in their own
-header. Docker is not installed on this machine (ADR-0004), so the files are
-unproven. A reviewer reading a compose file that has never run is a risk we
-should not carry into screening. This is item 4 on the team lead's list.
+**Verified on 2026-09-25: the Docker path runs, and the full suite passes
+against it.**
+
+It was worse than "authored, never executed" when Docker was finally
+installed: **there were no Dockerfiles in the repository at all**, so the
+compose file failed on its first line. It also declared PostGIS and Mosquitto,
+which the app does not use, and put the agent on 8100 where the code listens on
+8010. All of that is now fixed rather than described.
+
+```
+docker compose up --build
+  api     python:3.11-slim, repo layout reproduced under /srv/sagardrishti,
+          data/ mounted read-only (only data/cube writable, for the SagarNode
+          log), and NO network client in the image: copernicusmarine is
+          filtered out of the install because it only serves tools/fetch_sample.py
+  agent   python:3.11-slim, reaches the API by service name (http://api:8000)
+  web     node:22-slim + pnpm, Cesium vendored at build time, both
+          NEXT_PUBLIC_* bases passed as build args because Next inlines them
+  -> all three report healthy on their own /healthz checks
+
+SAGAR_E2E_EXTERNAL=1 CI=1 pnpm e2e        (the suite, pointed at the containers)
+  -> 12 passed (6.8m)
+
+docker compose -f docker-compose.yml -f docker-compose.offline.yml                --profile airgap up api-airgap          (network_mode: none)
+  -> healthz ok, stores [glorys12_cur, incois_vam_argo], 5 plugins loaded
+  -> scorecard rmse 0.6017 over 11718 pairs
+  -> request to https://example.com: blocked (URLError)
+```
+
+`./tasks.ps1 docker` re-runs every line of that and fails if any of it stops
+being true.
+
+**What the air-gap check proves, and what it does not.** It proves the data
+plane needs nothing outside the machine to answer. It cannot do the same for the
+browser's side, because a container on `network_mode: none` cannot publish a
+port. The browser's half is proven where it always was: every test in the suite
+fails if a single request leaves the machine, and it just passed against the
+containers.
 
 On "OPeNDAP-compatible": we serve REST, plus OGC WCS for subsetting, which is
 the same job through a standard INCOIS already speaks. We do not implement the

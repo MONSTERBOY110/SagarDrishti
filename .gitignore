@@ -20,7 +20,7 @@ data/cube/*
 ppt examples
 .ppt-build
 docs/evidence
-
+help
 # Env / secrets (Copernicus creds, LLM keys)
 .env
 .env.local

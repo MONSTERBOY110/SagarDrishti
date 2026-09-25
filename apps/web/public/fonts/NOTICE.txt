@@ -1,12 +1,12 @@
 SagarDrishti - vendored web fonts
 =================================
 
-Both faces are self-hosted rather than loaded from a CDN. That is a hard
+Every face here is self-hosted rather than loaded from a CDN. That is a hard
 requirement, not a preference: PRD F11 and CLAUDE.md require the entire demo to
 run air-gapped, and a font request to fonts.gstatic.com would break the offline
 path the moment the WiFi is off on stage.
 
-Both are licensed under the SIL Open Font License 1.1, whose full text is in
+All are licensed under the SIL Open Font License 1.1, whose full text is in
 OFL-1.1.txt beside this file.
 
 --------------------------------------------------------------------------
@@ -33,6 +33,24 @@ courier-prime-700-latin.woff2     18.9 KB
              (https://github.com/quoteunquoteapps/CourierPrime)
   Licence    SIL Open Font License 1.1 - http://scripts.sil.org/OFL
   Subset     latin only, as served by Google Fonts
+
+--------------------------------------------------------------------------
+noto-sans-devanagari.woff2        118.4 KB   (Version 2.006)
+noto-sans-telugu.woff2            121.1 KB   (Version 2.005)
+noto-sans-tamil.woff2              49.3 KB   (Version 2.004)
+--------------------------------------------------------------------------
+  Family     Noto Sans Devanagari, Noto Sans Telugu, Noto Sans Tamil,
+             served under the one CSS family "Sagar Indic" with a
+             unicode-range each (globals.css)
+  Role       Hindi, Telugu and Tamil text in the voice answers (PRD F10)
+  Type       VARIABLE, wght axis (fvar reports 100-900; declared 400-700)
+  Copyright  Copyright 2022 The Noto Project Authors
+             (https://github.com/notofonts/devanagari, .../telugu, .../tamil)
+  Licence    SIL Open Font License 1.1 - https://scripts.sil.org/OFL
+  Subset     the script's own subset only (devanagari, telugu, tamil), as
+             served by Google Fonts; latin comes from the faces above
+  Retrieved  2026-09-25, same method as below, family=Noto+Sans+<Script>
+             with wght@400..700, taking the block named for the script
 
 --------------------------------------------------------------------------
 How these files were obtained (reproducible)

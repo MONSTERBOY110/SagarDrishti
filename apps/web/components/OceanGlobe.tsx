@@ -122,15 +122,30 @@ const HOME = {
    *  came up to the surface: the column hangs BELOW the point the camera is
    *  aimed at, so a shallower angle is what brings it back into the middle of
    *  the frame. */
-  pitchDeg: -20,
+  pitchDeg: -90,
   /** Far enough out that the stack covers part of the viewport instead of all
    *  of it: overdraw is the dominant cost in this scene. Raised from 3.0 Mm
    *  when the aim point came up to the surface, because the column then hangs
    *  BELOW that point instead of straddling it and ran off the bottom of the
    *  frame. Measured at 3.9 Mm: the warm surface, the gradient and the blue
    *  deep water all sit inside the viewport with the limb behind them. */
-  range: 3_900_000,
+  range: 13_300_000,
 };
+/* THE OPENING FRAME CHANGED ON 25 SEPTEMBER 2026, at the lead's request: the
+   whole globe, straight down, India and the Bay of Bengal in the middle, the
+   way a forecaster first meets the ocean on every portal they already use.
+   The low oblique shot above is what the tours and the studio show when they
+   need the stratification; the first frame's job is to say WHERE we are.
+   13.3 Mm is measured, not guessed: Cesium's 60 degree field of view is taken
+   across the wider axis, so at 1920 px the focal length is about 1663 px, and
+   a disc about 1130 px across (the reference frame) needs the Earth to
+   subtend 18.9 degrees of half-angle, which is 13.3 Mm above the surface. The
+   comments on pitch and range above record why the oblique shot was chosen
+   and still apply to it. */
+
+/** The side-on view of the water column that a guided tour flies to. These
+ *  are the opening frame's old values; see HOME for why they were chosen. */
+const COLUMN = { pitchDeg: -20, range: 3_900_000, flySeconds: 3.0 };
 
 /** How close and how far the camera may get to the water.
  *
@@ -154,7 +169,7 @@ const CAMERA = {
   minZoom: 120_000,
   /** Far enough to see the whole Bay in context, not so far that the data box
    *  becomes a speck with nothing to grab. */
-  maxZoom: 14_000_000,
+  maxZoom: 20_000_000,
   /** Cesium's defaults are 0.9, which on a scene this size reads as drift.
    *  Lower is crisper: the motion stops close to when the hand stops. */
   inertiaSpin: 0.55,
@@ -338,10 +353,22 @@ export default function OceanGlobe(props: Props) {
          the viewport is keeps the column about the same size ON SCREEN, which
          is what the framing was actually chosen for. Clamped, so a very tall
          or very short window does not swing it absurdly. */
+      /* SUPERSEDED 25 SEPTEMBER for the straight-down opening frame: the
+         globe is sized to the WINDOW, so it reads the same on every screen.
+         The disc is 1.3 times the window height (the lead's reference frame,
+         top and bottom just cut), or 1.2 times the width on a portrait
+         screen where the height rule would run it off the sides. Cesium's
+         field of view spans the wider axis, which sets the focal length; the
+         Earth then has to subtend that disc, which sets the distance. */
       const homeRange = () => {
+        const w = viewer.scene.canvas.clientWidth || 1920;
         const h = viewer.scene.canvas.clientHeight || 1080;
-        const k = Math.min(1.6, Math.max(1, 1080 / Math.max(600, h)));
-        return HOME.range * k;
+        const fov = (viewer.camera.frustum as unknown as { fov?: number }).fov ?? Math.PI / 3;
+        const focal = Math.max(w, h) / 2 / Math.tan(fov / 2);
+        const radiusPx = Math.min(0.65 * h, 0.6 * w);
+        const earth = 6_371_000;
+        const range = earth / Math.sin(Math.atan(radiusPx / focal)) - earth;
+        return Math.min(CAMERA.maxZoom, Math.max(HOME.range * 0.5, range));
       };
 
       const home = () =>
@@ -372,6 +399,31 @@ export default function OceanGlobe(props: Props) {
           },
           duration: CAMERA.recentreSeconds,
           complete: home,
+        });
+      };
+
+      /* THE COLUMN VIEW: the low oblique shot that was the opening frame until
+         25 September, kept for what it was chosen for (the stratification
+         reads only from the side) and flown to when a guided tour starts.
+         Range scaled by viewport height as it always was, so the column
+         clears the panels on a 768 px screen too. */
+      (window as unknown as Record<string, unknown>).__sagarColumnView = () => {
+        const h = viewer.scene.canvas.clientHeight || 1080;
+        const k = Math.min(1.6, Math.max(1, 1080 / Math.max(600, h)));
+        const target = Cesium.Cartesian3.fromDegrees(HOME.lon, HOME.lat, 0);
+        const hpr = new Cesium.HeadingPitchRange(
+          0,
+          Cesium.Math.toRadians(COLUMN.pitchDeg),
+          COLUMN.range * k,
+        );
+        // Released first: a flight is computed in world coordinates, and the
+        // camera is otherwise held in the water's frame (see CAMERA). The
+        // `complete` lookAt takes it back.
+        viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+        viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(target, 1), {
+          offset: hpr,
+          duration: COLUMN.flySeconds,
+          complete: () => viewer.camera.lookAt(target, hpr),
         });
       };
 
@@ -407,6 +459,8 @@ export default function OceanGlobe(props: Props) {
       let reported = 0;
       let movingUntil = 0;
       let lastCam = scene.camera.positionWC.clone();
+      let lastDir = scene.camera.directionWC.clone();
+      let lastUp = scene.camera.upWC.clone();
 
       const onPostRender = () => {
         const now = performance.now();
@@ -415,9 +469,21 @@ export default function OceanGlobe(props: Props) {
 
         // A tenth of a metre of camera movement is far below anything a person
         // can see and far above floating-point noise.
+        // OR a turn of the view with the camera standing still. From straight
+        // above (the opening frame since 25 September) a spin moves neither
+        // the position nor the view direction, only the camera's up vector:
+        // the picture rotates, and a person sees it move.
         const cam = scene.camera.positionWC;
-        if (Cesium.Cartesian3.distance(cam, lastCam) > 0.1) {
+        const dir = scene.camera.directionWC;
+        const up = scene.camera.upWC;
+        if (
+          Cesium.Cartesian3.distance(cam, lastCam) > 0.1 ||
+          Cesium.Cartesian3.angleBetween(dir, lastDir) > 1e-5 ||
+          Cesium.Cartesian3.angleBetween(up, lastUp) > 1e-5
+        ) {
           lastCam = Cesium.Cartesian3.clone(cam, lastCam);
+          lastDir = Cesium.Cartesian3.clone(dir, lastDir);
+          lastUp = Cesium.Cartesian3.clone(up, lastUp);
           // Half a second of grace, so the sample survives the gap between one
           // drag and the next rather than resetting on every pause.
           movingUntil = now + 500;

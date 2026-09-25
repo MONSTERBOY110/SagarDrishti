@@ -32,12 +32,25 @@ const PYTHON =
  * default posture, not a special mode (TRD M6).
  */
 
-const WEB = "http://127.0.0.1:3100";
-const API = "http://127.0.0.1:8100";
+/* EXTERNAL MODE: `SAGAR_E2E_EXTERNAL=1` runs the same twelve tests against a
+   stack that is ALREADY RUNNING, and boots nothing itself. It exists for one
+   job: proving the Docker deployment (`docker compose up`, then
+   `./tasks.ps1 docker`), so that "deployable on INCOIS infrastructure" is a
+   claim the full suite has checked against the containers rather than a
+   compose file somebody wrote. Ports default to the compose file's. */
+const EXTERNAL = !!process.env.SAGAR_E2E_EXTERNAL;
+
+const WEB = process.env.SAGAR_E2E_WEB ?? (EXTERNAL ? "http://127.0.0.1:3000" : "http://127.0.0.1:3100");
+const API = process.env.SAGAR_E2E_API ?? (EXTERNAL ? "http://127.0.0.1:8000" : "http://127.0.0.1:8100");
 /* The agent plane. Booted here so the suite can prove the ask panel works,
    and on its own port so that killing it is a one-line change if we ever want
    to assert the "kill the agent and every P0 still passes" property directly. */
-const AGENT = "http://127.0.0.1:8110";
+const AGENT =
+  process.env.SAGAR_E2E_AGENT ?? (EXTERNAL ? "http://127.0.0.1:8010" : "http://127.0.0.1:8110");
+
+// The spec posts to the data plane directly in one test, so it reads the same
+// address rather than keeping a second copy of the port.
+process.env.SAGAR_E2E_API = API;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -71,7 +84,7 @@ export default defineConfig({
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1920, height: 1080 } } },
   ],
 
-  webServer: [
+  webServer: EXTERNAL ? undefined : [
     {
       // The data plane. OFFLINE=1 is the default and is stated here anyway, so
       // a reader of this file knows the suite never touches the network.
@@ -91,7 +104,9 @@ export default defineConfig({
       url: `${AGENT}/healthz`,
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
-      env: { SAGAR_API_BASE: API },
+      // OFFLINE=1 stated for the agent too: voice (PRD F10) must degrade in
+      // words, and a real environment variable beats anything in .env.
+      env: { SAGAR_API_BASE: API, OFFLINE: "1" },
     },
     {
       /* The BUILD happens here, and that is the fix for a real bug rather than

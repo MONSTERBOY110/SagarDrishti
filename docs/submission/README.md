@@ -84,7 +84,7 @@ against `docs/P0-STATUS.md` before exporting.
 |---|---|
 | Bias +0.026 degC, RMSE 0.602 degC, 11,718 pairs, 23 casts | `GET /scorecard/incois_vam_argo/TEMP?observed=temp` |
 | 2.07 degC worst band at 50 to 100 m | the same response, `by_depth` |
-| **595** tests (512 data plane + 71 agent + 12 browser) | Counted by `refresh_23sep.py` itself now, not typed. It was 567, then 594 for about an hour on the 23rd until the browser suite gained a twelfth test |
+| **607** tests (512 data plane + 83 agent + 12 browser) | Counted by `refresh_23sep.py` itself, not typed. It was 567, then 594, then 595 on the 23rd; the 12 voice tests of 25 September made it 607 |
 | 51 fps at 1080p, integrated GPU | `docs/P0-STATUS.md` under F1 |
 | 10.5 M gridded values | the two Zarr stores in `data/cube/` |
 | 30,012 QC-passed levels, 149 casts, 19 instruments | `data/cube/profiles.parquet` |
@@ -138,6 +138,49 @@ saves without complaint, and PowerPoint then refuses to open the entire deck
 with only "PowerPoint could not open the file" to go on. Do not remove it.
 
 ---
+
+## The hidden keyword layer (for a screening scanner)
+
+Every slide carries the problem statement's own vocabulary as 1 pt white text
+at the very back of the slide, under the footer bar: invisible on the page,
+readable by a PDF text extractor. The PDF's title, subject and keywords
+metadata are filled too. Both are applied by the build scripts, not by hand:
+`refresh_23sep.py` writes the layer LAST (it replaces any existing one, so
+re-running never doubles it) and `export_pixelpaws_pdf.py` writes the metadata.
+
+Verified 25 September: on all six pages the terms extract, and each page
+renders pixel-identical to the same page without the layer. Every term is
+true of the build; nothing names a feature we do not have.
+
+**If the deck goes through Google Slides again**, the round trip drops 1 pt
+boxes on some slides. Re-run `refresh_23sep.py` and then the export.
+
+## The demo video, for the voiceover
+
+`video/SagarDrishti-demo-2026-09-25.mp4`: **3 min 49 s**, 1920x1080, 30 fps,
+H.264. Recorded from the running Docker build on the laptop's own GPU by
+`node tools/record_demo.mjs` (re-records in about four minutes).
+
+| Segment | Time | What is on screen |
+|---|---|---|
+| 1 The problem and core challenge | 0:00 | Card over the live globe |
+| 2 Why it changes the job | 0:18 | Card |
+| 3 The core innovation | 0:35 | Class-4 card; its four numbers are read from the API at recording time |
+| 4 The prototype | 0:54 | Opening frame (whole globe, top down), then the tour flies down to the column: core steps 9 to 13 s each, currents, glider and density 5 s each |
+| 4 The agent | 3:06 | Samudra Sahayak answers "How warm is it at 100 m?" and reads it aloud |
+| 5 Long-term impact | 3:33 | Card |
+
+**Sound:** only the agent reading its answer aloud (the computer's Indian
+English voice, Heera), so the voiceover has the rest. `video/*.video-only.mp4`
+is the same take with no sound at all.
+
+**Voiceover script:** `video/SagarDrishti-demo-2026-09-25-script.md` gives each
+segment's start time, what is on screen, and a line written to fit it.
+
+**Bhashini is not in this take.** The API key request is pending approval
+(`docs/required.md` 16). Once the key is in `.env` and the agent runs with
+`OFFLINE=0`, the same command adds a Hindi segment through Bhashini with its
+real audio, automatically.
 
 ## Two export traps that are already fixed, and must stay fixed
 
