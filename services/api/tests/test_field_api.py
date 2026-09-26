@@ -59,7 +59,7 @@ def test_field_returns_exactly_the_requested_cells(client):
 
 
 def test_field_reports_provenance_for_every_response(client):
-    """CLAUDE.md: numbers reach an answer only with dataset + timestamp. The
+    """CONTRIBUTING.md: numbers reach an answer only with dataset + timestamp. The
     API is where that guarantee has to originate."""
     r = client.get(
         "/field/incois_vam_argo/TEMP",

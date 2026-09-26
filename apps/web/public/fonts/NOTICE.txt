@@ -2,7 +2,7 @@ SagarDrishti - vendored web fonts
 =================================
 
 Every face here is self-hosted rather than loaded from a CDN. That is a hard
-requirement, not a preference: PRD F11 and CLAUDE.md require the entire demo to
+requirement, not a preference: PRD F11 and CONTRIBUTING.md require the entire demo to
 run air-gapped, and a font request to fonts.gstatic.com would break the offline
 path the moment the WiFi is off on stage.
 

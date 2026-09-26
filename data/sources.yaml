@@ -121,8 +121,8 @@ sources:
   # lines and then writes a fixed-width numeric block with no column-name row
   # at all, and the parser raises rather than guessing. An earlier draft of this
   # entry was titled ".cnv style" with path_template "*.cnv", which promised
-  # something the code cannot do; supporting real .cnv is tracked as a Phase 2
-  # item in docs/ROADMAP.md.
+  # something the code cannot do; supporting real .cnv is a planned
+  # extension.
   #
   # No files are on disk under data/raw/ctd yet. The entry is live so the
   # config path is real and testable; tools/preprocess.py ingests whatever
@@ -738,7 +738,7 @@ sources:
   # not built; the kind is left as declared so the registry entry does not
   # have to change when it is.
   #
-  # WORDING (CLAUDE.md): the TDS probe is a conductivity-derived salinity
+  # WORDING (CONTRIBUTING.md): the TDS probe is a conductivity-derived salinity
   # PROXY, never a salinity sensor. A test greps for the wrong phrase.
   # ---------------------------------------------------------------------------
   - id: sagarnode_demo

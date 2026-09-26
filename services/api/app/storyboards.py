@@ -17,7 +17,7 @@ So every numeral in a tour's narration must be BACKED: it must appear either in
 the patch that step applies, or in that step's own `evidence` list, which is
 where the author records the on-screen fact and where it comes from. That rule
 is enforced by `validate_tour` and by a test over every shipped tour, and it is
-the narration equivalent of the citation discipline CLAUDE.md imposes on the
+the narration equivalent of the citation discipline CONTRIBUTING.md imposes on the
 agent.
 
 It also catches the thing that will actually happen: a number in a tour going

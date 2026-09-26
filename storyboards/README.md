@@ -87,9 +87,9 @@ data we do not have:
   fetched for its dates.
 - **Monsoon upwelling off Kerala** is off the WEST coast, around 75 E. The demo
   box is 81 to 96 E. It needs a second box fetched.
-- **An eddy seen by a glider** needs a glider, and there is none: the reader is
-  built and tested, and no glider file has been obtained (see
-  `docs/required.md`).
+- **An eddy seen by a glider** needs a glider in this bay today, and there is
+  none: the one glider on the globe flew in 2018, so it is shown dated and is
+  never scored against a 2026 field.
 
 The Argo explainer survives, inside `03-instruments-and-skill`. The other three
 are written above from what the data actually supports, which is also what the

@@ -7,7 +7,7 @@
  * globe, a colour ramp and a depth ladder, and had to go looking to discover
  * that three of the five fields are computed rather than stored, that all
  * five leave the building as OGC layers, and that the whole set is declared
- * in one file. A competitor's screenshot that advertises eight layers reads
+ * in one file. A screenshot that advertises eight layers reads
  * as the larger system even when it is the smaller one.
  *
  * WHAT IT DELIBERATELY DOES NOT DO. It does not repeat the mark legend

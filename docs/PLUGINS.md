@@ -407,38 +407,5 @@ reader is exercised by `open_source()` and its tests. The derived-product point
 `POST /plugins/reload` re-scans the directory and returns the fresh
 `describe()`. It never accepts uploaded code: it only re-reads files already on
 that disk. It is still a mutating endpoint, so **gate it behind the operator
-network in an INCOIS deployment**; it exists for the stage move below and for
+network in an INCOIS deployment**; it exists for live demonstrations and for
 development.
-
----
-
-## 8. The 60-second live registration (PRD section 11 step 6)
-
-The demo script promises a judge that a new product is registered live. This is
-the exact sequence. It is covered by
-`test_reload_picks_up_a_file_dropped_after_the_first_load` and
-`test_the_worked_examples_in_docs_plugins_md_actually_run`, so the file in
-section 5 cannot rot without the suite failing.
-
-Before going on stage: have a second terminal open in the repo root, and
-`docs/PLUGINS.md` section 5 already copied to
-`storyboards/live/d20_isotherm.py`.
-
-| t | Say | Do |
-|---|---|---|
-| 0:00 | "You asked for extensibility. Name a threshold." | Judge says 20 degC (or 28, or 24). |
-| 0:05 | "Twenty. Here is the plugin: forty lines, one `register` call, no imports from our core." | Show `storyboards/live/d20_isotherm.py` on screen. Point at `register_derived_product`. |
-| 0:20 | "It goes in the plugin directory." | `cp storyboards/live/d20_isotherm.py services/api/plugins/` |
-| 0:25 | "No install, no restart. One reload." | `curl -X POST http://localhost:8000/plugins/reload` |
-| 0:30 | "The API now says it loaded, and from which file." | The response names `D20` under `derived_products` and `d20_isotherm` under `plugins`, with the file path. |
-| 0:40 | "Refresh the browser." | Reload the tab. **"Depth of the 20 degC isotherm"** is in the variable selector. |
-| 0:50 | "Click it." | The D20 field draws over the Bay of Bengal. Median around 122 m. |
-| 0:55 | "And it is cited, and it admits what it does not know." | Point at the panel: `method`, `params`, `plugin`, and `204 of 336 columns`. The 132 blank cells are land or have no 20 degC crossing. |
-
-If the threshold the judge names is one you have not pre-copied, change the two
-`THRESHOLD_DEGC` lines and the `name`/`label` in the editor before the `cp`.
-That is a ten-second edit; budget for it rather than promising any threshold.
-
-**The failure move.** If the reload reports a failure, read the `error` line
-aloud. That is the demonstration too: the plugin refused to load and said which
-file and why, instead of drawing a wrong ocean. Then fix and reload.

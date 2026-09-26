@@ -52,3 +52,21 @@ apps/web/public/cesium/
 # Playwright artifacts
 test-results/
 playwright-report/
+
+# Kept locally, not shown on GitHub (26 September 2026): planning and
+# submission documents, CI, design tooling, the station firmware, and the
+# deck and video production scripts. docs/PLUGINS.md stays tracked because a
+# test runs the plugin examples inside it.
+docs/*
+!docs/PLUGINS.md
+.github/
+.impeccable
+firmware/
+CLAUDE.md
+PRODUCT.md
+DESIGN.md
+tools/record_demo.mjs
+tools/tts_winrt.ps1
+tools/capture_deck_assets.mjs
+tools/capture_evidence.mjs
+tools/check_dashes.py

@@ -22,7 +22,7 @@ Bay of Bengal, and three different things could go wrong in a way that matters:
     to it unchanged: the server refuses it unless asked, the globe draws it
     dashed, the panel stamps itself.
 
-And the wording rule from CLAUDE.md, which has a test of its own: the TDS probe
+And the wording rule from CONTRIBUTING.md, which has a test of its own: the TDS probe
 is a "conductivity-derived salinity proxy", NEVER a salinity sensor. It infers
 dissolved solids from conductivity and calling it a salinity sensor overstates
 what a two-electrode probe in a bucket can know.
@@ -199,7 +199,7 @@ def test_a_tank_that_is_simply_warm_does_not_trip_forever():
 
 
 # --------------------------------------------------------------------------
-# The wording rule (CLAUDE.md)
+# The wording rule (CONTRIBUTING.md)
 # --------------------------------------------------------------------------
 
 

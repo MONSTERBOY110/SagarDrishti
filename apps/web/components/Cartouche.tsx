@@ -8,7 +8,7 @@
  * sampling and the retrieval date, the way an engraved cartouche does. The box
  * is also what keeps the citation legible over a moving 3D scene.
  *
- * CLAUDE.md: numbers enter an answer only with dataset, timestamp and (for
+ * CONTRIBUTING.md: numbers enter an answer only with dataset, timestamp and (for
  * Argo) float WMO id. This panel is where that guarantee becomes visible to a
  * forecaster, and it is the same text the agent will speak in Phase 2, read
  * from the store's provenance.json rather than composed here.

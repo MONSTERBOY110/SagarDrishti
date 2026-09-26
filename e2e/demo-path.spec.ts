@@ -205,7 +205,7 @@ test.describe("SagarDrishti demo path", () => {
     const last = Number((await rows.last().innerText()).match(/([\d.]+)\s*$/)?.[1]);
     expect(first, "the surface must be warmer than 2000 m").toBeGreaterThan(last + 10);
 
-    // --- 2. provenance is on screen (CLAUDE.md: no number without it) --------
+    // --- 2. provenance is on screen (CONTRIBUTING.md: no number without it) --------
     const cartouche = page.locator(".cartouche");
     await expect(cartouche).toContainText("INCOIS");
     await expect(cartouche).toContainText("incois_argo_10d_VAM");
@@ -329,7 +329,7 @@ test.describe("SagarDrishti demo path", () => {
       type: "frame-rate (instrumented, NOT the product figure)",
       description:
         `${render} under Playwright trace capture. The uninstrumented ` +
-        "measurement is in docs/P0-STATUS.md under F1; expect roughly 5x this.",
+        "measurement (51 fps median at 1080p on integrated graphics) is roughly 5x this.",
     });
 
     // --- 7. the guards that had to hold throughout ---------------------------
@@ -1288,7 +1288,7 @@ test.describe("SagarDrishti demo path", () => {
 
     const panel = page.locator(".node");
     await expect(panel).toBeVisible({ timeout: 30_000 });
-    // The label the SERVER serves, not one invented here. CLAUDE.md: it is a
+    // The label the SERVER serves, not one invented here. CONTRIBUTING.md: it is a
     // conductivity-derived salinity PROXY, and an INCOIS oceanographer is
     // exactly the person who would notice the difference.
     await expect(panel).toContainText("Conductivity-derived salinity proxy");

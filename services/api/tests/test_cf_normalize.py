@@ -1,6 +1,6 @@
 """CF-convention normalization (TRD M1, TRD §9).
 
-These are the four edge cases CLAUDE.md names by hand, because they are the
+These are the four edge cases CONTRIBUTING.md names by hand, because they are the
 ones that silently corrupt a field instead of raising: a fill value painted as
 a real temperature, a double-applied scale factor, an inverted depth axis, and
 a unit string nobody converted.

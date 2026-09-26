@@ -1,6 +1,6 @@
 """Proof that the data plane needs no network (TRD M6, PRD F11).
 
-CLAUDE.md requires every feature to work with OFFLINE=1, and the power-round
+CONTRIBUTING.md requires every feature to work with OFFLINE=1, and the power-round
 demo runs air-gapped. "We think it is offline" is not good enough -- a single
 forgotten HTTP client in a library import is exactly the failure that kills a
 demo on a nodal-centre network. So we take the socket away and run the demo

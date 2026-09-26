@@ -96,7 +96,7 @@ export default function Page() {
      and two pollers could disagree about whether the threshold has tripped.
      Null is the normal state and means no mark and no panel. */
   const [sagarnode, setSagarnode] = useState<SagarNodeStation | null>(null);
-  /* The water column studio (beat-competition.md T2). Closed by default and
+  /* The water column studio. Closed by default and
      mounted only while open, so an overlay can never be in the way of the
      scene and a fault in it cannot reach the globe. */
 

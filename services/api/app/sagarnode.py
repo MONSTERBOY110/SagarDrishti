@@ -31,7 +31,7 @@ dashed and lighter, and the panel stamps itself. No new promises, no new code.
 
 THE WORDING RULE
 ----------------
-CLAUDE.md: the TDS probe is a "conductivity-derived salinity proxy", never a
+CONTRIBUTING.md: the TDS probe is a "conductivity-derived salinity proxy", never a
 salinity sensor. It infers total dissolved solids from conductivity, and
 calling that a salinity sensor overstates what two electrodes in a bucket can
 know. An INCOIS oceanographer is precisely the person who would notice.

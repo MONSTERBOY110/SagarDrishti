@@ -33,7 +33,7 @@ Three decisions are worth knowing before reading the code.
     the fact that it was a decision taken rather than a step skipped, is
     docs/adr/0005-ogc-colour-parity-over-matplotlib.md.
 
-  * Nothing here reaches the network (CLAUDE.md, TRD M6): layers come from
+  * Nothing here reaches the network (CONTRIBUTING.md, TRD M6): layers come from
     store.catalog_entries(), so a layer exists only if the registry enables it
     AND the store is materialized locally AND the variable is a real data_var.
     That is why TERR and SERR, which data/sources.yaml registers but the cube
@@ -520,7 +520,7 @@ def _derived_note(layer: LayerInfo) -> str:
     """State that a layer is COMPUTED, and by what recipe.
 
     A derived layer looks exactly like a stored one over the wire, so the
-    Abstract is the only place a client is told the difference. CLAUDE.md
+    Abstract is the only place a client is told the difference. CONTRIBUTING.md
     forbids a served number without provenance, and for a computed field the
     provenance is the method: "the depth of the 26 degC isotherm" is a
     different claim depending on whether it interpolated, extrapolated, or took

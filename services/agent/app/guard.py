@@ -1,6 +1,6 @@
 """The no-fabrication guard: an answer may not state a number no tool produced.
 
-CLAUDE.md's hard rule is that the agent never computes or invents numbers, and
+CONTRIBUTING.md's hard rule is that the agent never computes or invents numbers, and
 that numbers enter answers only via tool results with dataset, timestamp and
 float WMO id citations. This module is that rule made mechanical, because a
 rule enforced by good intentions is a rule that survives until the demo.
@@ -117,6 +117,6 @@ def enforce(answer: str, results: list, question: str = "") -> str:
             "the answer states "
             + ", ".join(verdict.unbacked)
             + " and no tool result contains those figures. Numbers may only "
-            "enter an answer through a tool (CLAUDE.md)."
+            "enter an answer through a tool (CONTRIBUTING.md)."
         )
     return answer

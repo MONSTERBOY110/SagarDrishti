@@ -1,7 +1,7 @@
 """The tools Samudra Sahayak is allowed to use (TRD M4).
 
 A TOOL IS THE ONLY WAY A NUMBER ENTERS AN ANSWER. That is the hard rule in
-CLAUDE.md and it is the whole architecture of this module: every tool returns
+CONTRIBUTING.md and it is the whole architecture of this module: every tool returns
 a `ToolResult` carrying its `values` and its `citations`, and app/guard.py
 refuses to let an answer through that states a figure no tool produced.
 

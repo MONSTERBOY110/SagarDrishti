@@ -74,7 +74,7 @@ def _decode_char_array(var: xr.DataArray) -> list[str]:
 
     PLATFORM_NUMBER is (N_PROF, STRING8) of single characters -- joining and
     stripping is the only way to recover the WMO id, and the agent must cite
-    that id with every number it speaks (CLAUDE.md).
+    that id with every number it speaks (CONTRIBUTING.md).
     """
     return ["".join(_as_char(c) for c in row).strip() for row in var.values]
 

@@ -6,7 +6,7 @@ what keeps TRD's "kill the agent and every P0 still passes" property true.
 
 Every response that carries numbers also carries `source_id` and `citation`,
 because the agent is required to cite dataset + timestamp for anything it says
-(CLAUDE.md) and it can only cite what the API gives it.
+(CONTRIBUTING.md) and it can only cite what the API gives it.
 """
 
 from __future__ import annotations
@@ -259,7 +259,7 @@ def field(
     if derived_prov is not None:
         # Method, params, plugin and the valid-cell count. A computed number has
         # to carry how it was computed and how much of the box it covers, or it
-        # is a number without provenance (CLAUDE.md).
+        # is a number without provenance (CONTRIBUTING.md).
         body.update(derived_prov)
     return body
 
@@ -527,7 +527,7 @@ def isosurface(
     computed FROM the geometry must be answered from the field instead. The
     vertices are a rendering of where the field crosses a value; treating them
     as the field itself is how a plausible number with no measurement behind it
-    gets spoken, which CLAUDE.md forbids outright.
+    gets spoken, which CONTRIBUTING.md forbids outright.
     """
     reg = load_registry()
     if not reg.has(source_id):

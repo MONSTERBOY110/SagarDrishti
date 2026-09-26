@@ -1,4 +1,4 @@
-"""The no-fabrication guard (CLAUDE.md's hardest rule, made mechanical).
+"""The no-fabrication guard (CONTRIBUTING.md's hardest rule, made mechanical).
 
 "The agent never computes or invents numbers. Numbers enter answers only via
 tool results." Everything here tests that one sentence.
@@ -38,7 +38,7 @@ def test_a_figure_no_tool_produced_is_refused():
         guard.enforce("The model is accurate to within 0.25 degrees.", [tool])
 
     assert "0.25" in str(e.value)
-    assert "CLAUDE.md" in str(e.value)
+    assert "CONTRIBUTING.md" in str(e.value)
 
 
 def test_a_figure_a_tool_did_produce_is_allowed():

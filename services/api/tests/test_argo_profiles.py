@@ -55,7 +55,7 @@ def test_only_qc_flags_1_and_2_survive(argo_like_nc, argo_spec):
 
 def test_wmo_id_extracted_from_char_array(argo_like_nc, argo_spec):
     """PLATFORM_NUMBER is fixed-width char padding, not a string. Every number
-    the agent speaks must carry a WMO id (CLAUDE.md), so this cannot be fuzzy."""
+    the agent speaks must carry a WMO id (CONTRIBUTING.md), so this cannot be fuzzy."""
     df = parse_profiles(argo_like_nc, argo_spec)
 
     wmos = sorted(df["wmo"].unique())

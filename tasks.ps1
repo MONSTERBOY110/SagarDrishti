@@ -21,7 +21,7 @@
 # own assets and renders as an empty shell, which looks exactly like a data
 # outage and is not one. This cost real debugging time more than once.
 #
-# New here? Read docs/START-HERE.md first.
+# New here? Read README.md first.
 
 param(
     [Parameter(Position = 0)]

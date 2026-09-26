@@ -151,7 +151,7 @@ export default function SagarNodePanel({
           return (
             <div className="node__row" key={key}>
               {/* The label the SERVER serves, verbatim. The conductivity probe
-                  is a salinity PROXY (CLAUDE.md) and the one place that must
+                  is a salinity PROXY (CONTRIBUTING.md) and the one place that must
                   never be shortened into "salinity" is the line a reader
                   actually looks at. */}
               <dt className="node__name">{meta.label}</dt>

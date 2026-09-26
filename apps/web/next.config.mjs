@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   // The dev badge sits bottom-left, exactly on top of the provenance
   // cartouche, and it covered the citation in every review capture. Provenance
-  // is a hard requirement (CLAUDE.md), so nothing may occlude it -- including
+  // is a hard requirement (CONTRIBUTING.md), so nothing may occlude it -- including
   // a tool affordance that only exists in development.
   devIndicators: false,
   // Cesium's static assets (Workers/Assets/ThirdParty/Widgets) are copied into

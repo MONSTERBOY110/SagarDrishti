@@ -1,6 +1,6 @@
 """Provenance records (TRD M1, feeding the agent's citation guarantee).
 
-CLAUDE.md: numbers enter an answer only via tool results, carrying dataset +
+CONTRIBUTING.md: numbers enter an answer only via tool results, carrying dataset +
 timestamp + float WMO id. That guarantee has to start at ingestion -- by the
 time a value is a pixel or a spoken sentence it is far too late to work out
 where it came from. So every derived store gets a provenance.json written
