@@ -181,7 +181,7 @@ translation; the English is the one the numbers are checked against.
 
 ```bash
 ./tasks.ps1 test     # 512 data-plane tests
-python -m pytest services/agent/tests    # 83 agent, guard and voice tests
+python -m pytest services/agent/tests    # 96 agent, guard and voice tests
 ./tasks.ps1 e2e      # 12 browser tests against a production build
 ./tasks.ps1 docker   # the same 12, against the three containers
 ```

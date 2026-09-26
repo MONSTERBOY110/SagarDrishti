@@ -169,7 +169,7 @@ def test_route_speak_keeps_english_and_labels_translation(api):
     r = c.post("/voice/speak", json={"text": "It is 28.1 degC.", "language": "ta"})
     j = r.json()
     assert j["english"] == "It is 28.1 degC."
-    assert j["text"] == "T(It is 28.1 degC.)"
+    assert j["text"] == "T(It is 28.1 degrees Celsius.)"  # codes spelled out for the translator
     assert j["machine_translation"] is True and j["audio"] == "UklGRg=="
 
 
@@ -178,3 +178,64 @@ def test_route_offline_is_503_with_reason(api):
     r = c.post("/voice/speak", json={"text": "hi", "language": "hi"})
     assert r.status_code == 503
     assert r.json()["detail"]["reason"] == "offline"
+
+
+# ---- spoken numbers (ASR writes "one hundred meters", the planner reads "100 m") ----
+
+
+@pytest.mark.parametrize(
+    "said, expected",
+    [
+        ("How warm is it at one hundred meters?", "How warm is it at 100 meters?"),
+        ("temperature at five hundred metres", "temperature at 500 metres"),
+        ("at two thousand meters", "at 2000 meters"),
+        ("at fifty meters", "at 50 meters"),
+        ("at one thousand two hundred meters", "at 1200 meters"),
+        ("twenty two point four five degree Celsius", "22.45 degree Celsius"),
+        ("show me float two nine zero three eight three one", "show me float 2903831"),
+        ("how good is the model", "how good is the model"),
+        ("Are there any warnings?", "Are there any warnings?"),
+        ("one of the floats", "one of the floats"),
+    ],
+)
+def test_spoken_numbers_become_digits(said, expected):
+    assert voice.spoken_numbers(said) == expected
+
+
+def test_route_asr_normalises_spoken_numbers(api):
+    def handler(req):
+        body = json.loads(req.content)
+        task = body["pipelineTasks"][0]["taskType"]
+        if str(req.url) == voice.CONFIG_URL:
+            return fake_bhashini([])(req)
+        if task == "asr":
+            return httpx.Response(200, json={"pipelineResponse": [{"output": [{"source": "x"}]}]})
+        return httpx.Response(200, json={"pipelineResponse": [{"output": [{"target": "How warm is it at one hundred meters?"}]}]})
+
+    c = api(client_with(ON, handler))
+    j = c.post("/voice/asr", json={"audio": "UklGRg==", "language": "hi"}).json()
+    assert j["english"] == "How warm is it at 100 meters?"
+    assert j["english_as_heard"] == "How warm is it at one hundred meters?"
+
+
+def test_speakable_spells_out_codes_but_keeps_numbers():
+    s = voice.speakable("TEMP at 100 m runs from 17.98 to 25.45 degC; SAL 34.2 PSU, RMSE 0.602 degC.")
+    assert "degC" not in s and "TEMP" not in s and "RMSE" not in s
+    assert "degrees Celsius" in s and "temperature" in s and "salinity" in s
+    for n in ("100", "17.98", "25.45", "34.2", "0.602"):
+        assert n in s
+
+
+def test_route_speak_translates_the_speakable_text_but_returns_the_english(api):
+    seen = []
+
+    def handler(req):
+        body = json.loads(req.content)
+        if body["pipelineTasks"][0]["taskType"] == "translation" and str(req.url) != voice.CONFIG_URL:
+            seen.append(body["inputData"]["input"][0]["source"])
+        return fake_bhashini([])(req)
+
+    c = api(client_with(ON, handler))
+    j = c.post("/voice/speak", json={"text": "TEMP is 22.45 degC.", "language": "hi"}).json()
+    assert seen == ["temperature is 22.45 degrees Celsius."]
+    assert j["english"] == "TEMP is 22.45 degC."

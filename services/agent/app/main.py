@@ -174,13 +174,15 @@ def voice_asr(body: Heard) -> dict:
     b = _bhashini()
     try:
         heard = b.asr(body.audio, body.language)
-        english = b.translate(heard, body.language, "en") if heard else ""
+        as_heard = b.translate(heard, body.language, "en") if heard else ""
     except voice.VoiceUnavailable as exc:
         raise _unavailable(exc) from exc
     return {
         "language": body.language,
         "transcript": heard,
-        "english": english,
+        # Digits, because the planner reads "100 m", not "one hundred meters".
+        "english": voice.spoken_numbers(as_heard),
+        "english_as_heard": as_heard,
         "machine_translation": body.language != "en",
     }
 
@@ -191,7 +193,7 @@ def voice_speak(body: Speak) -> dict:
     is what the numbers were checked in; the translation is labelled."""
     b = _bhashini()
     try:
-        text = b.translate(body.text, "en", body.language)
+        text = b.translate(voice.speakable(body.text), "en", body.language)
         audio = b.tts(text, body.language) if body.audio else ""
     except voice.VoiceUnavailable as exc:
         raise _unavailable(exc) from exc

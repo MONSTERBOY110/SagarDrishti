@@ -29,6 +29,7 @@ demo and the first call costs a round trip.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,108 @@ TIMEOUT = 20.0
 #: Browser recordings are resampled to this before they are sent (see
 #: apps/web/lib/voice.ts), so the rate is a fact rather than a guess.
 ASR_RATE = 16000
+
+
+# ---- spoken numbers ---------------------------------------------------------
+#
+# Speech recognition writes numbers the way they are said ("one hundred
+# meters", "twenty two point four five"), and the planner reads digits. The
+# English it is handed is therefore normalised here, deterministically, and
+# the route returns what was heard beside it, so a person can see both.
+
+_UNITS = {w: i for i, w in enumerate(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen "
+    "fourteen fifteen sixteen seventeen eighteen nineteen".split())}
+_TENS = {w: 10 * i for i, w in enumerate(
+    "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()) if w != "_"}
+_SCALES = {"hundred": 100, "thousand": 1000}
+_UNIT_AFTER = {"m", "meter", "meters", "metre", "metres", "degree", "degrees", "km"}
+
+
+def _is_num(w: str) -> bool:
+    return w in _UNITS or w in _TENS or w in _SCALES
+
+
+def _value(words: list[str]) -> str:
+    if len(words) >= 2 and all(w in _UNITS and _UNITS[w] < 10 for w in words):
+        return "".join(str(_UNITS[w]) for w in words)  # said digit by digit: an ID
+    total, current = 0, 0
+    for w in words:
+        if w in _UNITS:
+            current += _UNITS[w]
+        elif w in _TENS:
+            current += _TENS[w]
+        elif w == "hundred":
+            current = (current or 1) * 100
+        elif w == "thousand":
+            total += (current or 1) * 1000
+            current = 0
+    return str(total + current)
+
+
+def spoken_numbers(text: str) -> str:
+    """Numbers said as words become digits; everything else is left alone."""
+    tokens = re.findall(r"[A-Za-z]+|[^A-Za-z]+", text)
+    out: list[str] = []
+    i = 0
+    while i < len(tokens):
+        w = tokens[i].lower()
+        if not _is_num(w):
+            out.append(tokens[i])
+            i += 1
+            continue
+        # Collect a run of number words joined by spaces or hyphens, allowing
+        # "and" inside it and one "point" followed by digit words.
+        words, frac, j, end = [w], [], i + 1, i + 1
+        while j + 1 < len(tokens) and tokens[j].strip(" -") == "":
+            nxt = tokens[j + 1].lower()
+            if _is_num(nxt) and not frac:
+                words.append(nxt)
+            elif nxt == "and" and j + 3 < len(tokens) and _is_num(tokens[j + 3].lower()):
+                pass
+            elif nxt == "point" and not frac and j + 3 < len(tokens) and tokens[j + 3].lower() in _UNITS:
+                frac.append(".")
+            elif frac and nxt in _UNITS and _UNITS[nxt] < 10:
+                frac.append(str(_UNITS[nxt]))
+            else:
+                break
+            j += 2
+            end = j
+        after = ""
+        k = end
+        while k < len(tokens) and tokens[k].strip() == "":
+            k += 1
+        if k < len(tokens):
+            after = tokens[k].lower()
+        value = _value(words)
+        spoken = len(words) >= 2 or frac or int(value) >= 10 or after in _UNIT_AFTER
+        if spoken:
+            out.append(value + ("".join(frac) if len(frac) > 1 else ""))
+            i = end
+        else:
+            out.append(tokens[i])
+            i += 1
+    return "".join(out)
+
+
+#: The data plane's own codes, spelled out before an answer is TRANSLATED, so
+#: a Hindi reader hears "degrees Celsius" rather than "D G C". The English
+#: answer shown on screen, which is what the guard checked, is not changed.
+_SPEAKABLE = [
+    (r"\bdegC\b", "degrees Celsius"),
+    (r"\bTEMP\b", "temperature"),
+    (r"\bSAL\b", "salinity"),
+    (r"\bRMSE\b", "root mean square error"),
+    (r"\bD26\b", "depth of the 26 degree isotherm"),
+    (r"\bSIG0\b", "potential density"),
+    (r"\bSVEL\b", "speed of sound"),
+]
+
+
+def speakable(text: str) -> str:
+    for pat, rep in _SPEAKABLE:
+        text = re.sub(pat, rep, text)
+    return text
 
 
 class VoiceUnavailable(RuntimeError):
