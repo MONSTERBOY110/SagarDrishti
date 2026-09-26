@@ -7,6 +7,21 @@ observations, built for **Smart India Hackathon 2026, PS SIH26067**
 
 **Demo video (3:49):** https://youtu.be/YbU09uJUCfE
 
+![The opening frame: the whole globe, the Bay of Bengal model box with every instrument on it, and the model's verification card](screenshots/01-opening.jpg)
+
+## Screenshots
+
+All taken from the running build (`tools/capture_readme_shots.mjs`), offline.
+
+| | |
+|---|---|
+| ![The water column from the side, with the station sheet](screenshots/02-water-column.jpg) | ![The 26 degC isosurface drawn through the column](screenshots/03-isosurface.jpg) |
+| **The water column.** 24 levels, 5 m to 2000 m, with the station sheet: variable, colorbar, the bottle rack of values by depth, vertical exaggeration. | **The 26 degC isosurface**, the depth of cyclone fuel, extracted from the grid by marching cubes. |
+| ![CAP warnings drawn over the water](screenshots/04-hazards.jpg) | ![The water column studio: the measured profile, the ray-marched volume and the Class-4 readout](screenshots/05-studio.jpg) |
+| **HazardWatch.** CAP v1.2 warnings over the water; rehearsal bulletins are marked EXERCISE and never pass for real alerts. | **The water column studio.** A BGC float's measured profile against the model, the GPU ray-marched volume, and the Class-4 numbers at the depth under the cursor. |
+| ![Samudra Sahayak answering with its tool trace](screenshots/06-agent.jpg) | ![The same build at phone width](screenshots/07-phone.jpg) |
+| **Samudra Sahayak.** An answer built only from tool results, with its working and its caveat. | **Phone width.** The same build; nothing to install. |
+
 > INCOIS generates 3D ocean model output and in-situ observations daily, but
 > forecasters must "toggle between disparate software packages" to see them
 > together, which "impedes timely hazard assessment, search-and-rescue support,
